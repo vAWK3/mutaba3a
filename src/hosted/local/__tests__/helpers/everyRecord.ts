@@ -1,4 +1,5 @@
 import { composeDocument } from '../../../../../server/src/issuing/compose.js';
+import { IL_PACK } from '../../../../../server/src/jurisdictions/il/index.js';
 import { MemoryLedgerStore } from '../../../../../server/src/repositories/memory.js';
 import type { IssueDocumentInput } from '../../../../../server/src/repositories/ports.js';
 
@@ -224,10 +225,10 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   for (const [n, reference] of [[1, 'RF-1'], [2, null]] as const) {
     const issue = (docType: 'TAX_INVOICE_RECEIPT' | 'CREDIT_NOTE', originalId: string | null, paidPart: IssueDocumentInput['paidPart']): IssueDocumentInput => ({
       organizationId: org, docType, documentDate: '2026-10-04', currency: 'ILS',
-      composed: composeDocument({ docType, currency: 'ILS', documentDate: '2026-10-04', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 10_000n, discountMinor: 0n }] }),
+      composed: composeDocument({ pack: IL_PACK, docType, currency: 'ILS', documentDate: '2026-10-04', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 10_000n, discountMinor: 0n }] }),
       issuer: { legalName: 'Studio', vatId: '123456789', dealerType: 'COMPANY' }, customerId: customer.id, customer: { name: 'Client' }, language: 'en', style: 'PROFESSIONAL', ink: 'BLACK', notes: null,
       dueDate: null, originalId, paidPart, payment: docType === 'TAX_INVOICE_RECEIPT' ? { method: 'BANK', reference: null, receivedOn: '2026-10-04' } : null, appliesToDocumentId: null, fromEntry: null,
-      allocationNumber: null, titlePrefix: docType, coreVersion: '1.0.0', createdByUserId: user.id, requestKey: `refund-${n}-${docType}`, requestId: n === 1 ? 'req-refund' : null,
+      allocationNumber: null, titlePrefix: docType, coreVersion: '1.0.0', jurisdiction: 'IL', jurisdictionPackVersion: '1.0.0', createdByUserId: user.id, requestKey: `refund-${n}-${docType}`, requestId: n === 1 ? 'req-refund' : null,
     });
     const paid = await store.issuing.issue(issue('TAX_INVOICE_RECEIPT', null, null), AT);
     if (paid.kind !== 'issued') throw new Error('the fixture invoice-receipt was not issued');
