@@ -224,6 +224,8 @@ export interface AppDependencies {
    * default). Absent = off: the operator's `invoicing` grant decides, as before.
    */
   invoicingForAll?: boolean;
+  /** MUT-736: overrides whether a paid plan can be bought here (PLAN_LIMIT's `canUpgrade`). Absent = Checkout is configured. */
+  planCheckout?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -425,7 +427,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.142.0-mut735';
+export const API_VERSION = '1.143.0-mut736';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -670,6 +672,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // MUT-571/572: hosted only, like the PDF.
     taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
     manualAllocationUrl: deps.manualAllocationUrl ?? null,
+    // MUT-736: whether a paid plan can be bought here (the Upgrade on a PLAN_LIMIT refusal).
+    planCheckout: deps.planCheckout ?? Boolean(deps.stripe?.checkoutGateway),
     portalOrigin: sessions.portalOrigin ?? null,
     servesPortal: Boolean(deps.portal),
     // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.

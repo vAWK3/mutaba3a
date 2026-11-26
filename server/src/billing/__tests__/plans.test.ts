@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   changeTimingOf,
+  cheapestPlanWith,
   currentPlanOf,
+  FREE_PLAN,
   nextPlanAbove,
+  PLAN_FEATURES,
   PLAN_LIMITS,
   PLAN_NAMES,
   planOfTier,
@@ -93,6 +96,22 @@ describe('plans', () => {
     it('prefers Solo over legacy Freelancer on a tie of rank', () => {
       expect(currentPlanOf([active('FREELANCER'), active('SOLO')])).toBe('solo');
       expect(currentPlanOf([active('SOLO'), active('FREELANCER')])).toBe('solo');
+    });
+  });
+
+  describe('PLAN_FEATURES (MUT-736): the Tax Authority connection is on the paid plans only', () => {
+    it('is off on the free plan, on for every paid plan and legacy Freelancer', () => {
+      expect(FREE_PLAN).toBe('starter');
+      expect(PLAN_FEATURES.starter.taxAuthority).toBe(false);
+      for (const plan of [...PLAN_NAMES, 'freelancer'] as const) expect(PLAN_FEATURES[plan].taxAuthority, plan).toBe(true);
+    });
+
+    it('names Solo as the cheapest plan on sale with the connection', () => {
+      expect(cheapestPlanWith('taxAuthority')).toBe('solo');
+    });
+
+    it('never puts the free plan on sale', () => {
+      expect(PLAN_NAMES).not.toContain(FREE_PLAN);
     });
   });
 });

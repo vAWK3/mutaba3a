@@ -694,8 +694,10 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
 /**
  * MUT-568 (ADR-260): an accountant reads a shared profile's issued documents when its owner holds `invoicing`, so the
  * issuing routes read the owner's flags under the accountant's guard. A read of flags only; listed, never derived.
+ * MUT-736 (ADR-282): the Tax Authority status and the invoicing setup read whether the payer's plan includes the
+ * connection (`taxAuthorityPlanOf`), so the owner's billing facts are read too; only allowed/next plan is answered.
  */
-export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
+export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor', 'billing.factsFor']);
 
 export function accountantStoreGuard(): StoreGuard {
   return { ...readOnlyStoreGuard(ACCOUNTANT_EXTRA_READS, accountantReadOnly), narrow: accountantExpenseView };

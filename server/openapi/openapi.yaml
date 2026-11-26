@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.142.0-mut735
+  version: 1.143.0-mut736
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -755,6 +755,7 @@ components:
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
                 - CONFLICT
+                - PLAN_LIMIT
                 - OPERATION_IN_PROGRESS
                 - RECONCILE_RUNNING
                 - LINK_ORIGIN_LOOPBACK
@@ -10351,6 +10352,15 @@ components:
           type: string
           format: uri
           description: "Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)"
+        automaticOn:
+          type: string
+          nullable: true
+          enum:
+            - solo
+            - business
+            - firm
+            - null
+          description: "MUT-736 (ADR-282): MANUAL because the payer’s plan has no Tax Authority connection; the plan on which numbers come automatically. Null otherwise. Additive since 1.143.0-mut736."
       required:
         - mode
         - nextNumber
@@ -10358,6 +10368,7 @@ components:
         - net
         - customerTaxId
         - requestUrl
+        - automaticOn
       description: "MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711."
     CreditNoteFacts:
       type: object
@@ -10960,6 +10971,8 @@ components:
             - none
             - connected
             - expired
+            - suspended
+          description: "MUT-736: `suspended` = a connection is kept but the payer’s plan doesn’t include it (Starter); nothing was deleted, and it is `connected` again on a paid plan (or `expired` if the Tax Authority’s consent ended meanwhile). Additive since 1.143.0-mut736."
         connectedAt:
           type: string
           nullable: true
@@ -10973,11 +10986,31 @@ components:
           type: string
           nullable: true
           description: sandbox or production
+        plan:
+          type: object
+          properties:
+            allowed:
+              type: boolean
+              description: The payer’s plan includes the connection (Solo and above)
+            nextPlan:
+              type: string
+              nullable: true
+              enum:
+                - solo
+                - business
+                - firm
+                - null
+              description: The cheapest plan that includes it, when not allowed
+          required:
+            - allowed
+            - nextPlan
+          description: "MUT-736 (ADR-282): the connection is a paid-plan feature. Additive since 1.143.0-mut736."
       required:
         - state
         - connectedAt
         - until
         - environment
+        - plan
     TaxAuthorityConnect:
       type: object
       properties:
@@ -15306,10 +15339,12 @@ components:
                   - other-environment
                   - no-refresh
                   - profile-gone
+                  - plan
                   - owner-gone
                   - owner-inactive
                   - suppressed
                   - null
+                description: "MUT-736: `plan` = the payer’s plan has no Tax Authority connection (Starter); nothing to renew. Additive since 1.143.0-mut736."
               outcome:
                 type: string
                 nullable: true
@@ -27803,7 +27838,7 @@ paths:
       tags:
         - Issuing
       summary: Whether this profile is connected to the Tax Authority
-      description: "MUT-571: `connected` until the consent ends (90 days), then `expired` (connect again); `none` before the first connect. 404 when this server has no Tax Authority connection configured."
+      description: "MUT-571: `connected` until the consent ends (90 days), then `expired` (connect again); `none` before the first connect. MUT-736: `suspended` while the payer’s plan has no connection (Starter), and `plan` says whether it does. 404 when this server has no Tax Authority connection configured."
       security:
         - session: []
         - deviceSession: []
@@ -27880,7 +27915,7 @@ paths:
       tags:
         - Issuing
       summary: Start connecting this profile to the Tax Authority
-      description: "MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only."
+      description: "MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only. MUT-736: 409 PLAN_LIMIT (`details`: limit taxAuthority, plan, nextPlan, canUpgrade) when the payer’s plan has no connection (Starter)."
       security:
         - session: []
         - deviceSession: []
@@ -27910,6 +27945,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limited
           content:
@@ -27921,7 +27962,7 @@ paths:
       tags:
         - Issuing
       summary: Where the Tax Authority sends the browser back after sign-in
-      description: "MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened."
+      description: "MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent), `failed`, or `plan` (MUT-736: the payer’s plan no longer includes the connection; nothing exchanged or stored). With no portal to return to, or a forged or late state, it answers a short page saying what happened."
       security: []
       parameters:
         - schema:
@@ -27956,7 +27997,7 @@ paths:
       tags:
         - Issuing
       summary: Report the choice for a held allocation number
-      description: "MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264)."
+      description: "MUT-736: 409 PLAN_LIMIT on a plan without the connection (Starter). MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264)."
       security:
         - session: []
         - deviceSession: []
