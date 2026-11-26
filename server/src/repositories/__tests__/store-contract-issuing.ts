@@ -7,7 +7,7 @@ import { summarizePeriod } from '../../statements/period.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 import { IL_PACK } from '../../jurisdictions/il/index.js';
 
-const ISSUER_DEFAULTS = { country: 'IL', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
+const ISSUER_DEFAULTS = { country: 'IL', vatIdScheme: 'IL_TAX_ID', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 
 /** MUT-568 (ADR-260) storage contract: issued documents, gap-free numbers, their ledger rows, copies and gaps. */
 export function describeLedgerStoreIssuingContract(name: string, makeStore: () => Promise<LedgerStore>): void {
@@ -59,6 +59,8 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
         allocationNumber: null,
         titlePrefix: 'חשבונית מס',
         coreVersion: '1.0.0',
+        jurisdiction: 'IL',
+        jurisdictionPackVersion: '1.0.0',
         createdByUserId: user.id,
         requestKey: `key-${unique()}`,
         requestId: null,
@@ -95,7 +97,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const store = await makeStore();
       const w = await world(store);
       const doc = await w.issued(store, w.issue());
-      expect(doc).toMatchObject({ docType: 'TAX_INVOICE', number: 1, netMinor: shekels(1_000), vatMinor: shekels(180), grossMinor: shekels(1_180), coreVersion: '1.0.0' });
+      expect(doc).toMatchObject({ docType: 'TAX_INVOICE', number: 1, netMinor: shekels(1_000), vatMinor: shekels(180), grossMinor: shekels(1_180), coreVersion: '1.0.0', jurisdiction: 'IL', jurisdictionPackVersion: '1.0.0' });
       expect(doc.lines).toHaveLength(1);
       expect(doc.lines[0]).toMatchObject({ index: 1, description: 'Sprint 3', netMinor: shekels(1_000), vatMinor: shekels(180) });
       const owed = await store.receivables.getById(w.a.id, doc.receivableId!);
@@ -388,6 +390,22 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
         kind: 'updated',
         record: { ink: 'BLUE', documentStyle: 'MINIMAL', defaultLanguage: 'ar', paymentTermsDays: 30, bankDetails: 'Bank Leumi 10-800-123456', footerNote: 'Thank you', version: 3 },
       });
+    });
+
+    it('MUT-742: a document keeps the jurisdiction and pack version it was issued under, and reads them back', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const doc = await w.issued(store, w.issue({ jurisdiction: 'SA', jurisdictionPackVersion: '0.1.0' }));
+      expect(doc).toMatchObject({ jurisdiction: 'SA', jurisdictionPackVersion: '0.1.0' });
+      expect(await store.issuing.getById(w.a.id, doc.id)).toMatchObject({ jurisdiction: 'SA', jurisdictionPackVersion: '0.1.0' });
+    });
+
+    it('MUT-742: keeps the issuer tax ID scheme and a tax ID wider than nine digits with the details', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const input = { legalName: 'Barmajiyat Ltd.', vatId: 'SA-310122393500003', dealerType: 'COMPANY' as const, address: null, city: null, phone: null, email: null, website: null, pricesIncludeVat: false, ...ISSUER_DEFAULTS, vatIdScheme: 'SA_VAT' };
+      expect(await store.issuing.putIssuer(w.a.id, input, null, at(1))).toMatchObject({ kind: 'created', record: { vatId: 'SA-310122393500003', vatIdScheme: 'SA_VAT' } });
+      expect(await store.issuing.getIssuer(w.a.id)).toMatchObject({ vatId: 'SA-310122393500003', vatIdScheme: 'SA_VAT' });
     });
 
     it('MUT-740: keeps the issuer country with the details, IL by default, and replaces it with them', async () => {

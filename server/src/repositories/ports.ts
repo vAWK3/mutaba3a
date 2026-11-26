@@ -4727,6 +4727,8 @@ export interface InboxEntryRepository {
 export interface IssuerDetailsInput {
   legalName: string;
   vatId: string;
+  /** MUT-742: how `vatId` is read (the jurisdiction pack's `taxId.scheme`). */
+  vatIdScheme: string;
   /** MUT-740 (ADR-287 D1): ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Locked after the first document. */
   country: string;
   dealerType: DealerType;
@@ -4894,6 +4896,9 @@ export interface IssuedDocumentRecord {
   /** MUT-643: a credit note whose paid part went back to the client. */
   refundId: string | null;
   coreVersion: string;
+  /** MUT-742 (ADR-287): the country whose pack this was issued under, and that pack's version. Documents before it read IL and 1.0.0. */
+  jurisdiction: string;
+  jurisdictionPackVersion: string;
   createdByUserId: string;
   requestKey: string;
   lines: IssuedDocumentLineRecord[];
@@ -4984,6 +4989,9 @@ export interface IssueDocumentInput {
   /** The ledger rows' title before the number, e.g. "חשבונית מס"; the store appends the number. */
   titlePrefix: string;
   coreVersion: string;
+  /** MUT-742: the issuer's country and its pack's version, written explicitly (the column defaults are for rows from before). */
+  jurisdiction: string;
+  jurisdictionPackVersion: string;
   createdByUserId: string;
   /** The issue request's idempotency key: the same key returns the same document. */
   requestKey: string;

@@ -1599,6 +1599,8 @@ export class MemoryLedgerStore implements LedgerStore {
       creditId,
       refundId: links.refundId ?? null,
       coreVersion: input.coreVersion,
+      jurisdiction: input.jurisdiction,
+      jurisdictionPackVersion: input.jurisdictionPackVersion,
       createdByUserId: input.createdByUserId,
       requestKey: input.requestKey,
       lines: composed.lines.map((l) => ({

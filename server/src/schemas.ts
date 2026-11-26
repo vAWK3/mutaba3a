@@ -732,10 +732,10 @@ export const BillingOverviewSchema = z
       .optional(),
     /**
      * MUT-702 Part B (ADR-288): the plans on sale, cheapest first, with their live prices (a currency without both prices
-     * is null) and limits. Empty while PLAN_CHECKOUT is off or Stripe can't be asked. Additive since 1.147.0-mut740.
+     * is null) and limits. Empty while PLAN_CHECKOUT is off or Stripe can't be asked. Additive since 1.146.0-mut702b.
      */
     plans: z.array(BillingPlanSchema).optional(),
-    /** MUT-702 Part B: the address saved on the person's billing account, to prefill the form; null with none. Additive since 1.147.0-mut740. */
+    /** MUT-702 Part B: the address saved on the person's billing account, to prefill the form; null with none. Additive since 1.146.0-mut702b. */
     billingAddress: z.union([BillingAddressSchema, z.null()]).optional(),
   })
   .openapi('BillingOverview');
@@ -761,10 +761,10 @@ export const CheckoutSessionRequestSchema = z
     plan: z.enum(['freelancer', 'accountant', 'solo', 'business', 'firm']).optional(),
     /**
      * MUT-702 Part B (ADR-288): required for `solo`, `business` and `firm`; its country must equal `country`. Saved on the
-     * person's billing account before Checkout, so the tax is computed from it. Additive since 1.147.0-mut740.
+     * person's billing account before Checkout, so the tax is computed from it. Additive since 1.146.0-mut702b.
      */
     address: BillingAddressSchema.optional(),
-    /** MUT-731 / Part B: the one-time 14-day Solo trial (card up front); `plan` must be `solo`. Additive since 1.147.0-mut740. */
+    /** MUT-731 / Part B: the one-time 14-day Solo trial (card up front); `plan` must be `solo`. Additive since 1.146.0-mut702b. */
     trial: z.boolean().optional(),
   })
   .strict()
@@ -5677,6 +5677,8 @@ export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
   paymentId: uuid.nullable(),
   refundId: uuid.nullable().openapi({ description: 'MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643.' }),
   coreVersion: z.string(),
+  jurisdiction: z.string().openapi({ description: 'MUT-742 (ADR-287): the country (ISO 3166-1) whose jurisdiction pack the document was issued under. Documents issued before it read IL. Since 1.148.0-mut742.' }),
+  jurisdictionPackVersion: z.string().openapi({ description: 'MUT-742: the version of that pack; with `coreVersion` it names the rules the document was issued under. Since 1.148.0-mut742.' }),
   /** MUT-662 */
   displayNumber: z.string().openapi({ description: 'The number as shown: PR-0007 for a payment request, the plain number otherwise' }),
   paymentRequest: PaymentRequestFactsSchema.nullable().openapi({ description: 'MUT-662: a payment request\'s derived status; null for other types' }),

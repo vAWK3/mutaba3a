@@ -2983,3 +2983,8 @@ Rows kept past an account's deletion carry no foreign key to the profile, so "cl
 ## Pattern: a country's rules are a pack behind one door (MUT-741, ADR-287)
 **Where**: `server/src/jurisdictions/` (`pack.ts`, `registry.ts`, `il/`), `issuing/issuer-pack.ts`.
 **Rule**: Strategy registry. The issuer's country (`issuer_details.country`) picks a `JurisdictionPack` (`packFor`); the core asks the pack for VAT, currencies, document codes, dealer rules, tax-ID checks, clearance and the statutory file, never `if (country === …)`. Core code imports `jurisdictions/index.ts` only; `boundary.test.ts` fails on a direct `jurisdictions/il/**` import outside a named allowlist, on a `defaultPack()` call outside its named list, and on an import cycle through `jurisdictions/**`. A new country is a new folder, a registry line and a golden fixture; a live country without a pack refuses the boot (`assertPacksFor`).
+
+## Pattern: a column on an INSERT-only table is added with a constant default, never backfilled (MUT-742, ADR-260)
+**Where**: `server/prisma/migrations/20261127140000_mut742_issuing_jurisdiction` (earlier: MUT-711's `allocationSource`), proved by `repositories/__tests__/migration-mut742.test.ts`.
+**Rule**: the legal tables refuse `UPDATE` (`issuing_refuse_change`), so a new column gets `ADD COLUMN … NOT NULL DEFAULT <constant>` (catalog-only in Postgres 11+: no rewrite, no trigger) and the rows from before read the default as their value; a CHECK is added `NOT VALID` then `VALIDATE`d. Keep the default (an older image still inserts). The migration test builds a scratch database from the migrations before it, inserts old rows as raw SQL, hashes every pre-existing column before and after, and re-asserts the triggers and the MUT-644 bypass.
+

@@ -27,6 +27,8 @@ export interface JurisdictionPack {
   readonly taxId: {
     /** The stored form of a person's or company's tax number, or null when it is not a valid one. */
     readonly normalize: (raw: string) => string | null;
+    /** Names how the stored number is read (Israel: `IL_TAX_ID`, the Israeli VAT, company or ID number with its check digit); kept with it (MUT-742). */
+    readonly scheme: string;
   };
   /** What each core document type is under this country's law. */
   readonly documentTypes: Readonly<Record<IssuedDocType, { readonly code: number; readonly vatBearing: boolean; readonly taxDocument: boolean }>>;
