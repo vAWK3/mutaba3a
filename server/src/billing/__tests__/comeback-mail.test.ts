@@ -97,6 +97,12 @@ describe('runComebackMail (MUT-534)', () => {
     expect(mail!.text).toContain('⁨₪9⁩');
     expect(mail!.text).toContain('⁨₪270⁩');
     expect(mail!.html).toContain('step=subscribe');
+    // s.30A: an advertisement says so in the footer; it is no service email, and it offers its way out
+    expect(mail!.html).toContain('هذه رسالة إعلانية من متابعة');
+    expect(mail!.html).not.toContain('رسالة خدمة');
+    expect(mail!.text).toContain('هذه رسالة إعلانية من متابعة');
+    expect(mail!.text).not.toContain('بسبب إجراء على حسابك');
+    expect(mail!.html).toContain('data-opt-out');
     expect(await h.store.billing.retentionEventsOf(user.id)).toMatchObject([{ kind: 'COMEBACK_OFFERED', reason: 'day-30', stripeSubscriptionId: subscriptionId }]);
     const second = await h.run();
     expect(second.rows[0]).toMatchObject({ action: 'skip', skip: 'already-mailed' });
@@ -110,6 +116,11 @@ describe('runComebackMail (MUT-534)', () => {
     const [mail] = h.outbox.list({ to: user.email });
     expect(mail!.subject).toBe('פרסומת: Come back to MTB3A for $3 your first month');
     expect(mail!.text).toContain('then $9 a month');
+    expect(mail!.html).toContain('This is a promotional email from MTB3A');
+    expect(mail!.html).not.toContain('service email');
+    expect(mail!.text).toContain('This is a promotional email from MTB3A');
+    expect(mail!.text).not.toContain('because of an action on your MTB3A account');
+    expect(mail!.text).toContain('Unsubscribe.');
   });
 
   it('skips with a reason: never paid, Firm, a stay offer this year, covered by a grant, between the windows, suppressed', async () => {

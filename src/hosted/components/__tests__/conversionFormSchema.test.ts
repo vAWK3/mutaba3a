@@ -18,6 +18,15 @@ function baseFields(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('hosted conversion drawer schema', () => {
+  // The schema carries i18n keys, rendered with t() where they show (profileFormSchema's pattern), so Arabic readers get Arabic.
+  it('reports a bad amount as the amountInvalid key, on each leg', () => {
+    const from = conversionFormSchema.safeParse(baseFields({ fromAmount: '100.123' }));
+    const to = conversionFormSchema.safeParse(baseFields({ toAmount: '91.123' }));
+    const keyOf = (r: typeof from, path: string) => !r.success && r.error.issues.find((i) => i.path.join('.') === path)?.message;
+    expect(keyOf(from, 'fromAmount')).toBe('hosted.conversions.errors.amountInvalid');
+    expect(keyOf(to, 'toAmount')).toBe('hosted.conversions.errors.toAmountInvalid');
+  });
+
   it('accepts a valid two-currency conversion', () => {
     expect(conversionFormSchema.safeParse(baseFields()).success).toBe(true);
   });
@@ -41,7 +50,7 @@ describe('hosted conversion drawer schema', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues.find((i) => i.path.join('.') === 'toCurrency');
-      expect(issue?.message).toBe('Choose a different currency to convert to');
+      expect(issue?.message).toBe('hosted.conversions.errors.sameCurrency');
     }
   });
 

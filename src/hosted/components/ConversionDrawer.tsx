@@ -249,7 +249,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
                   />
                 )}
               />
-              {formState.errors.fromAmount && <p className="form-error">{formState.errors.fromAmount.message}</p>}
+              {formState.errors.fromAmount && <p className="form-error">{t(formState.errors.fromAmount.message ?? '')}</p>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="hosted-conversion-from-currency">
@@ -291,7 +291,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
                   />
                 )}
               />
-              {formState.errors.toAmount && <p className="form-error">{formState.errors.toAmount.message}</p>}
+              {formState.errors.toAmount && <p className="form-error">{t(formState.errors.toAmount.message ?? '')}</p>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="hosted-conversion-to-currency">
@@ -310,7 +310,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
                   </select>
                 )}
               />
-              {formState.errors.toCurrency && <p className="form-error">{formState.errors.toCurrency.message}</p>}
+              {formState.errors.toCurrency && <p className="form-error">{t(formState.errors.toCurrency.message ?? '')}</p>}
             </div>
           </div>
 

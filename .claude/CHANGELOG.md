@@ -28,6 +28,14 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — Copy bugs: the conversion drawer's errors in Arabic, the come-back mail's footer
+
+- **Conversion drawer**: `conversionFormSchema` carried English messages ("Invalid amount", "Choose a different currency to convert to"), so Arabic readers saw English. The schema now carries the existing `hosted.conversions.errors.*` keys (`amountInvalid`, `toAmountInvalid`, `sameCurrency`, en and ar already present) and `ConversionDrawer` renders them with `t()`, the profile schemas' pattern. The "Amount is required" / "Date is required" messages are untouched.
+- **Come-back offer mail (MUT-534)**: the footer called it "a service email about your account", but it is an advertisement («פרסומת», s.30A). A mail that names its sender now says "This is a promotional email from MTB3A" / "هذه رسالة إعلانية من متابعة" in the footer and in the plain-text footer (which no longer claims the mail is "because of an action on your account"). Its unsubscribe line was already there.
+- Files: `src/hosted/components/conversionFormSchema.ts`, `ConversionDrawer.tsx`, `server/src/email/templates/layout.ts`; tests in `conversionFormSchema.test.ts` and `server/src/billing/__tests__/comeback-mail.test.ts`.
+
+---
+
 ## [Unreleased] - 2026-11-25 — Usage metering and Operator › Usage (MUT-735, ADR-281, API 1.142.0-mut735)
 
 ### Added
