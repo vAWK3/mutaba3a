@@ -793,6 +793,14 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
+        # MUT-702 Part B (ADR-288): Solo, Business and Firm on sale; off = only the legacy Freelancer Checkout.
+        dynamic "env" {
+          for_each = var.plan_checkout ? { PLAN_CHECKOUT = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-731 (Basel Q7): the one-time Solo trial in onboarding, for accounts created from this instant.
         dynamic "env" {
           for_each = var.solo_trial_offer_since != "" ? { SOLO_TRIAL_OFFER_SINCE = var.solo_trial_offer_since } : {}

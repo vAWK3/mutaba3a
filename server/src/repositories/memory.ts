@@ -4834,6 +4834,13 @@ export class MemoryLedgerStore implements LedgerStore {
       this.paidTrials.set(userId, next);
       return { ...next };
     },
+    markPaidTrialUsed: async (userId, at) => {
+      if (!this.people.has(userId)) return null;
+      const current = this.paidTrials.get(userId) ?? { offeredAt: null, usedAt: null };
+      const next = { ...current, usedAt: current.usedAt ?? at };
+      this.paidTrials.set(userId, next);
+      return { ...next };
+    },
     setTrialStart: async (userId, at) => {
       if (!this.people.has(userId)) return null;
       this.trialStarts.set(userId, at);

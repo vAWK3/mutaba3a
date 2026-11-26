@@ -65,6 +65,7 @@
     "billing:comeback-mail": "tsx src/scripts/users.ts billing-comeback-mail",
     "billing:monthly-summary-mail": "tsx src/scripts/users.ts billing-monthly-summary-mail",
     "billing:product-tiers": "tsx src/scripts/stripe-product-tiers.ts",
+    "billing:plans": "tsx src/scripts/stripe-plans.ts",
     "accounts:purge": "tsx src/scripts/users.ts accounts-purge",
     "issuing:retained": "tsx src/scripts/issuing-retained.ts",
     "smoke": "tsx src/scripts/smoke.ts",

@@ -477,7 +477,11 @@ A person's profiles are covered by one plan, read from their own profiles' entit
 - Every Starter limit is a hard cap: 409 `PLAN_LIMIT` at its door (documents in the issue transaction, scans at start and complete, a second business, a new partner); a receipt paying an issued document is never refused; the key is released. More than one business: all read-only until the person picks the active one (`PUT /v1/billing/active-businesses`; the portal's blocking dialog), the rest stay read-only (402 reason PLAN_LIMIT).
 - The flag lives on the store (`BillingRepository.starterPlan`), so the gate, `/v1/me`, `/v1/billing`, agents and mail jobs read one answer. Portal: Billing's month and plan lines, `PlanLimitNotice` where a limit is met, Home's 80%/90%/limit notices, the Issue drawer's documents left.
 
-Prices and Checkout per plan: MUT-702 Part B.
+### Buying a plan (MUT-702 Part B, ADR-288; dark behind `PLAN_CHECKOUT`)
+- Barmajiyat Ltd sells every subscription on Stripe, Israel included (ADR-286). Checkout goes through a provider-neutral port (`billing/provider.ts`) whose one adapter is Stripe (`billing/stripe/provider.ts`); subscriptions record `provider` and `seller`.
+- `POST /v1/billing/checkout-session` takes `plan` solo/business/firm with the billing address, asked only when paying (never at sign-up, never on Starter). The address is saved on the Stripe customer first; its country sets the currency (IL → ILS, else USD). An Israeli address pays VAT on top at `billing-countries.json` `vatRates.IL` (18) through a Stripe tax rate (Stripe Tax has no Israel registration); elsewhere Stripe Tax adds what is owed. `trial: true` buys the one-time 14-day Solo trial with a card.
+- Prices live only in Stripe, written by `npm --prefix server run billing:plans` (₪39/89/249, $12/27/75 a month, a year = 10 months, before tax). `GET /v1/billing` lists `plans` (prices and limits) and the saved `billingAddress`.
+- Portal: the Subscribe step's plan row and the typed billing address (country matched to our list in ar/en); the onboarding Solo trial asks the address and opens the trial Checkout. Moving between plans is MUT-734; offers per plan MUT-703.
 
 ### Usage metering (MUT-735, ADR-281)
 - Every issued document (any type) and every finished scan is recorded in a first-party ledger (`usage_events`) and counted on the payer's monthly counter (`usage_counters`), in the action's own transaction, once each. The payer is the profile's creator (a co-owner's act counts to the creator); the month is the Asia/Jerusalem month.

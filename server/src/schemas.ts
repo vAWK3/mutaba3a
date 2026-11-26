@@ -632,6 +632,31 @@ export const BillingUsageSchema = z
   })
   .openapi('BillingUsage');
 
+/** MUT-702 Part B (ADR-288): the billing address, asked only when paying. Free text; the country is ISO 3166-1 alpha-2. */
+export const BillingAddressSchema = z
+  .object({
+    country: z.string().regex(/^[A-Z]{2}$/),
+    line1: z.string().trim().min(1).max(200),
+    city: z.string().trim().min(1).max(200),
+    postalCode: z.string().trim().min(1).max(200),
+  })
+  .strict()
+  .openapi('BillingAddress');
+
+/** MUT-702 Part B (ADR-288): one plan on sale, its live list prices (minor units, before tax) and its limits. */
+export const BillingPlanSchema = z
+  .object({
+    plan: z.enum(['solo', 'business', 'firm']),
+    catalog: z.object({ ILS: CatalogPairSchema, USD: CatalogPairSchema }),
+    limits: z.object({
+      businesses: z.number().int(),
+      partners: z.number().int(),
+      documentsPerMonth: z.number().int(),
+      scansPerMonth: z.number().int(),
+    }),
+  })
+  .openapi('BillingPlan');
+
 export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
@@ -705,6 +730,13 @@ export const BillingOverviewSchema = z
     activeBusinesses: z
       .union([z.object({ cap: z.number().int(), active: z.array(z.string().uuid()), readOnly: z.array(z.string().uuid()), mustChoose: z.boolean() }), z.null()])
       .optional(),
+    /**
+     * MUT-702 Part B (ADR-288): the plans on sale, cheapest first, with their live prices (a currency without both prices
+     * is null) and limits. Empty while PLAN_CHECKOUT is off or Stripe can't be asked. Additive since 1.146.0-mut702b.
+     */
+    plans: z.array(BillingPlanSchema).optional(),
+    /** MUT-702 Part B: the address saved on the person's billing account, to prefill the form; null with none. Additive since 1.146.0-mut702b. */
+    billingAddress: z.union([BillingAddressSchema, z.null()]).optional(),
   })
   .openapi('BillingOverview');
 
@@ -726,7 +758,14 @@ export const CheckoutSessionRequestSchema = z
      * MUT-565 (ADR-251): which plan. Absent is `freelancer`. `accountant` (monthly only: `interval` must be `month`)
      * covers client books, never the person's own profiles; no trial carried over and no offers. Additive since 1.108.0-mut565.
      */
-    plan: z.enum(['freelancer', 'accountant']).optional(),
+    plan: z.enum(['freelancer', 'accountant', 'solo', 'business', 'firm']).optional(),
+    /**
+     * MUT-702 Part B (ADR-288): required for `solo`, `business` and `firm`; its country must equal `country`. Saved on the
+     * person's billing account before Checkout, so the tax is computed from it. Additive since 1.146.0-mut702b.
+     */
+    address: BillingAddressSchema.optional(),
+    /** MUT-731 / Part B: the one-time 14-day Solo trial (card up front); `plan` must be `solo`. Additive since 1.146.0-mut702b. */
+    trial: z.boolean().optional(),
   })
   .strict()
   .openapi('CheckoutSessionRequest');

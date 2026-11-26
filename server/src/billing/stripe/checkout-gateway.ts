@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import { CHECKOUT_PLAN_METADATA_KEY, expectedTierOfLookupKey, OFFER_METADATA_KEY, type CheckoutPlanName, type SubscriptionState } from '../checkout.js';
+import { CHECKOUT_PLAN_METADATA_KEY, expectedTierOfLookupKey, ISRAEL_VAT, OFFER_METADATA_KEY, type BillingAddress, type CheckoutPlanName, type ProductTier, type SubscriptionState } from '../checkout.js';
 import type { CouponFact } from '../offer.js';
 import type { RenewalFacts } from '../renewal-mail.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
@@ -56,6 +56,12 @@ export interface CheckoutGateway {
   couponById(id: string, options?: { fresh?: boolean }): Promise<CouponFact | null>;
   /** MUT-525 (DD8): what the renewal notice needs of a subscription; null when Stripe no longer has it. */
   renewalOf(subscriptionId: string): Promise<RenewalFacts | null>;
+  /** MUT-702 Part B: the billing address the person gave, saved on the customer before Checkout (Stripe Tax reads it). */
+  setCustomerAddress(customer: string, address: BillingAddress): Promise<void>;
+  /** MUT-702 Part B: the customer's saved address, to prefill the form; null when it has no full one. */
+  customerAddress(customer: string): Promise<BillingAddress | null>;
+  /** MUT-702 Part B: the active Israeli VAT rate at `percentage` the catalog script made (ISRAEL_VAT); null with none. Cached like the catalog. */
+  israelVatRateId(percentage: number): Promise<string | null>;
 }
 
 /** A person is waiting: one retry, which the SDK makes safe with the same idempotency key. */
@@ -97,6 +103,7 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
   const coupons = new Map<string, CouponEntry>();
   const couponTtl = options.couponTtlMs ?? CATALOG_TTL_MS;
 
+  let vatRate: { at: number; percentage: number; id: string | null } | null = null;
   const productCache = new Map<string, { at: number; product: Stripe.Product | null }>();
   /** A product by id, cached for CATALOG_TTL_MS; null when Stripe has none (deleted). */
   async function productById(id: string): Promise<Stripe.Product | null> {
@@ -133,9 +140,11 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
 
   async function lookUp(cacheKey: string, keys: readonly string[]): Promise<Map<string, PriceFact>> {
     try {
-      const page = await wrapped(() => stripe.prices.list({ lookup_keys: [...keys], active: true, limit: LOOKUP_PAGE, expand: ['data.product'] }));
+      // MUT-702 Part B: Stripe takes at most ten lookup keys a call; the plans' twelve take two.
+      const chunks = Array.from({ length: Math.ceil(keys.length / LOOKUP_PAGE) }, (_, i) => keys.slice(i * LOOKUP_PAGE, (i + 1) * LOOKUP_PAGE));
+      const pages = await Promise.all(chunks.map((chunk) => wrapped(() => stripe.prices.list({ lookup_keys: [...chunk], active: true, limit: LOOKUP_PAGE, expand: ['data.product'] }))));
       const prices = new Map<string, PriceFact>();
-      for (const price of page.data) {
+      for (const price of pages.flatMap((page) => page.data)) {
         // MUT-565: each key must sit on its own plan's product (accountant_* on the Accountant one).
         const fact = price.lookup_key ? sellableFactOf(price, expectedTierOfLookupKey(price.lookup_key)) : null;
         if (fact && price.lookup_key) prices.set(price.lookup_key, fact);
@@ -193,7 +202,7 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
     },
     async expireOpenCheckouts(customer, plan = 'freelancer') {
       const page = await wrapped(() => stripe.checkout.sessions.list({ customer, status: 'open', limit: OPEN_SESSIONS_PAGE }));
-      const ours = page.data.filter((session) => (session.metadata?.[CHECKOUT_PLAN_METADATA_KEY] ?? 'freelancer') === plan);
+      const ours = page.data.filter((session) => samePlan(session.metadata?.[CHECKOUT_PLAN_METADATA_KEY] ?? 'freelancer', plan));
       for (const session of ours) await wrapped(() => stripe.checkout.sessions.expire(session.id));
       return ours.length;
     },
@@ -223,6 +232,22 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
         throw err;
       }
     },
+    async setCustomerAddress(customer, address) {
+      await wrapped(() => stripe.customers.update(customer, { address: { country: address.country, line1: address.line1, city: address.city, postal_code: address.postalCode } }));
+    },
+    async customerAddress(customer) {
+      const found = await wrapped(() => stripe.customers.retrieve(customer));
+      if ('deleted' in found && found.deleted) return null;
+      const a = (found as Stripe.Customer).address;
+      return a?.country && a.line1 && a.city && a.postal_code ? { country: a.country, line1: a.line1, city: a.city, postalCode: a.postal_code } : null;
+    },
+    async israelVatRateId(percentage) {
+      if (vatRate && vatRate.percentage === percentage && options.now().getTime() - vatRate.at < CATALOG_TTL_MS) return vatRate.id;
+      const page = await wrapped(() => stripe.taxRates.list({ active: true, inclusive: false, limit: 100 }));
+      const found = page.data.find((r) => r.metadata?.[ISRAEL_VAT.metadataKey] === ISRAEL_VAT.country && r.country === ISRAEL_VAT.country && r.percentage === percentage);
+      vatRate = { at: options.now().getTime(), percentage, id: found?.id ?? null };
+      return vatRate.id;
+    },
     async couponById(id, { fresh = false } = {}) {
       const hit = fresh ? undefined : coupons.get(id);
       const age = hit ? options.now().getTime() - hit.at : Number.POSITIVE_INFINITY;
@@ -235,11 +260,11 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
 
 /**
  * Only a price the mirror and our copy can stand behind (review): a monthly or yearly one (Stripe's interval type is
- * open-ended), on a product tagged with the plan's tier (`freelancer`, or MUT-565's `accountant`; else mirrorOf
+ * open-ended), on a product tagged with the plan's tier (`freelancer`, MUT-565's `accountant`, or Part B's plan; else mirrorOf
  * would mirror the paid subscription as another plan, or refuse it as UNKNOWN_TIER), VAT-exclusive (we promise
  * "Prices exclude VAT"), with an amount.
  */
-export function sellableFactOf(price: Stripe.Price, expectedTier: 'freelancer' | 'accountant'): PriceFact | null {
+export function sellableFactOf(price: Stripe.Price, expectedTier: ProductTier): PriceFact | null {
   const interval = price.recurring?.interval === 'month' ? 'month' : price.recurring?.interval === 'year' ? 'year' : null;
   if (!interval || price.recurring?.interval_count !== 1) return null;
   if (typeof price.unit_amount !== 'number' || price.unit_amount <= 0) return null;
@@ -281,6 +306,13 @@ function couponFactOf(coupon: Stripe.Coupon): CouponFact {
     redeemBy: typeof coupon.redeem_by === 'number' ? new Date(coupon.redeem_by * 1000) : null,
     appliesToProducts: coupon.applies_to?.products ? [...coupon.applies_to.products] : null,
   };
+}
+
+/** MUT-702 Part B: the profile plans share one Checkout at a time; the Accountant plan keeps its own. */
+const PROFILE_PLANS: ReadonlySet<string> = new Set(['freelancer', 'solo', 'business', 'firm']);
+
+function samePlan(sessionPlan: string, plan: CheckoutPlanName): boolean {
+  return plan === 'profile' ? PROFILE_PLANS.has(sessionPlan) : sessionPlan === plan;
 }
 
 function digestOf(...parts: string[]): string {

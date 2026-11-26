@@ -229,6 +229,8 @@ export interface AppDependencies {
   planCheckout?: boolean;
   /** MUT-731 (Basel Q7): SOLO_TRIAL_OFFER_SINCE; accounts created from it are offered the one-time Solo trial. Absent = off. */
   soloTrialOfferSince?: Date | null;
+  /** MUT-702 Part B (ADR-288): PLAN_CHECKOUT, Solo, Business and Firm on sale through Checkout. Absent = off. */
+  planSales?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -430,7 +432,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.145.0-mut731';
+export const API_VERSION = '1.146.0-mut702b';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -724,6 +726,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       plan: deps.stripe?.planGateway ?? null,
       accountantAccess,
       accountantPlanOn: accountantPlan.on,
+      planSales: deps.planSales ?? false,
     }),
   );
   // MUT-531/532: changing one's own plan (switch, pause, cancel, the stay offer), person-level like the rest of Billing.

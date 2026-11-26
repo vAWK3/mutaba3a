@@ -116,6 +116,8 @@ describe('STORE_ACCESS', () => {
       'billing.linkAccount',
       'billing.listAccounts',
       'billing.listGrants',
+      // MUT-702 Part B: the Stripe sync marks the Solo trial used.
+      'billing.markPaidTrialUsed',
       // MUT-535: the monthly summary run, on the unguarded store.
       'billing.monthlySummaryCandidates',
       'billing.offerRenewalCandidates',

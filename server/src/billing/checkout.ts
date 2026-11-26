@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import countriesFile from './billing-countries.json' with { type: 'json' };
 import { grantIsLive, periodOver, type BillingTier, type Entitlement, type GrantFact } from './entitlement.js';
 import { formatMinor } from './money.js';
+import { FREE_PLAN, listLookupKey, PLAN_NAMES, planOfLookupKey, type PlanName } from './plans.js';
 import { ARABIC_LOCALE } from '../dates.js';
 
 /**
@@ -32,11 +33,50 @@ export const ACCOUNTANT_PRICE_LOOKUP_KEYS: Readonly<Record<BillingCurrency, { mo
 export const ALL_ACCOUNTANT_LOOKUP_KEYS: readonly string[] = Object.values(ACCOUNTANT_PRICE_LOOKUP_KEYS).map((k) => k.month);
 /** MUT-565 review: the Checkout Session metadata naming its plan; absent is the Freelancer plan (sessions made before). */
 export const CHECKOUT_PLAN_METADATA_KEY = 'mutaba3a_plan';
-/** Which plan a Checkout is for (CheckoutSessionRequest.plan; absent is freelancer). */
-export type CheckoutPlanName = 'freelancer' | 'accountant';
-/** The Stripe product tier a lookup key must sit on: `accountant_*` keys on the Accountant product, every other on Freelancer. */
-export function expectedTierOfLookupKey(key: string): 'freelancer' | 'accountant' {
-  return key.startsWith('accountant_') ? 'accountant' : 'freelancer';
+/**
+ * Which plan a Checkout is for (CheckoutSessionRequest.plan; absent is freelancer). MUT-702 Part B: `profile` is every
+ * profile plan at once (freelancer, solo, business, firm), so only the newest of them can be paid.
+ */
+export type CheckoutPlanName = 'freelancer' | 'accountant' | PlanName | 'profile';
+/** The Stripe product tier a lookup key must sit on (its `tier` metadata). */
+export type ProductTier = 'freelancer' | 'accountant' | PlanName;
+/**
+ * `accountant_*` keys on the Accountant product, MUT-702 Part B's `{plan}_list_*` on that plan's product, every other
+ * (the legacy `freelancer_*`) on Freelancer.
+ */
+export function expectedTierOfLookupKey(key: string): ProductTier {
+  if (key.startsWith('accountant_')) return 'accountant';
+  return planOfLookupKey(key) ?? 'freelancer';
+}
+
+/** MUT-702 Part B (ADR-288): who sells every subscription, and through which provider (Basel, 2026-11-26). */
+export const SELLER = 'barmajiyat' as const;
+export const SELLER_METADATA_KEY = 'mutaba3a_seller';
+/** The subscription metadata marking the one-time Solo trial, so the mirror can record it used. */
+export const TRIAL_METADATA_KEY = 'mutaba3a_trial';
+/**
+ * MUT-702 Part B (Basel, 2026-11-26; ADR-286 decision 2): Israeli residents pay VAT on top of the list price, at the
+ * rate `billing-countries.json` `vatRates.IL` sets. Stripe Tax has no Israel registration (its API refuses
+ * `country_options[il]`), so it is a Stripe tax rate the catalog script makes from that value, found by its metadata,
+ * country and percentage; every other country goes through Stripe Tax.
+ */
+export const ISRAEL_VAT = { country: 'IL', metadataKey: 'mtb3a_vat' } as const;
+
+/** The configured Israeli VAT percent; null when billing-countries.json sets none (Israel then can't be sold). */
+export function israelVatPercent(countries: BillingCountries): number | null {
+  return countries.vatRates?.[ISRAEL_VAT.country] ?? null;
+}
+
+/** MUT-731 (Basel Q7): the Solo trial's length; a card up front. */
+export const SOLO_TRIAL_DAYS = 14;
+
+/** The billing address the person gives on the pay path only (never at sign-up, never on Starter). Free text. */
+export interface BillingAddress {
+  /** ISO 3166-1 alpha-2, matched by the portal from what the person typed. */
+  country: string;
+  line1: string;
+  city: string;
+  postalCode: string;
 }
 
 export interface CatalogPrice {
@@ -59,6 +99,11 @@ export interface BillingCountries {
   consumer: typeof EVERY_COUNTRY | readonly string[];
   /** Where Stripe has no tax-ID type, so a business types its number into a Checkout custom field. */
   customTaxId: readonly string[];
+  /**
+   * MUT-702 Part B (ADR-286 decision 2, ADR-288): the VAT we add ourselves, percent by country, on top of the list price
+   * for an address there (Israel: 18). One configuration value; Stripe Tax is not relied on for these countries.
+   */
+  vatRates?: Readonly<Record<string, number>>;
 }
 
 /** Stripe's minimum is 30 minutes; a forgotten tab can't be paid days later (plan §2.3). */
@@ -113,7 +158,10 @@ export type CheckoutRefusal =
   | 'COVERED_BY_GRANT'
   | 'COUNTRY_NEEDS_BUSINESS'
   | 'PRICES_NOT_SET'
-  | 'VALIDATION_FAILED';
+  | 'VALIDATION_FAILED'
+  | 'ADDRESS_INVALID'
+  | 'TRIAL_NOT_OFFERED'
+  | 'PLAN_CHECKOUT_OFF';
 
 export interface CheckoutInput {
   userId: string;
@@ -127,6 +175,17 @@ export interface CheckoutInput {
   trialEndsAt: Date | null;
   /** MUT-525: the launch offer this Checkout carries (the route decided it applies), else null or absent. */
   offer?: AppliedOffer | null;
+  /** MUT-702 Part B: the plan sold; absent or null is the legacy Freelancer Checkout, unchanged. */
+  plan?: PlanName | null;
+  /** MUT-702 Part B: saved on the customer before the session, so Stripe's page shows it and can't change it. */
+  address?: BillingAddress | null;
+  /** MUT-731 (Basel Q7): the one-time Solo trial (the route checked `soloTrialOpen`). */
+  soloTrial?: boolean;
+  /**
+   * MUT-702 Part B: Stripe's Israeli VAT rate at the configured percent (ISRAEL_VAT, made by the catalog script). Stripe
+   * Tax takes no Israel registration, so an Israeli address is taxed with this rate instead; null: Israel can't be sold yet.
+   */
+  israelVatRateId?: string | null;
 }
 
 /** MUT-525: what an offer adds to a Checkout: its coupon, its name in the metadata, and the pay-page line (R8). */
@@ -160,10 +219,11 @@ export const ALL_GA_LOOKUP_KEYS: readonly string[] = Object.values(GA_PRICE_LOOK
  * The sellable catalog from the prices Stripe returned: a currency needs both its prices, each in that currency and
  * interval. A key put on the wrong price in the dashboard leaves that currency unsellable rather than mischarging.
  */
-export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: string; unitAmount: number; interval: BillingInterval; productId: string }>): Catalog {
+export function catalogFrom(prices: ReadonlyMap<string, PriceLike>, plan?: PlanName): Catalog {
+  const keyOf = (currency: BillingCurrency, interval: BillingInterval) => (plan ? listLookupKey(plan, interval, currency) : GA_PRICE_LOOKUP_KEYS[currency][interval]);
   const pairOf = (currency: BillingCurrency) => {
     const pick = (interval: BillingInterval) => {
-      const price = prices.get(GA_PRICE_LOOKUP_KEYS[currency][interval]);
+      const price = prices.get(keyOf(currency, interval));
       return price && price.currency === currency && price.interval === interval ? { id: price.id, unitAmount: price.unitAmount, productId: price.productId } : null;
     };
     const month = pick('month');
@@ -171,6 +231,33 @@ export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: 
     return month && year ? { month, year } : null;
   };
   return { ILS: pairOf('ILS'), USD: pairOf('USD') };
+}
+
+type PriceLike = { id: string; currency: string; unitAmount: number; interval: BillingInterval; productId: string };
+
+/** MUT-702 Part B (ADR-288): each plan on sale's catalog, from its own list keys. */
+export type PlanCatalogs = Record<PlanName, Catalog>;
+
+export function planCatalogsFrom(prices: ReadonlyMap<string, PriceLike>): PlanCatalogs {
+  return Object.fromEntries(PLAN_NAMES.map((plan) => [plan, catalogFrom(prices, plan)])) as PlanCatalogs;
+}
+
+const ADDRESS_LINE_MAX = 200;
+
+/** A two-letter country and every line given (Stripe Tax needs them all to compute the tax). */
+export function addressRefusalOf(address: BillingAddress): 'ADDRESS_INVALID' | null {
+  if (!COUNTRY.test(address.country)) return 'ADDRESS_INVALID';
+  const lines = [address.line1, address.city, address.postalCode];
+  return lines.every((line) => line.trim() !== '' && line.length <= ADDRESS_LINE_MAX) ? null : 'ADDRESS_INVALID';
+}
+
+/**
+ * MUT-731 (Basel Q7, ADR-284) and Part B: Checkout may carry the one-time Solo trial only for an account created from
+ * SOLO_TRIAL_OFFER_SINCE, on Starter, that web onboarding offered it to and that never used it.
+ */
+export function soloTrialOpen(facts: { since: Date | null; starterPlan: boolean; currentPlan: string | null; createdAt: Date; trial: { offeredAt: Date | null; usedAt: Date | null } | null }): boolean {
+  if (!facts.since || !facts.starterPlan || facts.currentPlan !== FREE_PLAN || facts.createdAt < facts.since) return false;
+  return facts.trial !== null && facts.trial.offeredAt !== null && facts.trial.usedAt === null;
 }
 
 /**
@@ -210,11 +297,14 @@ export function currentSubscription<T extends SubscriptionState>(subscriptions: 
 }
 
 export function planCheckout(input: CheckoutInput, person: PersonBilling, countries: BillingCountries, catalog: Catalog): CheckoutPlan {
-  const refusal = checkoutRefusalOf(input, person, countries);
+  const onSale = input.plan && (PLAN_NAMES as readonly string[]).includes(input.plan);
+  const refusal = checkoutRefusalOf(input, person, countries) ?? (onSale ? (input.address ? addressRefusalOf(input.address) : 'ADDRESS_INVALID') : null);
   if (refusal) return { ok: false, code: refusal };
   const currency = currencyOf(input.country);
   const prices = catalog[currency];
   if (!prices) return { ok: false, code: 'PRICES_NOT_SET' };
+  // Never sell a plan in Israel without its VAT.
+  if (onSale && input.country === ISRAEL_VAT.country && !input.israelVatRateId) return { ok: false, code: 'PRICES_NOT_SET' };
   return { ok: true, currency, params: paramsOf(input, currency, prices[input.interval], countries) };
 }
 
@@ -290,16 +380,30 @@ function paramsOf(input: CheckoutInput, currency: BillingCurrency, price: Catalo
     ? [{ key: BUSINESS_TAX_NUMBER_KEY, label: { type: 'custom', custom: TAX_NUMBER_FIELD_LABEL }, type: 'text', optional: false }]
     : [];
   const offer = input.offer ?? null;
-  const trial = trialCarriedOver(input);
+  // Only a plan on sale: a caller's wider body (the Accountant Checkout's carries `plan: accountant`) is never one.
+  const plan = input.plan && (PLAN_NAMES as readonly string[]).includes(input.plan) ? input.plan : null;
+  const soloTrial = plan === 'solo' && input.soloTrial === true;
+  const trial = soloTrial ? {} : trialCarriedOver(input);
+  // MUT-702 Part B: a plan Checkout names its plan and seller; the address was saved on the customer first, so
+  // Stripe's page shows it and can't change it (the currency was already chosen from it).
+  const planMetadata = plan ? { [CHECKOUT_PLAN_METADATA_KEY]: plan, [SELLER_METADATA_KEY]: SELLER } : null;
+  const trialData = soloTrial ? { trial_period_days: SOLO_TRIAL_DAYS, trial_settings: { end_behavior: { missing_payment_method: 'cancel' as const } } } : {};
+  const israeliVat = plan !== null && input.country === ISRAEL_VAT.country && input.israelVatRateId ? input.israelVatRateId : null;
   return {
     mode: 'subscription',
-    line_items: [{ price: price.id, quantity: 1 }],
+    line_items: [{ price: price.id, quantity: 1, ...(israeliVat ? { tax_rates: [israeliVat] } : {}) }],
     client_reference_id: input.userId,
+    ...(planMetadata ? { metadata: planMetadata } : {}),
     ...(offer ? { discounts: [{ coupon: offer.couponId }] } : {}),
-    subscription_data: { metadata: { mutaba3a_user_id: input.userId, ...(offer ? { [OFFER_METADATA_KEY]: offer.id } : {}) }, ...trial },
-    customer_update: { address: 'auto', name: 'auto' },
-    automatic_tax: { enabled: true },
-    billing_address_collection: 'required',
+    ...(soloTrial ? { payment_method_collection: 'always' as const } : {}),
+    subscription_data: {
+      metadata: { mutaba3a_user_id: input.userId, ...(planMetadata ?? {}), ...(soloTrial ? { [TRIAL_METADATA_KEY]: 'solo' } : {}), ...(offer ? { [OFFER_METADATA_KEY]: offer.id } : {}) },
+      ...trial,
+      ...trialData,
+    },
+    customer_update: { address: plan ? 'never' : 'auto', name: 'auto' },
+    automatic_tax: { enabled: israeliVat === null },
+    billing_address_collection: plan ? 'auto' : 'required',
     tax_id_collection: { enabled: true, required: taxIdRequired ? 'if_supported' : 'never' },
     custom_fields: customFields,
     locale: 'auto',
@@ -365,7 +469,15 @@ function trialCarriedOver(input: CheckoutInput): { trial_end?: number } {
 export function parseBillingCountries(raw: unknown): BillingCountries {
   const value = (raw ?? {}) as Record<string, unknown>;
   const consumer = value.consumerCountries === EVERY_COUNTRY ? EVERY_COUNTRY : codes(value, 'consumerCountries');
-  return { consumer, customTaxId: codes(value, 'customTaxIdCountries') };
+  const vatRates = value.vatRates === undefined ? null : ratesOf(value.vatRates);
+  return { consumer, customTaxId: codes(value, 'customTaxIdCountries'), ...(vatRates ? { vatRates } : {}) };
+}
+
+/** `vatRates`: ISO-2 country → a percent above 0 and below 100. */
+function ratesOf(raw: unknown): Record<string, number> {
+  const ok = typeof raw === 'object' && raw !== null && !Array.isArray(raw) && Object.entries(raw).every(([c, r]) => COUNTRY.test(c) && typeof r === 'number' && r > 0 && r < 100);
+  if (!ok) throw new Error('billing-countries.json: vatRates must map ISO 3166-1 alpha-2 codes to a percent between 0 and 100');
+  return { ...(raw as Record<string, number>) };
 }
 
 function codes(value: Record<string, unknown>, field: string): string[] {

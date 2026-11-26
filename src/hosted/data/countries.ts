@@ -42,3 +42,49 @@ export function countryOptions(language: Language): CountryOption[] {
     .sort((a, b) => collator.compare(a.name, b.name));
   return [...first, ...rest];
 }
+
+/**
+ * MUT-702 Part B (Basel, 2026-11-26): the billing address's country is typed, not picked from a list. What the person
+ * types is matched against every country's Arabic and English names (and its two-letter code); only a match counts,
+ * because the country sets the currency and the VAT.
+ */
+const LANGUAGES: readonly Language[] = ['ar', 'en'];
+
+/** Case, accents, Arabic short vowels and hamza forms, and a leading «ال», ignored. */
+export function foldCountryText(text: string): string {
+  const folded = text
+    .normalize('NFKD')
+    .replace(/[̀-ًͯ-ٰٟ]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} ]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return folded.startsWith('ال') ? folded.slice(2) : folded;
+}
+
+let folded: Array<{ code: string; names: string[] }> | null = null;
+
+function foldedNames(): Array<{ code: string; names: string[] }> {
+  folded ??= BILLING_COUNTRY_CODES.map((code) => ({ code, names: [code.toLowerCase(), ...LANGUAGES.map((language) => foldCountryText(countryName(code, language)))] }));
+  return folded;
+}
+
+/** The country the text names exactly (in Arabic, English, or its code); null otherwise. */
+export function matchCountry(text: string): string | null {
+  const typed = foldCountryText(text);
+  if (typed === '') return null;
+  return foldedNames().find((c) => c.names.includes(typed))?.code ?? null;
+}
+
+/** Countries whose name (or a word of it) starts with the text, the region first, named in the reader's language. */
+export function countrySuggestions(text: string, language: Language, limit = 6): CountryOption[] {
+  const typed = foldCountryText(text);
+  if (typed === '') return [];
+  const hits = new Set(foldedNames().filter((c) => c.names.some((name) => name.startsWith(typed) || name.split(' ').some((word) => word.startsWith(typed)))).map((c) => c.code));
+  return countryOptions(language)
+    .filter((o) => hits.has(o.code))
+    .slice(0, limit);
+}

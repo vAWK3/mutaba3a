@@ -469,5 +469,31 @@ describe('Stripe sync (MUT-360)', () => {
     expect(summary.errors).toEqual([{ subscriptionId: null, code: 'TIME_BUDGET' }]);
     await expect(h.sync.reconcile(null)).resolves.toBeDefined();
   });
-});
 
+  it('MUT-702 Part B: a trialing Solo subscription from the trial Checkout marks the Solo trial used, once', async () => {
+    const h = await harness();
+    h.stripe.products.set('prod_SOLO', stripeObjects.product('prod_SOLO', 'solo'));
+    const u = await h.person();
+    h.stripe.customers.set('cus_t', stripeObjects.customer('cus_t', { mutaba3a_user_id: u.userId }));
+    h.stripe.subscriptions.set(
+      'sub_t',
+      stripeObjects.subscription({ id: 'sub_t', customer: 'cus_t', product: 'prod_SOLO', status: 'trialing', lookupKey: 'solo_list_monthly_ils', metadata: { mutaba3a_trial: 'solo', mutaba3a_plan: 'solo' } }),
+    );
+    await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_t' }), 'req-t');
+    expect(await h.store.billing.paidTrialOf(u.userId)).toEqual({ offeredAt: null, usedAt: NOW });
+    expect(await h.billingOf(u.personalId)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'SOLO' });
+    h.tick();
+    await h.sync.handleEvent(h.event('customer.subscription.updated', { id: 'sub_t' }), 'req-t2');
+    expect((await h.store.billing.paidTrialOf(u.userId))?.usedAt).toEqual(NOW);
+  });
+
+  it('MUT-702 Part B: a Solo subscription without the trial metadata leaves the trial unused', async () => {
+    const h = await harness();
+    h.stripe.products.set('prod_SOLO', stripeObjects.product('prod_SOLO', 'solo'));
+    const u = await h.person();
+    h.stripe.customers.set('cus_p', stripeObjects.customer('cus_p', { mutaba3a_user_id: u.userId }));
+    h.stripe.subscriptions.set('sub_p', stripeObjects.subscription({ id: 'sub_p', customer: 'cus_p', product: 'prod_SOLO', lookupKey: 'solo_list_monthly_ils' }));
+    await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_p' }), 'req-p');
+    expect((await h.store.billing.paidTrialOf(u.userId))?.usedAt).toBeNull();
+  });
+});

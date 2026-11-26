@@ -1264,6 +1264,10 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-billing-profile-name { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hp-billing-field { display: flex; flex-direction: column; gap: var(--space-1); }
 .hp-billing-interval .segmented-control-option { min-block-size: 44px; }
+/* MUT-702 Part B: the billing address (free text; city and postal code share a row, stacked on a phone). */
+.hp-billing-address { border: 0; margin: 0; padding: 0; gap: var(--space-2); min-inline-size: 0; }
+.hp-billing-address-row { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-2); }
+@media (max-width: 420px) { .hp-billing-address-row { grid-template-columns: 1fr; } }
 .hp-billing-summary { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; background: var(--surface-2); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
 .hp-billing-stack { display: flex; flex-direction: column; gap: var(--space-2); }
 .hp-billing-back { align-self: flex-start; min-block-size: 44px; padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-size: var(--text-label); font-weight: var(--weight-medium); cursor: pointer; }

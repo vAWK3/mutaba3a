@@ -4,6 +4,7 @@ import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
+import type { BillingAddress, CheckoutPlanName } from '../../checkout.js';
 import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 import type { FailedPaymentFacts } from '../../card-failed-mail.js';
@@ -149,6 +150,45 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return this;
   }
 
+  /** MUT-702 Part B: the plans' twelve list prices (the catalog script's spec), each on its plan's product. */
+  withPlanPrices(): this {
+    const spec = { solo: [3900, 1200], business: [8900, 2700], firm: [24900, 7500] } as const;
+    for (const [plan, [ils, usd]] of Object.entries(spec)) {
+      for (const [currency, month] of [['ILS', ils], ['USD', usd]] as const) {
+        const tag = currency.toLowerCase();
+        this.prices.set(`${plan}_list_monthly_${tag}`, { id: `price_${plan}_m_${tag}`, currency, unitAmount: month, interval: 'month', productId: `prod_${plan}` });
+        this.prices.set(`${plan}_list_yearly_${tag}`, { id: `price_${plan}_y_${tag}`, currency, unitAmount: month * 10, interval: 'year', productId: `prod_${plan}` });
+      }
+    }
+    this.vatRateId = 'txr_il_vat';
+    return this;
+  }
+
+  /** MUT-702 Part B: the Israeli VAT rate (withPlanPrices makes one). */
+  vatRateId: string | null = null;
+
+  /** The percent each lookup asked for. */
+  readonly vatPercents: number[] = [];
+
+  async israelVatRateId(percentage: number): Promise<string | null> {
+    this.calls.push('vatRate');
+    this.vatPercents.push(percentage);
+    return this.vatRateId;
+  }
+
+  /** MUT-702 Part B: billing addresses saved on customers. */
+  readonly addresses = new Map<string, BillingAddress>();
+
+  async setCustomerAddress(customer: string, address: BillingAddress): Promise<void> {
+    this.take(`address:${customer}`);
+    this.addresses.set(customer, address);
+  }
+
+  async customerAddress(customer: string): Promise<BillingAddress | null> {
+    this.take(`readAddress:${customer}`);
+    return this.addresses.get(customer) ?? null;
+  }
+
   /** MUT-565: the Accountant plan's monthly prices (the placeholder ₪99 / $25), on its own product. */
   withAccountantPrices(): this {
     this.prices.set('accountant_list_monthly_ils', { id: 'price_accountant_list_monthly_ils', currency: 'ILS', unitAmount: 9900, interval: 'month', productId: FAKE_ACCOUNTANT_PRODUCT });
@@ -217,11 +257,16 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return this.stripeSubscriptions.get(customer) ?? [];
   }
 
-  async expireOpenCheckouts(customer: string, plan: 'freelancer' | 'accountant' = 'freelancer'): Promise<number> {
+  async expireOpenCheckouts(customer: string, plan: CheckoutPlanName = 'freelancer'): Promise<number> {
     this.take(`expire:${customer}`);
-    const key = `${customer}:${plan}`;
-    const open = this.openByPlan.get(key) ?? 0;
-    this.openByPlan.set(key, 0);
+    // MUT-702 Part B: `profile` is every profile plan at once.
+    const plans = plan === 'profile' ? ['freelancer', 'solo', 'business', 'firm'] : [plan];
+    let open = 0;
+    for (const one of plans) {
+      const key = `${customer}:${one}`;
+      open += this.openByPlan.get(key) ?? 0;
+      this.openByPlan.set(key, 0);
+    }
     this.openCheckouts.set(customer, Math.max(0, (this.openCheckouts.get(customer) ?? 0) - open));
     this.expiredCheckouts += open;
     return open;

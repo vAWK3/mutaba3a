@@ -116,16 +116,18 @@ features:
   - id: solo-trial-step
     title: A new account's first web visit offers the 14-day Solo trial once, beside Continue on Starter
     tier: secondary
-    tickets: [MUT-731]
     status: hidden
-    reason: Dark until Solo can be bought (MUT-702 Part B) — SOLO_TRIAL_CHECKOUT is false in the portal and SOLO_TRIAL_OFFER_SINCE unset on the server. Automate when both go on.
+    reason: Dark until release — SOLO_TRIAL_CHECKOUT is false in the portal (a build constant, so no spec can turn it on) and SOLO_TRIAL_OFFER_SINCE and PLAN_CHECKOUT unset on the server. Covered meanwhile by AuthGate.soloTrial.test.tsx (the address step and the trial Checkout's body) and billing-plan-checkout.test.ts. Automate when they go on.
+    tickets: [MUT-731, MUT-702]
     paths:
       - src/hosted/pages/onboarding/SoloTrialStep.tsx
     steps:
       - Sign up on the web (or open the portal for the first time after signing up on the phone)
-      - Read the step, then choose Continue on Starter
-      - Sign out and in again
+      - Read the step, then choose Try Solo free for 14 days
+      - Type the billing address in Israel and choose Continue to payment
+      - On another new account, choose Continue on Starter, then sign out and in again
     expect:
-      - The step "Choose how to start" sets Starter and Solo side by side (1/1 business, 3/50 documents, 12/100 scans, the Tax Authority connection), with the card terms and the first-charge day, Solo's price from the live price list and "Offered only now."
-      - Home opens on Starter
-      - The step never shows again
+      - The step "Choose how to start" sets Starter and Solo side by side (1/1 business, 3/50 documents, 12/100 scans, the Tax Authority connection), with the card terms and the first-charge day, "Then ₪39.00 or $12.00 a month" from the live price list and "Offered only now."
+      - The billing address step shows, and its price line reads "Then ₪39.00 + VAT a month"
+      - Stripe's page opens for Solo with a 14-day trial and a card required
+      - Home opens on Starter and the step never shows again

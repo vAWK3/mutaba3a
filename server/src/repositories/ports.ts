@@ -2755,6 +2755,8 @@ export interface BillingRepository {
   paidTrialOf(userId: string): Promise<PaidTrialRecord | null>;
   /** MUT-731: records that the web onboarding step showed the trial (first time only; later calls keep the first date). */
   markPaidTrialOffered(userId: string, at: Date): Promise<PaidTrialRecord | null>;
+  /** MUT-702 Part B: records the Solo trial used when its trialing subscription first mirrors (first time only). */
+  markPaidTrialUsed(userId: string, at: Date): Promise<PaidTrialRecord | null>;
   /** MUT-331's signup sets it at email verification. Null for an unknown user. */
   setTrialStart(userId: string, at: Date): Promise<{ trialStartedAt: Date } | null>;
   /**

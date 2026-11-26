@@ -183,3 +183,14 @@ describe('mirrorOf: the Accountant plan (MUT-565, test 8)', () => {
     expect(mirrorOf(mixed, new Map())).toEqual({ error: 'UNKNOWN_TIER' });
   });
 });
+
+/** MUT-702 Part B (ADR-288): the plans on sale mirror as their own tiers; a Firm plan covers the person, not one profile. */
+describe('mirrorOf, the plans on sale (MUT-702 Part B)', () => {
+  it.each([
+    ['solo', 'SOLO', 'solo_list_monthly_ils'],
+    ['business', 'BUSINESS', 'business_list_yearly_usd'],
+    ['firm', 'FIRM', 'firm_list_monthly_ils'],
+  ])('a %s product mirrors as %s with no note', (tier, mirrored, key) => {
+    expect(mirrorOf(subscription({}, [item(product(`prod_${tier}`, tier), 1, key)]), new Map())).toMatchObject({ ok: { tier: mirrored, organizationId: null, priceLookupKey: key }, notes: [] });
+  });
+});
