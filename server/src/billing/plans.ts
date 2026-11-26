@@ -132,7 +132,7 @@ export const HARD_CAP_PLANS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PL
 export const ENFORCED_BUSINESS_CAPS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN]);
 
 /**
- * MUT-702 Part B (ADR-286): each plan's list prices by lookup key, `{plan}_list_{monthly|yearly}_{ils|usd}`. The amounts
+ * MUT-702 Part B (ADR-288): each plan's list prices by lookup key, `{plan}_list_{monthly|yearly}_{ils|usd}`. The amounts
  * live in the payment provider's catalog, written only by the catalog script (scripts/stripe-plans.ts).
  */
 export type ListInterval = 'month' | 'year';

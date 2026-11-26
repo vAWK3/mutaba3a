@@ -3,7 +3,7 @@ import { planCheckout, parseBillingCountries } from '../../checkout.js';
 import { stripeProvider } from '../provider.js';
 import { FakeCheckoutGateway } from './fake.js';
 
-/** MUT-702 Part B (ADR-286): the Stripe adapter behind the provider-neutral port. */
+/** MUT-702 Part B (ADR-288): the Stripe adapter behind the provider-neutral port. */
 const ADDRESS = { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' };
 const USER = '11111111-1111-4111-8111-111111111111';
 const NOW = new Date('2026-11-26T09:00:00Z');
@@ -27,7 +27,7 @@ describe('stripeProvider (MUT-702 Part B)', () => {
     const provider = stripeProvider(gateway);
     const catalogs = await provider.catalogs();
     const plan = planCheckout(
-      { userId: USER, interval: 'month', country: 'IL', buyer: 'person', returnUrl: 'https://app.example', now: NOW, trialEndsAt: null, plan: 'solo', address: ADDRESS, israelVatRateId: await provider.israelVatRate() },
+      { userId: USER, interval: 'month', country: 'IL', buyer: 'person', returnUrl: 'https://app.example', now: NOW, trialEndsAt: null, plan: 'solo', address: ADDRESS, israelVatRateId: await provider.israelVatRate(18) },
       { subscriptions: [], owned: [{ state: 'ACTIVE', source: 'TRIAL', tier: 'BUSINESS', until: new Date('2026-12-10T00:00:00Z') }] },
       COUNTRIES,
       catalogs.solo,

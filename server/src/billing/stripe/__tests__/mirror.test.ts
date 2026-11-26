@@ -184,7 +184,7 @@ describe('mirrorOf: the Accountant plan (MUT-565, test 8)', () => {
   });
 });
 
-/** MUT-702 Part B (ADR-286): the plans on sale mirror as their own tiers; a Firm plan covers the person, not one profile. */
+/** MUT-702 Part B (ADR-288): the plans on sale mirror as their own tiers; a Firm plan covers the person, not one profile. */
 describe('mirrorOf, the plans on sale (MUT-702 Part B)', () => {
   it.each([
     ['solo', 'SOLO', 'solo_list_monthly_ils'],

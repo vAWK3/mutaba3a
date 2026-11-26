@@ -60,8 +60,8 @@ export interface CheckoutGateway {
   setCustomerAddress(customer: string, address: BillingAddress): Promise<void>;
   /** MUT-702 Part B: the customer's saved address, to prefill the form; null when it has no full one. */
   customerAddress(customer: string): Promise<BillingAddress | null>;
-  /** MUT-702 Part B: the active 18% Israeli VAT rate the catalog script made (ISRAEL_VAT); null with none. Cached like the catalog. */
-  israelVatRateId(): Promise<string | null>;
+  /** MUT-702 Part B: the active Israeli VAT rate at `percentage` the catalog script made (ISRAEL_VAT); null with none. Cached like the catalog. */
+  israelVatRateId(percentage: number): Promise<string | null>;
 }
 
 /** A person is waiting: one retry, which the SDK makes safe with the same idempotency key. */
@@ -103,7 +103,7 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
   const coupons = new Map<string, CouponEntry>();
   const couponTtl = options.couponTtlMs ?? CATALOG_TTL_MS;
 
-  let vatRate: { at: number; id: string | null } | null = null;
+  let vatRate: { at: number; percentage: number; id: string | null } | null = null;
   const productCache = new Map<string, { at: number; product: Stripe.Product | null }>();
   /** A product by id, cached for CATALOG_TTL_MS; null when Stripe has none (deleted). */
   async function productById(id: string): Promise<Stripe.Product | null> {
@@ -241,11 +241,11 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       const a = (found as Stripe.Customer).address;
       return a?.country && a.line1 && a.city && a.postal_code ? { country: a.country, line1: a.line1, city: a.city, postalCode: a.postal_code } : null;
     },
-    async israelVatRateId() {
-      if (vatRate && options.now().getTime() - vatRate.at < CATALOG_TTL_MS) return vatRate.id;
+    async israelVatRateId(percentage) {
+      if (vatRate && vatRate.percentage === percentage && options.now().getTime() - vatRate.at < CATALOG_TTL_MS) return vatRate.id;
       const page = await wrapped(() => stripe.taxRates.list({ active: true, inclusive: false, limit: 100 }));
-      const found = page.data.find((r) => r.metadata?.[ISRAEL_VAT.metadataKey] === ISRAEL_VAT.country && r.country === ISRAEL_VAT.country && r.percentage === ISRAEL_VAT.percentage);
-      vatRate = { at: options.now().getTime(), id: found?.id ?? null };
+      const found = page.data.find((r) => r.metadata?.[ISRAEL_VAT.metadataKey] === ISRAEL_VAT.country && r.country === ISRAEL_VAT.country && r.percentage === percentage);
+      vatRate = { at: options.now().getTime(), percentage, id: found?.id ?? null };
       return vatRate.id;
     },
     async couponById(id, { fresh = false } = {}) {

@@ -3,7 +3,7 @@ import { planCatalogsFrom, SELLER } from '../checkout.js';
 import type { BillingProvider } from '../provider.js';
 import type { CheckoutGateway } from './checkout-gateway.js';
 
-/** MUT-702 Part B (ADR-286): the one adapter, a thin wrapper over the Stripe gateway; no Stripe logic lives here. */
+/** MUT-702 Part B (ADR-288): the one adapter, a thin wrapper over the Stripe gateway; no Stripe logic lives here. */
 export function stripeProvider(checkout: CheckoutGateway): BillingProvider {
   return {
     id: 'stripe',
@@ -11,7 +11,7 @@ export function stripeProvider(checkout: CheckoutGateway): BillingProvider {
     async catalogs() {
       return planCatalogsFrom(await checkout.pricesByLookupKey(ALL_PLAN_LOOKUP_KEYS));
     },
-    israelVatRate: () => checkout.israelVatRateId(),
+    israelVatRate: (percentage) => checkout.israelVatRateId(percentage),
     billingAddress: (customer) => checkout.customerAddress(customer),
     async startCheckout({ customer, address, params }) {
       // Stripe Tax reads the customer's address, and `customer_update.address: never` keeps it as given.

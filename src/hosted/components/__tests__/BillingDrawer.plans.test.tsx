@@ -5,7 +5,7 @@ import type { BillingEntitlement, BillingOverview } from '../../api/client';
 import { stripeNavigation } from '../../data/billingQueries';
 
 /**
- * MUT-702 Part B (ADR-286, wireframes v3): with plans on sale the Subscribe step shows a plan row (live prices, a limits
+ * MUT-702 Part B (ADR-288, wireframes v3): with plans on sale the Subscribe step shows a plan row (live prices, a limits
  * line, the current plan not offered) and a billing address typed as free text, its country matched to our list.
  */
 

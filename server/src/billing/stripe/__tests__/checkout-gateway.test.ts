@@ -433,7 +433,7 @@ describe('one tier reading: Stripe’s list and the mirror agree (MUT-565 review
   });
 });
 
-/** MUT-702 Part B (ADR-286): the plans' twelve keys, their products, the profile-plan expiry and the billing address. */
+/** MUT-702 Part B (ADR-288): the plans' twelve keys, their products, the profile-plan expiry and the billing address. */
 describe('CheckoutGateway for the plans on sale (MUT-702 Part B)', () => {
   const planPrice = (key: string, tier: string) => ({ ...price(key, key.endsWith('_ils') ? 'ils' : 'usd', 3900, key.includes('yearly') ? 'year' : 'month'), product: { id: `prod_${tier}`, object: 'product', metadata: { tier } } });
 
@@ -495,10 +495,10 @@ describe('CheckoutGateway for the plans on sale (MUT-702 Part B)', () => {
 describe('CheckoutGateway Israeli VAT rate (MUT-702 Part B)', () => {
   const rate = (id: string, over: Record<string, unknown> = {}) => ({ id, object: 'tax_rate', active: true, inclusive: false, country: 'IL', percentage: 18, metadata: { mtb3a_vat: 'IL' }, ...over });
 
-  it('finds the catalog script’s 18% Israeli rate, exclusive and active, and caches it', async () => {
+  it('finds the catalog script’s Israeli rate at the configured percent, exclusive and active, and caches it', async () => {
     const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([rate('txr_other', { metadata: {} }), rate('txr_17', { percentage: 17 }), rate('txr_il')]) }));
-    expect(await gateway.israelVatRateId()).toBe('txr_il');
-    await gateway.israelVatRateId();
+    expect(await gateway.israelVatRateId(18)).toBe('txr_il');
+    await gateway.israelVatRateId(18);
     expect(seen.map(route)).toEqual(['GET /v1/tax_rates']);
     expect(seen[0]!.query.get('active')).toBe('true');
     expect(seen[0]!.query.get('inclusive')).toBe('false');
@@ -506,6 +506,6 @@ describe('CheckoutGateway Israeli VAT rate (MUT-702 Part B)', () => {
 
   it('none: null', async () => {
     const { gateway } = gatewayWith(() => ({ status: 200, body: list([]) }));
-    expect(await gateway.israelVatRateId()).toBeNull();
+    expect(await gateway.israelVatRateId(18)).toBeNull();
   });
 });

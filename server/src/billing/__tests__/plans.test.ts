@@ -146,7 +146,7 @@ describe('plans', () => {
     });
   });
 
-  describe('list lookup keys (MUT-702 Part B, ADR-286)', () => {
+  describe('list lookup keys (MUT-702 Part B, ADR-288)', () => {
     it('names each plan, interval and currency', () => {
       expect(listLookupKey('solo', 'month', 'ILS')).toBe('solo_list_monthly_ils');
       expect(listLookupKey('business', 'year', 'USD')).toBe('business_list_yearly_usd');

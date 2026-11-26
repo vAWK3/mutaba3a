@@ -5,7 +5,7 @@ import { FakeApi } from '../../support/portalApi';
 import { openYou, youRow } from '../../support/you';
 
 /**
- * MUT-702 Part B (ADR-286, wireframes v3): Subscribe with Solo, Business and Firm on sale, on the FakeApi's Starter seed
+ * MUT-702 Part B (ADR-288, wireframes v3): Subscribe with Solo, Business and Firm on sale, on the FakeApi's Starter seed
  * with `plans` (PLAN_CHECKOUT on). Stripe's page is stubbed; the body the portal sent is asserted.
  */
 

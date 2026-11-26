@@ -130,7 +130,7 @@ describe('GET /v1/billing (MUT-362)', () => {
       // MUT-731 (ADR-284): Starter is off on this server.
       starter: null,
       activeBusinesses: null,
-      // MUT-702 Part B (ADR-286): PLAN_CHECKOUT is off in this harness, so nothing on sale and no address to prefill.
+      // MUT-702 Part B (ADR-288): PLAN_CHECKOUT is off in this harness, so nothing on sale and no address to prefill.
       plans: [],
       billingAddress: null,
     });

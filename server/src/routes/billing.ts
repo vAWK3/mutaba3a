@@ -25,6 +25,8 @@ import {
   type CheckoutRefusal,
   type PersonBilling,
   addressRefusalOf,
+  ISRAEL_VAT,
+  israelVatPercent,
   soloTrialOpen,
   type PlanCatalogs,
 } from '../billing/checkout.js';
@@ -116,7 +118,7 @@ export const refusedResponses = {
 export function billingRoutes(store: LedgerStore, options: BillingRouteOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
   const offers = options.offers ?? OFFERS;
-  // MUT-702 Part B (ADR-286): the plans on sale go through the provider port; its one adapter is Stripe.
+  // MUT-702 Part B (ADR-288): the plans on sale go through the provider port; its one adapter is Stripe.
   const provider = options.planSales && options.checkout ? stripeProvider(options.checkout) : null;
 
   app.openapi(
@@ -175,7 +177,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           usage: await billingUsage(store, user.id, owned, now),
           // MUT-731 (ADR-284): Starter's choice and the pick-your-business state, from the same coverage read.
           ...starterView(store, user.id, owned),
-          // MUT-702 Part B (ADR-286): the plans on sale and the saved billing address (prefill).
+          // MUT-702 Part B (ADR-288): the plans on sale and the saved billing address (prefill).
           plans,
           billingAddress,
         },
@@ -198,7 +200,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         'webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a ' +
         'subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means ' +
         'full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout. ' +
-        'MUT-702 Part B (ADR-286, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by ' +
+        'MUT-702 Part B (ADR-288, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by ' +
         'Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe ' +
         'Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open ' +
         'profile-plan Checkouts are expired. No offers apply until MUT-703. `trial: true` (Solo only) carries the one-time 14-day Solo ' +
@@ -658,7 +660,7 @@ async function accountantCheckout(
 }
 
 /**
- * MUT-702 Part B (ADR-286): a Checkout for Solo, Business or Firm through the provider port. The billing address comes
+ * MUT-702 Part B (ADR-288): a Checkout for Solo, Business or Firm through the provider port. The billing address comes
  * with the request (asked only here, never at sign-up): its country sets the currency and Stripe Tax computes the tax
  * from it (18% VAT on top in Israel). The Freelancer rules apply (ALREADY_SUBSCRIBED across every profile plan: moving
  * between plans is MUT-734), with Stripe asked first. No launch or come-back offer until MUT-703 makes them per plan.
@@ -688,7 +690,8 @@ async function planSale(
   const person: PersonBilling = { subscriptions: profileSubscriptions, owned: owned.entitlements };
   const refusal = checkoutRefusalOf({ ...body, now }, person, options.countries);
   if (refusal) throw refusalError(refusal);
-  const [catalogs, israelVatRateId] = await viaStripe(() => Promise.all([provider.catalogs(), body.country === 'IL' ? provider.israelVatRate() : null]), user, null, options.logger);
+  const vat = body.country === ISRAEL_VAT.country ? israelVatPercent(options.countries) : null;
+  const [catalogs, israelVatRateId] = await viaStripe(() => Promise.all([provider.catalogs(), vat === null ? null : provider.israelVatRate(vat)]), user, null, options.logger);
   const trialEndsAt = summary.trialStartedAt ? trialTimelineOf(summary.trialStartedAt).endsAt : null;
   const input = { userId: user.id, ...body, address, soloTrial: body.trial === true, israelVatRateId, returnUrl, now, trialEndsAt };
   const plan = planCheckout(input, person, options.countries, catalogs[body.plan]);

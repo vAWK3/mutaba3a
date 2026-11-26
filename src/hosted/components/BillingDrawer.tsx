@@ -871,7 +871,7 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   const { pathname } = useLocation();
   const { language } = useLanguage();
   const [legacyCountry, setCountry] = useState('');
-  // MUT-702 Part B (ADR-286): with plans on sale, a plan row and the billing address (prefilled once from the last one).
+  // MUT-702 Part B (ADR-288): with plans on sale, a plan row and the billing address (prefilled once from the last one).
   const onOffer = plansOnOffer(billing);
   const [chosenPlan, setPlan] = useState<PlanName | null>(null);
   const plan = onOffer.find((p) => p.plan === chosenPlan) ?? onOffer[0] ?? null;

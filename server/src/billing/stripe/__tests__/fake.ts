@@ -167,8 +167,12 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   /** MUT-702 Part B: the Israeli VAT rate (withPlanPrices makes one). */
   vatRateId: string | null = null;
 
-  async israelVatRateId(): Promise<string | null> {
+  /** The percent each lookup asked for. */
+  readonly vatPercents: number[] = [];
+
+  async israelVatRateId(percentage: number): Promise<string | null> {
     this.calls.push('vatRate');
+    this.vatPercents.push(percentage);
     return this.vatRateId;
   }
 

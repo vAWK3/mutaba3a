@@ -6,7 +6,7 @@ import { formatMinor } from '../components/billingText';
 import { countryName } from './countries';
 
 /**
- * MUT-702 Part B (ADR-286, wireframes v3): the plans on sale and the billing address, as the Subscribe step and the
+ * MUT-702 Part B (ADR-288, wireframes v3): the plans on sale and the billing address, as the Subscribe step and the
  * onboarding Solo trial read them. Prices and limits come from GET /v1/billing `plans`; nothing here names an amount.
  */
 

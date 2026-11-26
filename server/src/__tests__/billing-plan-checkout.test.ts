@@ -8,7 +8,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
- * MUT-702 Part B (ADR-286): buying Solo, Business or Firm through the provider port, with the billing address given on
+ * MUT-702 Part B (ADR-288): buying Solo, Business or Firm through the provider port, with the billing address given on
  * the pay path, and the one-time Solo trial. Real app and session auth; Stripe's write door faked.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,7 +19,7 @@ let seq = 0;
 const COOKIE = '__Host-mut_session';
 const SAME_ORIGIN = { origin: 'http://localhost' };
 const NOW = new Date('2026-11-26T09:00:00Z');
-const COUNTRIES = parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: ['IL', 'JO'] });
+const COUNTRIES = parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: ['IL', 'JO'], vatRates: { IL: 18 } });
 const CHECKOUT = '/v1/billing/checkout-session';
 const IL = { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' };
 const JO = { country: 'JO', line1: 'Rainbow St. 12', city: 'Amman', postalCode: '11181' };
@@ -102,6 +102,7 @@ describe('POST /v1/billing/checkout-session for a plan (MUT-702 Part B)', () => 
     // Stripe Tax has no Israel registration: 18% VAT on top through our own rate.
     expect(session.line_items).toEqual([{ price: 'price_solo_m_ils', quantity: 1, tax_rates: ['txr_il_vat'] }]);
     expect(session.automatic_tax).toEqual({ enabled: false });
+    expect(h.checkout.vatPercents).toEqual([18]);
     expect(session.metadata).toEqual({ mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat' });
     expect(session.customer_update).toEqual({ address: 'never', name: 'auto' });
     const customer = String(session.customer);

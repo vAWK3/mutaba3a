@@ -1,16 +1,17 @@
 import { pathToFileURL } from 'node:url';
 import Stripe from 'stripe';
 import { STRIPE_API_VERSION } from '../billing/stripe/gateway.js';
-import { ISRAEL_VAT } from '../billing/checkout.js';
+import { BILLING_COUNTRIES, ISRAEL_VAT, israelVatPercent } from '../billing/checkout.js';
 import { listLookupKey, PLAN_NAMES, type ListCurrency, type ListInterval, type PlanName } from '../billing/plans.js';
 
 /**
- * MUT-702 Part B (ADR-286): makes Stripe's catalog match the plans on sale: one product per plan (`metadata.tier` and
+ * MUT-702 Part B (ADR-288): makes Stripe's catalog match the plans on sale: one product per plan (`metadata.tier` and
  * `metadata.mtb3a_plan` = the plan, the SaaS tax code) and its four list prices (ILS and USD, monthly and yearly, VAT
  * exclusive), each under its lookup key. **The only place the plans' amounts are written.** A key on a wrong price
  * (another amount, product or tax behaviour) gets a new price and the key moves to it; subscriptions already on the
- * old price keep it. Freelancer and Accountant products and prices are never touched. It also makes the 18% Israeli
- * VAT tax rate (ISRAEL_VAT): Stripe Tax takes no Israel registration, so an Israeli address is taxed with it.
+ * old price keep it. Freelancer and Accountant products and prices are never touched. It also makes the Israeli VAT
+ * tax rate at billing-countries.json's `vatRates.IL` (ISRAEL_VAT): Stripe Tax takes no Israel registration, so an
+ * Israeli address is taxed with it. A changed percent makes a new rate; Checkout picks the one at the configured percent.
  *
  *   STRIPE_SECRET_KEY=<rk_test_…> npm run billing:plans                  dry run: prints what it would do
  *   STRIPE_SECRET_KEY=<rk_test_…> npm run billing:plans -- --apply       does it
@@ -45,7 +46,7 @@ export interface CatalogState {
 }
 
 export type PlanAction =
-  | { kind: 'create-vat-rate' }
+  | { kind: 'create-vat-rate'; percentage: number }
   | { kind: 'create-product'; plan: PlanName; name: string }
   | { kind: 'tag-product'; plan: PlanName; productId: string }
   | { kind: 'create-price'; plan: PlanName; lookupKey: string; currency: ListCurrency; unitAmount: number; interval: ListInterval; transfer: boolean };
@@ -56,10 +57,10 @@ function productOf(state: CatalogState, plan: PlanName) {
 }
 
 /** What it takes to make `state` match PLAN_SPEC. Pure. */
-export function planActions(state: CatalogState, spec: readonly PlanSpecRow[] = PLAN_SPEC): PlanAction[] {
+export function planActions(state: CatalogState, spec: readonly PlanSpecRow[] = PLAN_SPEC, vatPercent: number | null = israelVatPercent(BILLING_COUNTRIES)): PlanAction[] {
   const actions: PlanAction[] = [];
-  const vat = state.taxRates.some((r) => r.active && !r.inclusive && r.country === ISRAEL_VAT.country && r.percentage === ISRAEL_VAT.percentage && r.metadata[ISRAEL_VAT.metadataKey] === ISRAEL_VAT.country);
-  if (!vat) actions.push({ kind: 'create-vat-rate' });
+  const vat = state.taxRates.some((r) => r.active && !r.inclusive && r.country === ISRAEL_VAT.country && r.percentage === vatPercent && r.metadata[ISRAEL_VAT.metadataKey] === ISRAEL_VAT.country);
+  if (vatPercent !== null && !vat) actions.push({ kind: 'create-vat-rate', percentage: vatPercent });
   for (const row of spec) {
     const product = productOf(state, row.plan);
     if (!product) actions.push({ kind: 'create-product', plan: row.plan, name: row.name });
@@ -87,7 +88,7 @@ export function planActions(state: CatalogState, spec: readonly PlanSpecRow[] = 
 export function describeAction(action: PlanAction): string {
   switch (action.kind) {
     case 'create-vat-rate':
-      return `create the ${ISRAEL_VAT.percentage}% Israeli VAT tax rate (exclusive)`;
+      return `create the ${action.percentage}% Israeli VAT tax rate (exclusive)`;
     case 'create-product':
       return `create product "${action.name}" (tier ${action.plan})`;
     case 'tag-product':
@@ -134,7 +135,7 @@ async function apply(stripe: Stripe, state: CatalogState, actions: readonly Plan
       await stripe.taxRates.create({
         display_name: 'VAT',
         description: 'Israel VAT · ضريبة القيمة المضافة',
-        percentage: ISRAEL_VAT.percentage,
+        percentage: action.percentage,
         inclusive: false,
         country: ISRAEL_VAT.country,
         tax_type: 'vat',

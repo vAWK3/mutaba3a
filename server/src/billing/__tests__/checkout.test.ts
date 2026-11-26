@@ -334,7 +334,7 @@ describe('billing countries, currency and return paths', () => {
   });
 
   it('the shipped file opens every country to consumers (MUT-418, Basel 2026-10-23); IL and JO keep the typed number', () => {
-    expect(BILLING_COUNTRIES).toEqual({ consumer: '*', customTaxId: ['IL', 'JO'] });
+    expect(BILLING_COUNTRIES).toEqual({ consumer: '*', customTaxId: ['IL', 'JO'], vatRates: { IL: 18 } });
   });
 
   it('"*" opens every country to a person, with no tax ID and no number field (MUT-418 D9)', () => {
@@ -365,6 +365,11 @@ describe('billing countries, currency and return paths', () => {
     // Only consumers may be "everywhere"; any other string is a typo that must stop the server.
     expect(() => parseBillingCountries({ consumerCountries: 'all', customTaxIdCountries: [] })).toThrow(/consumerCountries/);
     expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: '*' })).toThrow(/customTaxIdCountries/);
+    // MUT-702 Part B: the VAT we add ourselves, by country.
+    expect(parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { IL: 18 } }).vatRates).toEqual({ IL: 18 });
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { il: 18 } })).toThrow(/vatRates/);
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { IL: '18' } })).toThrow(/vatRates/);
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { IL: 180 } })).toThrow(/vatRates/);
   });
 
   it('a return path is one of ours, never another origin', () => {
@@ -377,7 +382,7 @@ describe('billing countries, currency and return paths', () => {
   });
 });
 
-/** MUT-702 Part B (ADR-286): Solo, Business and Firm, the billing address, and the one-time Solo trial. */
+/** MUT-702 Part B (ADR-288): Solo, Business and Firm, the billing address, and the one-time Solo trial. */
 describe('plan Checkout (MUT-702 Part B)', () => {
   const ADDRESS = { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' };
   const SOLO: Catalog = {

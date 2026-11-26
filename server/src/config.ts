@@ -142,7 +142,7 @@ const envSchema = z.object({
    */
   SOLO_TRIAL_OFFER_SINCE: z.string().datetime().transform((v) => new Date(v)).optional(),
   /**
-   * MUT-702 Part B (ADR-286): Solo, Business and Firm on sale through Checkout (GET /v1/billing `plans`, and Starter's
+   * MUT-702 Part B (ADR-288): Solo, Business and Firm on sale through Checkout (GET /v1/billing `plans`, and Starter's
    * limit refusals offer the upgrade). Only exactly "true" turns it on. Off: only the legacy Freelancer Checkout, as
    * today. Goes on with MUT-703 (the offers per plan), after the live catalog run and Stripe Tax's Israel registration.
    */

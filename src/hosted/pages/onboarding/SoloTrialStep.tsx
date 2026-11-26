@@ -17,7 +17,7 @@ import { ME_KEY } from '../../session/me';
  * terms with the first-charge date, "Offered only now", and the two buttons Basel named, same size. No close: skipping
  * is choosing Starter. Shown once: the server records it as offered as soon as it shows (POST …/solo-trial/offered).
  *
- * MUT-702 Part B (ADR-286, wireframes v3): the "Then … a month" line reads Solo's live price (both currencies, as the
+ * MUT-702 Part B (ADR-288, wireframes v3): the "Then … a month" line reads Solo's live price (both currencies, as the
  * country isn't known yet). Try Solo asks the billing address next, then opens Checkout for Solo with `trial: true`.
  * Dark until Solo can be bought: AuthGate shows it only while `SOLO_TRIAL_CHECKOUT` is on and the server offers it
  * (SOLO_TRIAL_OFFER_SINCE).

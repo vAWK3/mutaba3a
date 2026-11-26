@@ -632,7 +632,7 @@ export const BillingUsageSchema = z
   })
   .openapi('BillingUsage');
 
-/** MUT-702 Part B (ADR-286): the billing address, asked only when paying. Free text; the country is ISO 3166-1 alpha-2. */
+/** MUT-702 Part B (ADR-288): the billing address, asked only when paying. Free text; the country is ISO 3166-1 alpha-2. */
 export const BillingAddressSchema = z
   .object({
     country: z.string().regex(/^[A-Z]{2}$/),
@@ -643,7 +643,7 @@ export const BillingAddressSchema = z
   .strict()
   .openapi('BillingAddress');
 
-/** MUT-702 Part B (ADR-286): one plan on sale, its live list prices (minor units, before tax) and its limits. */
+/** MUT-702 Part B (ADR-288): one plan on sale, its live list prices (minor units, before tax) and its limits. */
 export const BillingPlanSchema = z
   .object({
     plan: z.enum(['solo', 'business', 'firm']),
@@ -731,7 +731,7 @@ export const BillingOverviewSchema = z
       .union([z.object({ cap: z.number().int(), active: z.array(z.string().uuid()), readOnly: z.array(z.string().uuid()), mustChoose: z.boolean() }), z.null()])
       .optional(),
     /**
-     * MUT-702 Part B (ADR-286): the plans on sale, cheapest first, with their live prices (a currency without both prices
+     * MUT-702 Part B (ADR-288): the plans on sale, cheapest first, with their live prices (a currency without both prices
      * is null) and limits. Empty while PLAN_CHECKOUT is off or Stripe can't be asked. Additive since 1.146.0-mut702b.
      */
     plans: z.array(BillingPlanSchema).optional(),
@@ -760,7 +760,7 @@ export const CheckoutSessionRequestSchema = z
      */
     plan: z.enum(['freelancer', 'accountant', 'solo', 'business', 'firm']).optional(),
     /**
-     * MUT-702 Part B (ADR-286): required for `solo`, `business` and `firm`; its country must equal `country`. Saved on the
+     * MUT-702 Part B (ADR-288): required for `solo`, `business` and `firm`; its country must equal `country`. Saved on the
      * person's billing account before Checkout, so the tax is computed from it. Additive since 1.146.0-mut702b.
      */
     address: BillingAddressSchema.optional(),

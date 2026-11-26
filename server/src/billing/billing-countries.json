@@ -1,4 +1,5 @@
 {
   "consumerCountries": "*",
-  "customTaxIdCountries": ["IL", "JO"]
+  "customTaxIdCountries": ["IL", "JO"],
+  "vatRates": { "IL": 18 }
 }

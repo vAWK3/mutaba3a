@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLAN_SPEC, planActions, type CatalogState } from '../stripe-plans.js';
 
-/** MUT-702 Part B (ADR-286): the catalog script's pure core, the one place the plans' amounts are written. */
+/** MUT-702 Part B (ADR-288): the catalog script's pure core, the one place the plans' amounts are written. */
 const EMPTY: CatalogState = { products: [], prices: [], taxRates: [] };
 const VAT = { id: 'txr_il', active: true, inclusive: false, country: 'IL', percentage: 18, metadata: { mtb3a_vat: 'IL' } };
 
@@ -46,11 +46,14 @@ describe('planActions', () => {
     expect(prices.find((a) => a.kind === 'create-price' && a.lookupKey === 'firm_list_yearly_ils')).toMatchObject({ unitAmount: 249000, currency: 'ILS', interval: 'year', transfer: false });
   });
 
-  it('makes the 18% Israeli VAT rate once (Stripe Tax has no Israel registration)', () => {
-    expect(planActions(EMPTY)[0]).toEqual({ kind: 'create-vat-rate' });
+  it('makes the Israeli VAT rate at the configured percent once (Stripe Tax has no Israel registration)', () => {
+    expect(planActions(EMPTY)[0]).toEqual({ kind: 'create-vat-rate', percentage: 18 });
     const state = complete();
     state.taxRates = [{ ...VAT, percentage: 17 }];
-    expect(planActions(state)).toEqual([{ kind: 'create-vat-rate' }]);
+    expect(planActions(state)).toEqual([{ kind: 'create-vat-rate', percentage: 18 }]);
+    // The rate is billing-countries.json's: a new percent makes a new rate; none configured makes none.
+    expect(planActions(complete(), undefined, 17)).toEqual([{ kind: 'create-vat-rate', percentage: 17 }]);
+    expect(planActions(EMPTY, undefined, null).some((a) => a.kind === 'create-vat-rate')).toBe(false);
   });
 
   it('a complete catalog has nothing to do', () => {

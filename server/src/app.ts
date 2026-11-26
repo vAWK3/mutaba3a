@@ -229,7 +229,7 @@ export interface AppDependencies {
   planCheckout?: boolean;
   /** MUT-731 (Basel Q7): SOLO_TRIAL_OFFER_SINCE; accounts created from it are offered the one-time Solo trial. Absent = off. */
   soloTrialOfferSince?: Date | null;
-  /** MUT-702 Part B (ADR-286): PLAN_CHECKOUT, Solo, Business and Firm on sale through Checkout. Absent = off. */
+  /** MUT-702 Part B (ADR-288): PLAN_CHECKOUT, Solo, Business and Firm on sale through Checkout. Absent = off. */
   planSales?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;

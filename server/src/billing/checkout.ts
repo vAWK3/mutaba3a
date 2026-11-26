@@ -49,17 +49,23 @@ export function expectedTierOfLookupKey(key: string): ProductTier {
   return planOfLookupKey(key) ?? 'freelancer';
 }
 
-/** MUT-702 Part B (ADR-286): who sells every subscription, and through which provider (Basel, 2026-11-26). */
+/** MUT-702 Part B (ADR-288): who sells every subscription, and through which provider (Basel, 2026-11-26). */
 export const SELLER = 'barmajiyat' as const;
 export const SELLER_METADATA_KEY = 'mutaba3a_seller';
 /** The subscription metadata marking the one-time Solo trial, so the mirror can record it used. */
 export const TRIAL_METADATA_KEY = 'mutaba3a_trial';
 /**
- * MUT-702 Part B (Basel, 2026-11-26): Israeli residents pay 18% VAT on top of the list price. Stripe Tax has no Israel
- * registration (its API refuses `country_options[il]`), so it is a Stripe tax rate the catalog script makes, found by
- * its metadata; every other country goes through Stripe Tax.
+ * MUT-702 Part B (Basel, 2026-11-26; ADR-286 decision 2): Israeli residents pay VAT on top of the list price, at the
+ * rate `billing-countries.json` `vatRates.IL` sets. Stripe Tax has no Israel registration (its API refuses
+ * `country_options[il]`), so it is a Stripe tax rate the catalog script makes from that value, found by its metadata,
+ * country and percentage; every other country goes through Stripe Tax.
  */
-export const ISRAEL_VAT = { country: 'IL', percentage: 18, metadataKey: 'mtb3a_vat' } as const;
+export const ISRAEL_VAT = { country: 'IL', metadataKey: 'mtb3a_vat' } as const;
+
+/** The configured Israeli VAT percent; null when billing-countries.json sets none (Israel then can't be sold). */
+export function israelVatPercent(countries: BillingCountries): number | null {
+  return countries.vatRates?.[ISRAEL_VAT.country] ?? null;
+}
 
 /** MUT-731 (Basel Q7): the Solo trial's length; a card up front. */
 export const SOLO_TRIAL_DAYS = 14;
@@ -93,6 +99,11 @@ export interface BillingCountries {
   consumer: typeof EVERY_COUNTRY | readonly string[];
   /** Where Stripe has no tax-ID type, so a business types its number into a Checkout custom field. */
   customTaxId: readonly string[];
+  /**
+   * MUT-702 Part B (ADR-286 decision 2, ADR-288): the VAT we add ourselves, percent by country, on top of the list price
+   * for an address there (Israel: 18). One configuration value; Stripe Tax is not relied on for these countries.
+   */
+  vatRates?: Readonly<Record<string, number>>;
 }
 
 /** Stripe's minimum is 30 minutes; a forgotten tab can't be paid days later (plan §2.3). */
@@ -171,8 +182,8 @@ export interface CheckoutInput {
   /** MUT-731 (Basel Q7): the one-time Solo trial (the route checked `soloTrialOpen`). */
   soloTrial?: boolean;
   /**
-   * MUT-702 Part B: Stripe's 18% Israeli VAT rate (ISRAEL_VAT, made by the catalog script). Stripe Tax takes no Israel
-   * registration, so an Israeli address is taxed with this rate instead; null: Israel can't be sold yet.
+   * MUT-702 Part B: Stripe's Israeli VAT rate at the configured percent (ISRAEL_VAT, made by the catalog script). Stripe
+   * Tax takes no Israel registration, so an Israeli address is taxed with this rate instead; null: Israel can't be sold yet.
    */
   israelVatRateId?: string | null;
 }
@@ -224,7 +235,7 @@ export function catalogFrom(prices: ReadonlyMap<string, PriceLike>, plan?: PlanN
 
 type PriceLike = { id: string; currency: string; unitAmount: number; interval: BillingInterval; productId: string };
 
-/** MUT-702 Part B (ADR-286): each plan on sale's catalog, from its own list keys. */
+/** MUT-702 Part B (ADR-288): each plan on sale's catalog, from its own list keys. */
 export type PlanCatalogs = Record<PlanName, Catalog>;
 
 export function planCatalogsFrom(prices: ReadonlyMap<string, PriceLike>): PlanCatalogs {
@@ -458,7 +469,15 @@ function trialCarriedOver(input: CheckoutInput): { trial_end?: number } {
 export function parseBillingCountries(raw: unknown): BillingCountries {
   const value = (raw ?? {}) as Record<string, unknown>;
   const consumer = value.consumerCountries === EVERY_COUNTRY ? EVERY_COUNTRY : codes(value, 'consumerCountries');
-  return { consumer, customTaxId: codes(value, 'customTaxIdCountries') };
+  const vatRates = value.vatRates === undefined ? null : ratesOf(value.vatRates);
+  return { consumer, customTaxId: codes(value, 'customTaxIdCountries'), ...(vatRates ? { vatRates } : {}) };
+}
+
+/** `vatRates`: ISO-2 country → a percent above 0 and below 100. */
+function ratesOf(raw: unknown): Record<string, number> {
+  const ok = typeof raw === 'object' && raw !== null && !Array.isArray(raw) && Object.entries(raw).every(([c, r]) => COUNTRY.test(c) && typeof r === 'number' && r > 0 && r < 100);
+  if (!ok) throw new Error('billing-countries.json: vatRates must map ISO 3166-1 alpha-2 codes to a percent between 0 and 100');
+  return { ...(raw as Record<string, number>) };
 }
 
 function codes(value: Record<string, unknown>, field: string): string[] {

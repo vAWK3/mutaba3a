@@ -2,7 +2,7 @@ app: portal
 area: plans
 title: Buying Solo, Business or Firm with a typed billing address, stubbed API
 tier: secondary
-# MUT-702 Part B (ADR-286, wireframes v3): the Subscribe step with plans on sale (PLAN_CHECKOUT, dark on the server
+# MUT-702 Part B (ADR-288, wireframes v3): the Subscribe step with plans on sale (PLAN_CHECKOUT, dark on the server
 # until release) on the FakeApi's Starter seed. The server's rules (address, currency, Israeli VAT, the Solo trial)
 # are route-tested in server/src/__tests__/billing-plan-checkout.test.ts; paying through the Stripe sandbox is
 # portal-live's, once PLAN_CHECKOUT is on there.

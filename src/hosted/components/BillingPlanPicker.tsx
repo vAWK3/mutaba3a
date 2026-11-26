@@ -6,7 +6,7 @@ import { useLimitsLine, usePlanPrice, type AddressDraft, type BillingPlan, type 
 import { RadioCards } from './RadioCards';
 
 /**
- * MUT-702 Part B (ADR-286, wireframes v3): the Subscribe step's plan row and the billing address, shared with the
+ * MUT-702 Part B (ADR-288, wireframes v3): the Subscribe step's plan row and the billing address, shared with the
  * onboarding Solo trial's address step. The address is free text; the country is typed and must match a country (it
  * sets the currency and the VAT). The helpers are in data/billingPlans.ts.
  */
