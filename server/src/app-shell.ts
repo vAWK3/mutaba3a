@@ -28,6 +28,10 @@ export interface ApiShellDependencies {
   twoFactorIssuingGate?: boolean;
   /** MUT-736 (ADR-282, INVOICING_FOR_ALL): every business profile issues, no operator grant. Absent = off (the grant decides). */
   invoicingForAll?: boolean;
+  /** MUT-731: a paid plan can be bought here (Checkout configured): PLAN_LIMIT's `canUpgrade`. Absent = false. */
+  planCheckout?: boolean;
+  /** MUT-731 (Basel Q7, SOLO_TRIAL_OFFER_SINCE): accounts created from this instant are offered the Solo trial once. Absent = off. */
+  soloTrialOfferSince?: Date | null;
 }
 
 /**
@@ -60,6 +64,8 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('passkeys', deps.passkeys ?? false);
     c.set('twoFactorIssuingGate', deps.twoFactorIssuingGate ?? false);
     c.set('invoicingForAll', deps.invoicingForAll ?? false);
+    c.set('planCheckout', deps.planCheckout ?? false);
+    c.set('soloTrialOfferSince', deps.soloTrialOfferSince ?? null);
     c.set('maxOwnedProfiles', deps.maxOwnedProfiles);
     c.set('accountantAccess', deps.accountantAccess ?? false);
     c.set('accountantPlan', deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF);

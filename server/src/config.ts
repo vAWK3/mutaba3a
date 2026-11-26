@@ -128,6 +128,19 @@ const envSchema = z.object({
    */
   INVOICING_FOR_ALL: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-731 (ADR-284): the free Starter plan. Only exactly "true" turns it on: anyone with nothing else covering them is
+   * ACTIVE on Starter (instead of read-only or locked), new sign-ups get no trial, and Starter's hard caps refuse with
+   * 409 PLAN_LIMIT. Goes on with MUT-702 Part B (the paid plans can be bought) and only after the phone build that
+   * understands PLAN_LIMIT is live (brief §5). Off is today's product exactly.
+   */
+  STARTER_PLAN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-731 (ADR-284, Basel Q7): the one-time 14-day Solo trial (card up front) in web onboarding. Accounts created at or
+   * after this instant are offered it once; earlier accounts never are. Unset = the step is off (TODO MUT-702 Part B:
+   * set it at release, once Solo can be bought through Checkout with `trial: true`).
+   */
+  SOLO_TRIAL_OFFER_SINCE: z.string().datetime().transform((v) => new Date(v)).optional(),
+  /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).
