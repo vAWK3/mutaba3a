@@ -1542,6 +1542,36 @@
         "meta": "{count} records · last entry {date}",
         "choose": "Choose a business",
         "confirm": "Keep {name} active"
+      },
+      "plans": {
+        "title": "Subscribe",
+        "label": "Plan",
+        "perMonth": "{price} a month",
+        "perMonthBoth": "{ils} or {usd} a month",
+        "plusVat": "+ VAT",
+        "limits": "{businesses} · {documents} · {scans} a month",
+        "businesses": {
+          "one": "{count} business",
+          "other": "{count} businesses"
+        },
+        "documents": {
+          "one": "{count} document",
+          "other": "{count} documents"
+        },
+        "scans": {
+          "one": "{count} scan",
+          "other": "{count} scans"
+        },
+        "aMonth": "a month",
+        "aYear": "a year"
+      },
+      "address": {
+        "title": "Billing address",
+        "country": "Country",
+        "line1": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "noMatch": "No match"
       }
     },
     "selfService": {
@@ -3570,7 +3600,8 @@
         "then": "Then {price} a month",
         "once": "Offered only now.",
         "start": "Try Solo free for 14 days",
-        "skip": "Continue on Starter"
+        "skip": "Continue on Starter",
+        "back": "Back"
       }
     }
   }

@@ -1,5 +1,6 @@
 import type Stripe from 'stripe';
 import type { BillingTier } from '../entitlement.js';
+import { planOfLookupKey } from '../plans.js';
 
 /**
  * MUT-360 (§2.2, ADR-165): one Stripe subscription → the fields `billing_subscriptions` mirrors. Pure; the sync
@@ -43,8 +44,8 @@ export interface MirrorFields {
   currency: 'ILS' | 'USD';
 }
 
-/** MUT-565 (ADR-251): `accountant` is the person's Accountant plan (client books). */
-const TIERS: Record<string, BillingTier> = { freelancer: 'FREELANCER', firm: 'FIRM', accountant: 'ACCOUNTANT' };
+/** MUT-565 (ADR-251): `accountant` is the person's Accountant plan (client books). MUT-702 Part B: `solo`, `business`. */
+const TIERS: Record<string, BillingTier> = { freelancer: 'FREELANCER', solo: 'SOLO', business: 'BUSINESS', firm: 'FIRM', accountant: 'ACCOUNTANT' };
 const LOOKUP_KEY_MAX = 100;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** offers.json's id rule, and billing_subscriptions.offerId's VarChar(40). */
@@ -84,7 +85,9 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
   const organizationId = tier === 'ACCOUNTANT' ? null : named;
   if (tier === 'ACCOUNTANT' && orgMeta !== null) notes.push('ACCOUNTANT_ORG_IGNORED');
   else if (orgMeta !== null && organizationId === null) notes.push('UNKNOWN_ORG');
-  if (tier === 'FIRM' && organizationId === null && orgMeta === null) notes.push('FIRM_WITHOUT_ORG');
+  // MUT-702 Part B: the Firm plan on sale covers the person's profiles; only a legacy per-profile Firm price names one.
+  const planKey = tieredItem.price.lookup_key ? planOfLookupKey(tieredItem.price.lookup_key) !== null : false;
+  if (tier === 'FIRM' && organizationId === null && orgMeta === null && !planKey) notes.push('FIRM_WITHOUT_ORG');
   const pause = pauseOf(sub);
   if (pause.notOurs) notes.push('PAUSE_NOT_OURS');
 

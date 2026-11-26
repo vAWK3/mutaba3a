@@ -561,6 +561,12 @@ variable "starter_plan" {
   default     = false
 }
 
+variable "plan_checkout" {
+  description = "MUT-702 Part B (ADR-288): sets PLAN_CHECKOUT=true: Solo, Business and Firm are on sale through Stripe Checkout (GET /v1/billing plans), and Starter's limit refusals offer the upgrade. false (default) = only the legacy Freelancer Checkout. Turn on with MUT-703, after the live catalog run (npm run billing:plans -- --apply --live)."
+  type        = bool
+  default     = false
+}
+
 variable "solo_trial_offer_since" {
   description = "MUT-731 (ADR-284, Basel Q7): accounts created at or after this RFC 3339 instant are offered the one-time 14-day Solo trial in web onboarding (SOLO_TRIAL_OFFER_SINCE). Empty (default) = the step is off, until Solo can be bought (MUT-702 Part B)."
   type        = string

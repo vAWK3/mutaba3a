@@ -28,12 +28,12 @@
 
 ---
 
-## [Unreleased] - 2026-11-26 — The issuer's country, and no issuing where no pack is live (MUT-740, ADR-287 D1 and D4, API 1.146.0-mut740)
+## [Unreleased] - 2026-11-26 — The issuer's country, and no issuing where no pack is live (MUT-740, ADR-287 D1 and D4, API 1.147.0-mut740)
 
 Epic MUT-738 (jurisdiction packs). Closes the gap that, with `INVOICING_FOR_ALL` on, any business anywhere could issue an Israeli tax invoice. Plan `.claude/designs/MUT-740-issuer-country.md`; the phone's country field is a follow-up (TD-347).
 
 ### Added
-- `issuer_details.country` (ISO 3166-1, `VARCHAR(2)`, default and backfill `IL`, a CHECK); migration `20261126200000_mut740_issuer_country` (additive; a rollback leaves the column).
+- `issuer_details.country` (ISO 3166-1, `VARCHAR(2)`, default and backfill `IL`, a CHECK); migration `20261127130000_mut740_issuer_country` (additive; a rollback leaves the column).
 - `INVOICING_JURISDICTIONS` (comma list, default `IL`, junk refuses the boot; Terraform `invoicing_jurisdictions` sets the env only when it differs, a tftest) and `issuing/jurisdictions.ts` (`parseLiveJurisdictions`, `isLive`, `assertLive`, `DEFAULT_COUNTRY`).
 - `PUT /v1/issuer` takes an optional `country` (absent: the current one, or `IL`): a country that isn't live is 422 `JURISDICTION_NOT_LIVE`; changing it after the first document is 409 `COUNTRY_LOCKED`; for Israel the issuer's VAT number must pass the check digit (422 `VAT_ID_INVALID`).
 - Issue and preview refuse an issuer whose stored country is no longer live (422 `JURISDICTION_NOT_LIVE`), documents-due and settle-and-issue included (one `issueOne`).
@@ -42,10 +42,26 @@ Epic MUT-738 (jurisdiction packs). Closes the gap that, with `INVOICING_FOR_ALL`
 - Release-QA: `portal.invoicing.country-not-live`, `country-locked`; `setup` chooses Israel first.
 
 ### Changed
-- API 1.146.0-mut740, additive. Test fixtures that save issuer details through the route use check-digit-valid numbers (`123456782`, `516161619`, `515151512`, `301234563`).
+- API 1.147.0-mut740, additive. Test fixtures that save issuer details through the route use check-digit-valid numbers (`123456782`, `516161619`, `515151512`, `301234563`).
 
 ### Technical
 - Tests: `jurisdictions.test.ts`, `config.test.ts`, `routes-issuing-setup.test.ts` (7 new cases), `store-contract-issuing.ts` (country round trip), `InvoicingSteps.test.tsx` (5 new), `terraform/tests/invoicing_jurisdictions.tftest.hcl`.
+## [Unreleased] - 2026-11-26 — Buying Solo, Business and Firm (MUT-702 Part B, ADR-288, API 1.146.0-mut702b)
+
+Dark behind `PLAN_CHECKOUT`; unlocks MUT-731's Solo trial and live prices.
+
+### Added
+- The provider port (`billing/provider.ts`) and its Stripe adapter (`billing/stripe/provider.ts`); subscriptions record `provider` and `seller` (migration `20261127120000_mut702b_provider`, additive).
+- `POST /v1/billing/checkout-session` sells `plan` solo/business/firm with the billing `address` (saved on the customer first; its country sets ILS/USD; Israel pays VAT on top through a Stripe tax rate at `billing-countries.json` `vatRates.IL`), and `trial: true` for the one-time Solo trial. New refusals: 422 `ADDRESS_INVALID`, 409 `TRIAL_NOT_OFFERED`, 409 `PLAN_CHECKOUT_OFF`.
+- `GET /v1/billing` `plans` (live prices and limits) and `billingAddress` (prefill).
+- `npm --prefix server run billing:plans`: the catalog script (dry run by default, `--apply`, `--live` for a live key), the only place plan amounts are written; it makes the Israeli VAT rate too. `billing:product-tiers` knows `solo` and `business`.
+- Config `PLAN_CHECKOUT` (`.env.example`, Terraform `plan_checkout`, a tftest).
+- Portal: the Subscribe step's plan row (both currencies until a country is known, + VAT for Israel, one limits line, the current plan not offered) and the typed billing address (`BillingPlanPicker.tsx`, `data/billingPlans.ts`, `matchCountry`/`countrySuggestions`); the onboarding Solo trial shows Solo's live price and asks the address before the trial Checkout. 20 strings, ar + en.
+- Release-QA area `portal.plans` (3 features on the FakeApi, written, not run).
+
+### Changed
+- The mirror reads `solo` and `business` products; a Firm plan price no longer notes FIRM_WITHOUT_ORG. Price lookups go ten keys a call. The sync marks the Solo trial used.
+- Stripe sandbox: head office GB, the plans' products and twelve prices, the 18% Israeli VAT rate.
 
 ## [Unreleased] - 2026-11-26 — MUT-731 final checks: fixes found running the full suites
 

@@ -19,6 +19,11 @@ import {
   type Catalog,
   type CheckoutInput,
   type PersonBilling,
+  addressRefusalOf,
+  expectedTierOfLookupKey,
+  planCatalogsFrom,
+  soloTrialOpen,
+  SOLO_TRIAL_DAYS,
 } from '../checkout.js';
 
 /**
@@ -329,7 +334,7 @@ describe('billing countries, currency and return paths', () => {
   });
 
   it('the shipped file opens every country to consumers (MUT-418, Basel 2026-10-23); IL and JO keep the typed number', () => {
-    expect(BILLING_COUNTRIES).toEqual({ consumer: '*', customTaxId: ['IL', 'JO'] });
+    expect(BILLING_COUNTRIES).toEqual({ consumer: '*', customTaxId: ['IL', 'JO'], vatRates: { IL: 18 } });
   });
 
   it('"*" opens every country to a person, with no tax ID and no number field (MUT-418 D9)', () => {
@@ -360,6 +365,11 @@ describe('billing countries, currency and return paths', () => {
     // Only consumers may be "everywhere"; any other string is a typo that must stop the server.
     expect(() => parseBillingCountries({ consumerCountries: 'all', customTaxIdCountries: [] })).toThrow(/consumerCountries/);
     expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: '*' })).toThrow(/customTaxIdCountries/);
+    // MUT-702 Part B: the VAT we add ourselves, by country.
+    expect(parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { IL: 18 } }).vatRates).toEqual({ IL: 18 });
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { il: 18 } })).toThrow(/vatRates/);
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { IL: '18' } })).toThrow(/vatRates/);
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: [], vatRates: { IL: 180 } })).toThrow(/vatRates/);
   });
 
   it('a return path is one of ours, never another origin', () => {
@@ -369,5 +379,109 @@ describe('billing countries, currency and return paths', () => {
     for (const bad of ['https://evil.example', '//evil.example', '/p/not-a-uuid', `/p/${PROFILE}?x=1`, `/p/${PROFILE}/../..`, '', 'p/x']) {
       expect(isReturnPath(bad), bad).toBe(false);
     }
+  });
+});
+
+/** MUT-702 Part B (ADR-288): Solo, Business and Firm, the billing address, and the one-time Solo trial. */
+describe('plan Checkout (MUT-702 Part B)', () => {
+  const ADDRESS = { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' };
+  const SOLO: Catalog = {
+    ILS: { month: { id: 'price_solo_ils_m', unitAmount: 3900, productId: 'prod_S' }, year: { id: 'price_solo_ils_y', unitAmount: 39000, productId: 'prod_S' } },
+    USD: { month: { id: 'price_solo_usd_m', unitAmount: 1200, productId: 'prod_S' }, year: { id: 'price_solo_usd_y', unitAmount: 12000, productId: 'prod_S' } },
+  };
+
+  it('each plan key sits on its own product; legacy keys on Freelancer, Accountant on its own', () => {
+    expect(expectedTierOfLookupKey('solo_list_monthly_ils')).toBe('solo');
+    expect(expectedTierOfLookupKey('business_list_yearly_usd')).toBe('business');
+    expect(expectedTierOfLookupKey('firm_list_monthly_usd')).toBe('firm');
+    expect(expectedTierOfLookupKey('freelancer_list_monthly_ils')).toBe('freelancer');
+    expect(expectedTierOfLookupKey('accountant_list_monthly_ils')).toBe('accountant');
+  });
+
+  it('planCatalogsFrom: a catalog per plan, each from its own keys; a plan missing a price is unsellable in that currency', () => {
+    const fact = (id: string, currency: string, unitAmount: number, interval: 'month' | 'year', productId = 'prod_S') => ({ id, currency, unitAmount, interval, productId });
+    const prices = new Map([
+      ['solo_list_monthly_ils', fact('s1', 'ILS', 3900, 'month')],
+      ['solo_list_yearly_ils', fact('s2', 'ILS', 39000, 'year')],
+      ['business_list_monthly_usd', fact('b1', 'USD', 2700, 'month', 'prod_B')],
+      ['freelancer_list_monthly_ils', fact('f1', 'ILS', 2900, 'month', 'prod_F')],
+    ]);
+    const catalogs = planCatalogsFrom(prices);
+    expect(catalogs.solo).toEqual({ ILS: { month: { id: 's1', unitAmount: 3900, productId: 'prod_S' }, year: { id: 's2', unitAmount: 39000, productId: 'prod_S' } }, USD: null });
+    expect(catalogs.business).toEqual({ ILS: null, USD: null });
+    expect(catalogs.firm).toEqual({ ILS: null, USD: null });
+  });
+
+  it('a plan Checkout names its plan and seller, keeps the address we saved, and adds tax from it', () => {
+    const result = plan({ plan: 'solo', address: ADDRESS, israelVatRateId: 'txr_il' }, {}, SOLO);
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.currency).toBe('ILS');
+    expect(result.params.metadata).toEqual({ mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat' });
+    expect(result.params.subscription_data?.metadata).toEqual({ mutaba3a_user_id: USER, mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat' });
+    expect(result.params.customer_update).toEqual({ address: 'never', name: 'auto' });
+    expect(result.params.billing_address_collection).toBe('auto');
+  });
+
+  it('an Israeli address pays 18% VAT on top through our own tax rate (Stripe Tax has no Israel registration)', () => {
+    const result = plan({ plan: 'solo', address: ADDRESS, israelVatRateId: 'txr_il' }, {}, SOLO);
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.line_items).toEqual([{ price: 'price_solo_ils_m', quantity: 1, tax_rates: ['txr_il'] }]);
+    expect(result.params.automatic_tax).toEqual({ enabled: false });
+  });
+
+  it('an Israeli address with no VAT rate in Stripe is not sold (never without VAT)', () => {
+    expect(plan({ plan: 'solo', address: ADDRESS, israelVatRateId: null }, {}, SOLO)).toEqual({ ok: false, code: 'PRICES_NOT_SET' });
+  });
+
+  it('the address country sets the currency: USD outside Israel', () => {
+    const result = plan({ plan: 'solo', country: 'GB', address: { ...ADDRESS, country: 'GB', city: 'London', postalCode: 'N1 9GU' } }, {}, SOLO);
+    expect(result).toMatchObject({ ok: true, currency: 'USD', params: { line_items: [{ price: 'price_solo_usd_m', quantity: 1 }], automatic_tax: { enabled: true } } });
+  });
+
+  it('the Solo trial: 14 days, a card always, cancelled without one; it replaces any carried trial', () => {
+    const result = plan({ plan: 'solo', address: ADDRESS, israelVatRateId: 'txr_il', soloTrial: true, trialEndsAt: new Date(NOW.getTime() + 10 * DAY) }, {}, SOLO);
+    if (!result.ok) throw new Error('expected a plan');
+    expect(SOLO_TRIAL_DAYS).toBe(14);
+    expect(result.params.payment_method_collection).toBe('always');
+    expect(result.params.subscription_data).toEqual({
+      metadata: { mutaba3a_user_id: USER, mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat', mutaba3a_trial: 'solo' },
+      trial_period_days: 14,
+      trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
+    });
+  });
+
+  it('a Freelancer Checkout (no plan) is unchanged: Stripe collects the address', () => {
+    const result = plan();
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.customer_update).toEqual({ address: 'auto', name: 'auto' });
+    expect(result.params.billing_address_collection).toBe('required');
+    expect(result.params).not.toHaveProperty('metadata');
+  });
+
+  it('addressRefusalOf: a two-letter country and every line, trimmed', () => {
+    expect(addressRefusalOf(ADDRESS)).toBeNull();
+    expect(addressRefusalOf({ ...ADDRESS, country: 'Israel' })).toBe('ADDRESS_INVALID');
+    expect(addressRefusalOf({ ...ADDRESS, country: 'il' })).toBe('ADDRESS_INVALID');
+    expect(addressRefusalOf({ ...ADDRESS, line1: '  ' })).toBe('ADDRESS_INVALID');
+    expect(addressRefusalOf({ ...ADDRESS, city: '' })).toBe('ADDRESS_INVALID');
+    expect(addressRefusalOf({ ...ADDRESS, postalCode: ' ' })).toBe('ADDRESS_INVALID');
+  });
+
+  describe('soloTrialOpen: once, for a new Starter account the web onboarding offered it to', () => {
+    const SINCE = new Date('2026-11-20T00:00:00Z');
+    const open = (over: Partial<Parameters<typeof soloTrialOpen>[0]> = {}) =>
+      soloTrialOpen({ since: SINCE, starterPlan: true, currentPlan: 'starter', createdAt: new Date('2026-11-25T00:00:00Z'), trial: { offeredAt: NOW, usedAt: null }, ...over });
+    it('is open on the offered, unused trial', () => expect(open()).toBe(true));
+    it('is closed with no switch date, Starter off, or another plan', () => {
+      expect(open({ since: null })).toBe(false);
+      expect(open({ starterPlan: false })).toBe(false);
+      expect(open({ currentPlan: 'solo' })).toBe(false);
+    });
+    it('is closed for an older account, one never offered it, or one that used it', () => {
+      expect(open({ createdAt: new Date('2026-11-19T00:00:00Z') })).toBe(false);
+      expect(open({ trial: { offeredAt: null, usedAt: null } })).toBe(false);
+      expect(open({ trial: { offeredAt: NOW, usedAt: NOW } })).toBe(false);
+      expect(open({ trial: null })).toBe(false);
+    });
   });
 });

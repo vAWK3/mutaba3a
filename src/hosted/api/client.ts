@@ -217,6 +217,10 @@ export type SetupLinkRedeemed = Schemas['SetupLinkRedeemResponse'];
 export type BillingOverview = Schemas['BillingOverview'];
 /** MUT-525: the launch offer on GET /v1/billing (the generated field is `BillingOffer | unknown`, its nullable union). */
 export type BillingOffer = Schemas['BillingOffer'];
+/** MUT-702 Part B: the billing address on GET /v1/billing (generated as `BillingAddress | unknown`, its nullable union). */
+export type BillingAddress = Schemas['BillingAddress'];
+/** MUT-702 Part B: one plan on sale (GET /v1/billing `plans`). */
+export type BillingPlan = Schemas['BillingPlan'];
 export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
 export type BillingRedirect = Schemas['BillingRedirect'];
 /** A profile's entitlement as /v1/me sends it (MUT-532's `paused` is absent from an older server). */

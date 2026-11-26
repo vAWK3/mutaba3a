@@ -14,6 +14,9 @@ import {
   RANK,
   TIER_OF,
   type ProfilePlanTier,
+  ALL_PLAN_LOOKUP_KEYS,
+  listLookupKey,
+  planOfLookupKey,
 } from '../plans.js';
 
 /** MUT-702 Part A (ADR-275): Solo, Business and Firm as provider-neutral tiers; legacy Freelancer kept. */
@@ -140,6 +143,28 @@ describe('plans', () => {
       expect(currentPlanOf([{ state: 'ACTIVE', tier: 'STARTER' }])).toBe('starter');
       expect(currentPlanOf([{ state: 'ACTIVE', tier: 'STARTER' }, { state: 'ACTIVE', tier: 'SOLO' }])).toBe('solo');
       expect(currentPlanOf([{ state: 'ACTIVE', tier: 'STARTER' }, { state: 'GRACE', tier: 'FREELANCER' }])).toBe('freelancer');
+    });
+  });
+
+  describe('list lookup keys (MUT-702 Part B, ADR-288)', () => {
+    it('names each plan, interval and currency', () => {
+      expect(listLookupKey('solo', 'month', 'ILS')).toBe('solo_list_monthly_ils');
+      expect(listLookupKey('business', 'year', 'USD')).toBe('business_list_yearly_usd');
+      expect(listLookupKey('firm', 'month', 'USD')).toBe('firm_list_monthly_usd');
+    });
+
+    it('lists all twelve, four per plan', () => {
+      expect(ALL_PLAN_LOOKUP_KEYS).toHaveLength(12);
+      expect(new Set(ALL_PLAN_LOOKUP_KEYS).size).toBe(12);
+      for (const plan of PLAN_NAMES) expect(ALL_PLAN_LOOKUP_KEYS.filter((k) => k.startsWith(`${plan}_`))).toHaveLength(4);
+    });
+
+    it('reads the plan back from any key; legacy and unknown keys name none', () => {
+      for (const key of ALL_PLAN_LOOKUP_KEYS) expect(listLookupKey(planOfLookupKey(key)!, key.includes('yearly') ? 'year' : 'month', key.endsWith('_ils') ? 'ILS' : 'USD')).toBe(key);
+      expect(planOfLookupKey('freelancer_list_monthly_ils')).toBeNull();
+      expect(planOfLookupKey('freelancer_founder_yearly_ils')).toBeNull();
+      expect(planOfLookupKey('accountant_list_monthly_ils')).toBeNull();
+      expect(planOfLookupKey('solo_list_weekly_ils')).toBeNull();
     });
   });
 });

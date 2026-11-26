@@ -24,7 +24,14 @@ import {
   type Catalog,
   type CheckoutRefusal,
   type PersonBilling,
+  addressRefusalOf,
+  ISRAEL_VAT,
+  israelVatPercent,
+  soloTrialOpen,
+  type PlanCatalogs,
 } from '../billing/checkout.js';
+import type { BillingProvider } from '../billing/provider.js';
+import { stripeProvider } from '../billing/stripe/provider.js';
 import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
 import { offerOrNothing } from '../billing/offer-read.js';
 import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } from '../billing/comeback.js';
@@ -32,7 +39,7 @@ import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-rea
 import { entitlementsWithFactsFor } from '../billing/coverage.js';
 import { businessCapView as viewOf } from '../billing/business-cap.js';
 import { profilePlanSubscriptions, trialTimelineOf } from '../billing/entitlement.js';
-import { currentPlanOf } from '../billing/plans.js';
+import { currentPlanOf, PLAN_LIMITS, PLAN_NAMES, type PlanName } from '../billing/plans.js';
 import { accountantPlanSubscriptions, resolveAccountantPlan } from '../billing/accountant-plan.js';
 import { catalogOf, catalogOrNothing, NO_CATALOG, yearlySwitchLine } from '../billing/yearly-switch-line.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
@@ -81,6 +88,8 @@ export interface BillingRouteOptions {
   accountantAccess?: boolean;
   /** MUT-565 (ACCOUNTANT_PLAN): Checkout sells the plan only while the cap is on too. Absent = off. */
   accountantPlanOn?: boolean;
+  /** MUT-702 Part B (PLAN_CHECKOUT): Solo, Business and Firm are on sale. Absent = off (only the legacy Freelancer Checkout). */
+  planSales?: boolean;
 }
 
 export const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -97,9 +106,10 @@ export const refusedResponses = {
   409: errorResponse(
     'CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, ' +
       'NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), ' +
-      'or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)',
+      'OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t ' +
+      'offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server)',
   ),
-  422: errorResponse('VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS'),
+  422: errorResponse('VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)'),
   429: errorResponse(`RATE_LIMITED: more than ${BILLING_SESSION_POLICY.perMinute} billing sessions a minute; \`Retry-After\` says when`),
   502: errorResponse('STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work'),
   503: errorResponse('BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET'),
@@ -108,6 +118,8 @@ export const refusedResponses = {
 export function billingRoutes(store: LedgerStore, options: BillingRouteOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
   const offers = options.offers ?? OFFERS;
+  // MUT-702 Part B (ADR-288): the plans on sale go through the provider port; its one adapter is Stripe.
+  const provider = options.planSales && options.checkout ? stripeProvider(options.checkout) : null;
 
   app.openapi(
     createRoute({
@@ -143,6 +155,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const comeback = options.checkout ? await comebackFor(store, user.id, subscriptions, now, offers, options.checkout, options.logger, false) : null;
       const accountantPlan = options.accountantAccess ? await accountantPlanView(store, user.id, summary, now, options.checkout, options.logger, c.get('requestId')) : null;
       const yearlySwitch = shown && options.plan ? await yearlySwitchLine(store, user.id, options.plan, shown, catalog, now, options.logger, c.get('requestId')) : null;
+      const [plans, billingAddress] = provider
+        ? await Promise.all([plansView(provider, options.logger, c.get('requestId')), summary.account ? addressOrNothing(provider, summary.account.stripeCustomerId, options.logger, c.get('requestId')) : null])
+        : [[], null];
       return c.json(
         {
           configured: options.checkout !== null,
@@ -162,6 +177,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           usage: await billingUsage(store, user.id, owned, now),
           // MUT-731 (ADR-284): Starter's choice and the pick-your-business state, from the same coverage read.
           ...starterView(store, user.id, owned),
+          // MUT-702 Part B (ADR-288): the plans on sale and the saved billing address (prefill).
+          plans,
+          billingAddress,
         },
         200,
       );
@@ -173,7 +191,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       method: 'post',
       path: '/v1/billing/checkout-session',
       tags: ['Billing'],
-      summary: 'Open Stripe Checkout for the Freelancer plan',
+      summary: 'Open Stripe Checkout for a plan',
       description:
         "Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its " +
         'metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is ' +
@@ -181,7 +199,12 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         'are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe ' +
         'webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a ' +
         'subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means ' +
-        'full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout.',
+        'full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout. ' +
+        'MUT-702 Part B (ADR-288, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by ' +
+        'Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe ' +
+        'Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open ' +
+        'profile-plan Checkouts are expired. No offers apply until MUT-703. `trial: true` (Solo only) carries the one-time 14-day Solo ' +
+        'trial with a card required, for an account web onboarding offered it to that never used it.',
       security: SESSION_ONLY,
       request: { body: { required: true, content: { 'application/json': { schema: CheckoutSessionRequestSchema } } } },
       responses: { 200: { description: 'The Checkout page', content: { 'application/json': { schema: BillingRedirectSchema } } }, ...refusedResponses },
@@ -200,6 +223,13 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         const url = await accountantCheckout(c, store, checkout, user, body, returnUrl, now, options);
         return c.json({ url }, 200);
       }
+      if (body.plan === 'solo' || body.plan === 'business' || body.plan === 'firm') {
+        const url = await planSale(c, store, checkout, user, { ...body, plan: body.plan }, returnUrl, now, options, provider);
+        return c.json({ url }, 200);
+      }
+      // MUT-731: the Solo trial is bought only with `plan: solo`.
+      if (body.trial) throw refusalError('TRIAL_NOT_OFFERED');
+      const legacy = { interval: body.interval, country: body.country, buyer: body.buyer };
       const [summary, owned] = await Promise.all([store.billing.summaryOf(user.id), ownedWithEntitlements(store, user.id, now)]);
       // MUT-565: only the profile plan's subscriptions; an Accountant plan never makes this one ALREADY_SUBSCRIBED.
       const profileSubscriptions = profilePlanSubscriptions(summary.subscriptions);
@@ -209,7 +239,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
 
       const trialEndsAt = summary.trialStartedAt ? trialTimelineOf(summary.trialStartedAt).endsAt : null;
       const catalog = await viaStripe(() => catalogOf(checkout), user, null, options.logger);
-      const plan = planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt }, person, options.countries, catalog);
+      const plan = planCheckout({ userId: user.id, ...legacy, returnUrl, now, trialEndsAt }, person, options.countries, catalog);
       if (!plan.ok) throw refusalError(plan.code);
       const linked = summary.account?.stripeCustomerId ?? null;
       const { url, applied } = await viaStripe(
@@ -233,7 +263,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           if (body.expectedOffer && applied?.id !== body.expectedOffer) {
             throw new ApiError('CONFLICT', CONFLICT_MESSAGES.OFFER_ENDED, { reason: 'OFFER_ENDED', offer: body.expectedOffer });
           }
-          const final = applied ? planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt, offer: applied }, person, options.countries, catalog) : plan;
+          const final = applied ? planCheckout({ userId: user.id, ...legacy, returnUrl, now, trialEndsAt, offer: applied }, person, options.countries, catalog) : plan;
           if (!final.ok) throw refusalError(final.code);
           // Only the newest Checkout can be paid: another tab's, or an abandoned one, can't charge a second time.
           await checkout.expireOpenCheckouts(customer, 'freelancer');
@@ -341,12 +371,16 @@ function refusalError(reason: Refusal): ApiError {
       return new ApiError('VALIDATION_FAILED', 'Individuals in this country cannot subscribe yet; a business with a tax number can', { reason });
     case 'PRICES_NOT_SET':
       return new ApiError('BILLING_NOT_CONFIGURED', 'Subscriptions are not open yet: the prices are not set', { reason });
+    case 'ADDRESS_INVALID':
+      return new ApiError('VALIDATION_FAILED', 'The billing address needs a country, a street, a city and a postal code, and its country must be the one sent', { reason });
     default:
       return new ApiError('CONFLICT', CONFLICT_MESSAGES[reason], { reason });
   }
 }
 
-const CONFLICT_MESSAGES: Record<Exclude<Refusal, 'VALIDATION_FAILED' | 'COUNTRY_NEEDS_BUSINESS' | 'PRICES_NOT_SET'>, string> = {
+const CONFLICT_MESSAGES: Record<Exclude<Refusal, 'VALIDATION_FAILED' | 'COUNTRY_NEEDS_BUSINESS' | 'PRICES_NOT_SET' | 'ADDRESS_INVALID'>, string> = {
+  TRIAL_NOT_OFFERED: 'The Solo trial is not offered to this account',
+  PLAN_CHECKOUT_OFF: 'These plans are not on sale yet',
   ALREADY_SUBSCRIBED: 'You already have a subscription; change it from Manage billing',
   RESUME_IN_PORTAL: 'Your last payment did not go through; pay the open invoice from Manage billing',
   CONTACT_US: 'This subscription needs a hand from us; please contact us',
@@ -623,4 +657,84 @@ async function accountantCheckout(
   const profiles = await ownedProfilesOf(store, user.id);
   await auditOn(store, profiles, user, 'billing.checkout_started', { plan: 'accountant', interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: null }, c.get('requestId'), options.logger);
   return url;
+}
+
+/**
+ * MUT-702 Part B (ADR-288): a Checkout for Solo, Business or Firm through the provider port. The billing address comes
+ * with the request (asked only here, never at sign-up): its country sets the currency and Stripe Tax computes the tax
+ * from it (18% VAT on top in Israel). The Freelancer rules apply (ALREADY_SUBSCRIBED across every profile plan: moving
+ * between plans is MUT-734), with Stripe asked first. No launch or come-back offer until MUT-703 makes them per plan.
+ * `trial: true` carries the one-time Solo trial (14 days, card up front) where `soloTrialOpen` allows it.
+ */
+async function planSale(
+  c: Context<AppEnv>,
+  store: LedgerStore,
+  checkout: CheckoutGateway,
+  user: UserRecord,
+  body: { interval: BillingInterval; country: string; buyer: 'person' | 'business'; plan: PlanName; address?: { country: string; line1: string; city: string; postalCode: string } | undefined; trial?: boolean | undefined },
+  returnUrl: string,
+  now: Date,
+  options: BillingRouteOptions,
+  provider: BillingProvider | null,
+): Promise<string> {
+  if (!provider) throw refusalError('PLAN_CHECKOUT_OFF');
+  const address = body.address ?? null;
+  if (!address || address.country !== body.country || addressRefusalOf(address)) throw refusalError('ADDRESS_INVALID');
+  const [summary, owned] = await Promise.all([store.billing.summaryOf(user.id), ownedWithEntitlements(store, user.id, now)]);
+  if (body.trial) {
+    const trial = body.plan === 'solo' ? await store.billing.paidTrialOf(user.id) : null;
+    const open = soloTrialOpen({ since: c.get('soloTrialOfferSince'), starterPlan: store.billing.starterPlan, currentPlan: currentPlanOf(owned.entitlements), createdAt: user.createdAt, trial });
+    if (!open) throw refusalError('TRIAL_NOT_OFFERED');
+  }
+  const profileSubscriptions = profilePlanSubscriptions(summary.subscriptions);
+  const person: PersonBilling = { subscriptions: profileSubscriptions, owned: owned.entitlements };
+  const refusal = checkoutRefusalOf({ ...body, now }, person, options.countries);
+  if (refusal) throw refusalError(refusal);
+  const vat = body.country === ISRAEL_VAT.country ? israelVatPercent(options.countries) : null;
+  const [catalogs, israelVatRateId] = await viaStripe(() => Promise.all([provider.catalogs(), vat === null ? null : provider.israelVatRate(vat)]), user, null, options.logger);
+  const trialEndsAt = summary.trialStartedAt ? trialTimelineOf(summary.trialStartedAt).endsAt : null;
+  const input = { userId: user.id, ...body, address, soloTrial: body.trial === true, israelVatRateId, returnUrl, now, trialEndsAt };
+  const plan = planCheckout(input, person, options.countries, catalogs[body.plan]);
+  if (!plan.ok) throw refusalError(plan.code);
+  const linked = summary.account?.stripeCustomerId ?? null;
+  const { url } = await viaStripe(
+    async () => {
+      const customer = linked ?? (await checkout.findOrCreateCustomer(personOf(user)));
+      // Review: the mirror can be late, so Stripe's own word decides before money moves.
+      const inStripe = profilePlanSubscriptions(await checkout.subscriptionsOf(customer));
+      const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: [...person.subscriptions, ...inStripe] }, options.countries);
+      if (stillRefused) throw refusalError(stillRefused);
+      return provider.startCheckout({ customer, address, params: plan.params });
+    },
+    user,
+    linked,
+    options.logger,
+  );
+  const metadata = { plan: body.plan, interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: null, trial: body.trial === true, seller: provider.seller };
+  await auditOn(store, owned.profiles, user, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
+  return url;
+}
+
+/** MUT-702 Part B: GET /v1/billing `plans`. A provider failure hides them (empty) rather than failing the read. */
+async function plansView(provider: BillingProvider, logger: Pick<Logger, 'warn'>, requestId: string) {
+  let catalogs: PlanCatalogs;
+  try {
+    catalogs = await provider.catalogs();
+  } catch (err) {
+    if (!(err instanceof StripeGatewayError)) throw err;
+    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'plan catalogs unavailable; plans hidden');
+    return [];
+  }
+  return PLAN_NAMES.map((plan) => ({ plan, catalog: { ILS: amountsOf(catalogs[plan].ILS), USD: amountsOf(catalogs[plan].USD) }, limits: { ...PLAN_LIMITS[plan] } }));
+}
+
+/** MUT-702 Part B: the saved billing address for the prefill; null when there is none or Stripe can't be asked. */
+async function addressOrNothing(provider: BillingProvider, customer: string, logger: Pick<Logger, 'warn'>, requestId: string) {
+  try {
+    return await provider.billingAddress(customer);
+  } catch (err) {
+    if (!(err instanceof StripeGatewayError)) throw err;
+    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'billing address unavailable; form not prefilled');
+    return null;
+  }
 }

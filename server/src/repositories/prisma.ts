@@ -3805,6 +3805,11 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { paidTrialOfferedAt: true, paidTrialUsedAt: true } });
       return row ? { offeredAt: row.paidTrialOfferedAt, usedAt: row.paidTrialUsedAt } : null;
     },
+    markPaidTrialUsed: async (userId, at) => {
+      await this.prisma.user.updateMany({ where: { id: userId, paidTrialUsedAt: null }, data: { paidTrialUsedAt: at } });
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { paidTrialOfferedAt: true, paidTrialUsedAt: true } });
+      return row ? { offeredAt: row.paidTrialOfferedAt, usedAt: row.paidTrialUsedAt } : null;
+    },
     setTrialStart: async (userId, at) => {
       const { count } = await this.prisma.user.updateMany({ where: { id: userId }, data: { trialStartedAt: at } });
       return count === 0 ? null : { trialStartedAt: at };

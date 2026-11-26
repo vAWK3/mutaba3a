@@ -159,6 +159,12 @@ const envSchema = z.object({
    */
   SOLO_TRIAL_OFFER_SINCE: z.string().datetime().transform((v) => new Date(v)).optional(),
   /**
+   * MUT-702 Part B (ADR-288): Solo, Business and Firm on sale through Checkout (GET /v1/billing `plans`, and Starter's
+   * limit refusals offer the upgrade). Only exactly "true" turns it on. Off: only the legacy Freelancer Checkout, as
+   * today. Goes on with MUT-703 (the offers per plan), after the live catalog run and Stripe Tax's Israel registration.
+   */
+  PLAN_CHECKOUT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).

@@ -18632,8 +18632,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Open Stripe Checkout for the Freelancer plan
-         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout.
+         * Open Stripe Checkout for a plan
+         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout. MUT-702 Part B (ADR-288, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open profile-plan Checkouts are expired. No offers apply until MUT-703. `trial: true` (Solo only) carries the one-time 14-day Solo trial with a card required, for an account web onboarding offered it to that never used it.
          */
         post: {
             parameters: {
@@ -18675,7 +18675,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made) */
+                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -18684,7 +18684,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -18781,7 +18781,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made) */
+                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -18790,7 +18790,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -18883,7 +18883,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made) */
+                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -18892,7 +18892,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -18992,7 +18992,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19084,7 +19084,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19184,7 +19184,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19292,7 +19292,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19379,7 +19379,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19484,7 +19484,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19571,7 +19571,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -19676,7 +19676,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -32487,7 +32487,7 @@ export interface components {
         IssuerDetails: {
             legalName: string;
             vatId: string;
-            /** @description MUT-740: ISO 3166-1 alpha-2; IL on every profile saved before it. Additive since 1.146.0-mut740. */
+            /** @description MUT-740: ISO 3166-1 alpha-2; IL on every profile saved before it. Additive since 1.147.0-mut740. */
             country: string;
             dealerType: components["schemas"]["DealerType"];
             address: string | null;
@@ -32516,7 +32516,7 @@ export interface components {
             legalName: string;
             /** @description VAT file number or company number (ח.פ./ע.מ.), 9 digits. For an Israeli business the check digit must be right (422 VAT_ID_INVALID). */
             vatId: string;
-            /** @description MUT-740: ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Absent: the current country, or IL on first save. A country that is not live (see /v1/issuing/setup liveJurisdictions) is 422 JURISDICTION_NOT_LIVE; changing it after the first document is 409 COUNTRY_LOCKED. Additive since 1.146.0-mut740. */
+            /** @description MUT-740: ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Absent: the current country, or IL on first save. A country that is not live (see /v1/issuing/setup liveJurisdictions) is 422 JURISDICTION_NOT_LIVE; changing it after the first document is 409 COUNTRY_LOCKED. Additive since 1.147.0-mut740. */
             country?: string;
             dealerType: components["schemas"]["DealerType"];
             address?: string | null;
@@ -32573,9 +32573,9 @@ export interface components {
             hasLogo: boolean;
             /** @description MUT-740: the issuer details’ country; null before they are saved */
             country: string | null;
-            /** @description MUT-740: a document has been issued, so the country can no longer change (409 COUNTRY_LOCKED). Additive since 1.146.0-mut740. */
+            /** @description MUT-740: a document has been issued, so the country can no longer change (409 COUNTRY_LOCKED). Additive since 1.147.0-mut740. */
             countryLocked: boolean;
-            /** @description MUT-740: the countries whose invoicing rules are live on this server; clients offer issuing only for these. Additive since 1.146.0-mut740. */
+            /** @description MUT-740: the countries whose invoicing rules are live on this server; clients offer issuing only for these. Additive since 1.147.0-mut740. */
             liveJurisdictions: string[];
         };
         IssuingNumberingRequest: {
@@ -33290,6 +33290,8 @@ export interface components {
                 readOnly: string[];
                 mustChoose: boolean;
             } | unknown;
+            plans?: components["schemas"]["BillingPlan"][];
+            billingAddress?: components["schemas"]["BillingAddress"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -33393,6 +33395,34 @@ export interface components {
                 limit: number | null;
             };
         };
+        BillingPlan: {
+            /** @enum {string} */
+            plan: "solo" | "business" | "firm";
+            catalog: {
+                /** @description Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold. */
+                ILS: {
+                    month: number;
+                    year: number;
+                } | null;
+                /** @description Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold. */
+                USD: {
+                    month: number;
+                    year: number;
+                } | null;
+            };
+            limits: {
+                businesses: number;
+                partners: number;
+                documentsPerMonth: number;
+                scansPerMonth: number;
+            };
+        };
+        BillingAddress: {
+            country: string;
+            line1: string;
+            city: string;
+            postalCode: string;
+        };
         BillingRedirect: {
             /** Format: uri */
             url: string;
@@ -33407,7 +33437,9 @@ export interface components {
             returnPath: string;
             expectedOffer?: string;
             /** @enum {string} */
-            plan?: "freelancer" | "accountant";
+            plan?: "freelancer" | "accountant" | "solo" | "business" | "firm";
+            address?: components["schemas"]["BillingAddress"];
+            trial?: boolean;
         };
         PortalSessionRequest: {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */

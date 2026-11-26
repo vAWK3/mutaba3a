@@ -259,6 +259,9 @@ const app = createApp({
   invoicingForAll: config.INVOICING_FOR_ALL,
   invoicingJurisdictions: config.INVOICING_JURISDICTIONS,
   soloTrialOfferSince: config.SOLO_TRIAL_OFFER_SINCE ?? null,
+  // MUT-702 Part B: the plans on sale; a limit refusal offers the upgrade only while they are.
+  planSales: config.PLAN_CHECKOUT,
+  planCheckout: config.PLAN_CHECKOUT,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },

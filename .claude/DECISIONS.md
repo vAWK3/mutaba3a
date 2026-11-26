@@ -7315,3 +7315,22 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** a schema migration on INSERT-only legal tables, roll-forward only once documents exist (ADR-260's trigger and the MUT-644 bypass must be respected); the Israel rules move out of `server/src/israel/*` and the Israel parts of `server/src/issuing/*`; MUT-667 (foreign currency and export) is built on the pack interface; Israel-only backlog (MUT-651, 654, 655, 656, 696) is re-homed under the IL pack. ADR-260 decision 3 (numbering), decision 6 (the statutory VAT table) and decision 7 (ILS only) become the Israel pack's rules, not the core's.
 
 **Alternatives rejected:** a fork of the issuing core per country; deriving the country from the billing country or currency; adding country checks inline where each new ticket needs them.
+
+---
+
+## ADR-288: Plans Are Bought Through a Provider-Neutral Port (Stripe, Sold by Barmajiyat); the Billing Address Is Asked Only When Paying and Its Country Sets the Currency and VAT (MUT-702 Part B)
+
+**Status:** Accepted (2026-11-26; Basel's decisions on MUT-702 comment 13558, wireframes v3 approved with Q1, Q5, Q6 yes). Builds on ADR-275 (the plans), ADR-284/285 (Starter, the Solo trial) and ADR-286 (Barmajiyat sells; Israeli VAT added for Israeli addresses, as one configuration value, not through Stripe Tax).
+
+**Context:** Only the legacy Freelancer price could be bought. Starter (MUT-731) can't go on until Solo, Business and Firm can, and the Solo trial needs a Checkout with a trial. Basel: Barmajiyat on Stripe bills every subscription, Israel included; Israeli residents pay 18% VAT on top; no separate country step: the country is the billing address's, asked only when paying. Stripe Tax refuses an Israel registration (`country_options[il]` is unknown to its API, checked in the sandbox).
+
+**Decision:**
+1. **One port, one adapter.** `billing/provider.ts` (`BillingProvider`: catalogs, the Israeli VAT rate, the saved address, startCheckout); `billing/stripe/provider.ts` wraps the existing gateways. Pause, the yearly switch, stay and come-back keep calling the gateways directly until a second provider exists. Subscriptions record `provider` and `seller` (`20261127120000_mut702b_provider`, defaults stripe / barmajiyat).
+2. **Prices only in Stripe.** Each plan's four list prices under `{plan}_list_{monthly|yearly}_{ils|usd}`, VAT-exclusive, on a product tagged `tier` and `mtb3a_plan`. `npm run billing:plans` is the only place amounts are written (₪39/89/249, $12/27/75 a month, a year = 10 months); a wrong price gets a new one and the key moves (subscriptions keep theirs). It also makes the Israeli VAT tax rate.
+3. **The billing address on our own form, before Checkout,** only on the pay path (Subscribe, the Solo trial), never at sign-up or on Starter. Free text; the country is typed and matched to our country list in Arabic and English (no match keeps Continue off). It is saved on the Stripe customer first and Checkout can't change it (`customer_update.address: never`), because a Checkout session's currency is fixed when it opens.
+4. **Currency and tax from the address's country.** IL → ILS, else USD. An Israeli address pays VAT on top through a Stripe tax rate at `billing-countries.json` `vatRates.IL` (18), with automatic tax off; with no such rate in Stripe Israel isn't sold (PRICES_NOT_SET). Elsewhere Stripe Tax adds what is owed. A person who moves keeps the subscription's currency; the tax follows the new address.
+5. **Checkout per plan.** `plan` solo/business/firm needs `address`; the Freelancer refusals apply across every profile plan (moving plans is MUT-734); only the newest profile-plan Checkout can be paid; no offers until MUT-703. `trial: true` (Solo only) carries 14 days with a card required and cancels without one; refused `TRIAL_NOT_OFFERED` unless web onboarding offered it to a new Starter account that never used it; the sync records it used from the subscription's `mutaba3a_trial` metadata.
+6. **Dark.** `PLAN_CHECKOUT` (Terraform `plan_checkout`) off: `GET /v1/billing` `plans` is empty and a plan Checkout is 409 `PLAN_CHECKOUT_OFF`. `SOLO_TRIAL_CHECKOUT` stays false in the portal.
+
+**Consequences:** Live needs Basel's catalog run with a live key (`--live`), Barmajiyat's Israeli VAT file before the first Israeli charge (ADR-286, MUT-749), and the Israeli tax document per payment (MUT-749/750). TD-347 (portal-live flows), TD-348 (the unique key).
+

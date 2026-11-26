@@ -2590,3 +2590,16 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/components/UsageNotice.tsx` | `UsageNotice` (Home's 80/90/limit) | `LandingNotices` |
 | `src/hosted/pages/onboarding/SoloTrialStep.tsx` | `SoloTrialStep`, `SOLO_TRIAL_CHECKOUT` (dark) | `AuthGate` |
 
+## MUT-702 Part B — buying a plan (ADR-288)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `server/src/billing/plans.ts` | `listLookupKey`, `ALL_PLAN_LOOKUP_KEYS`, `planOfLookupKey` | catalogs, mirror, the catalog script |
+| `server/src/billing/checkout.ts` | `planCatalogsFrom`, `PlanCatalogs`, `BillingAddress`, `addressRefusalOf`, `soloTrialOpen`, `SELLER`, `ISRAEL_VAT`, `israelVatPercent`, `SOLO_TRIAL_DAYS`; `planCheckout` takes `plan`, `address`, `soloTrial`, `israelVatRateId` | `routes/billing.ts`, the provider |
+| `server/src/billing/provider.ts` | `BillingProvider`, `ProviderId`, `Seller`, `ProviderCheckout` | `routes/billing.ts` |
+| `server/src/billing/stripe/provider.ts` | `stripeProvider(checkoutGateway)` | `routes/billing.ts` |
+| `server/src/billing/stripe/checkout-gateway.ts` | `setCustomerAddress`, `customerAddress`, `israelVatRateId(percent)`; `expireOpenCheckouts(customer, 'profile')` | the Stripe adapter |
+| `server/src/scripts/stripe-plans.ts` | `PLAN_SPEC`, `planActions`, `describeAction` (`npm run billing:plans`) | operator, QA sandbox |
+| `src/hosted/data/billingPlans.ts` | `plansOnOffer`, `AddressDraft`, `draftOf`, `addressOf`, `savedAddressOf`, `monthlyPriceOf`, `usePlanPrice`, `useLimitsLine` | Billing drawer, Solo trial step |
+| `src/hosted/data/countries.ts` | `matchCountry`, `countrySuggestions`, `foldCountryText` | `BillingAddressFields` |
+| `src/hosted/components/BillingPlanPicker.tsx` | `PlanRow` (RadioCards), `BillingAddressFields` (EntityTypeahead for the country, Inputs for the rest) | Subscribe step, `SoloTrialStep` |
