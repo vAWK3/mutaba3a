@@ -9,6 +9,7 @@ paths:
   - src/hosted/components/PlanLimitNotice.tsx
   - src/hosted/data/planUsage.ts
   - src/hosted/data/useStarterUsage.ts
+  - src/hosted/data/starterQueries.ts
 features:
   - id: starter-billing
     title: On Starter, Billing is a normal state with this month's documents and scans, the plan's lines and See plans
