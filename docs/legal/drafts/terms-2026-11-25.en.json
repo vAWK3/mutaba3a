@@ -2,7 +2,7 @@
   "version": "2026-11-25",
   "title": "Terms of service",
   "updated": "Version of 25 November 2026",
-  "intro": "These terms are the agreement between you and Narabnd Studio Ltd (נאראבנד סטודיו בע\"מ), company number 517108775, a company registered in Israel, of Az-Zahra St. 18, Jerusalem (\"we\", \"us\"), which owns MTB3A, for using MTB3A: its website, its web portal and its iPhone and Android apps. By creating an account or using MTB3A, you accept these terms and our privacy policy, which is part of them. If you don't accept them, please don't use MTB3A. These terms apply equally to everyone, whatever their gender.",
+  "intro": "These terms are the agreement between you and Barmajiyat Ltd, a company registered in England and Wales [TODO(MUT-732): company number and registered office] (\"we\", \"us\"), which owns MTB3A, for using MTB3A: its website, its web portal and its iPhone and Android apps. By creating an account or using MTB3A, you accept these terms and our privacy policy, which is part of them. If you don't accept them, please don't use MTB3A. These terms apply equally to everyone, whatever their gender.",
   "sections": [
     {
       "title": "1. The service",
@@ -28,8 +28,8 @@
     {
       "title": "4. Plans, trial, fees and payment",
       "body": [
-        "Every account can use the free Starter plan: one business beside your personal profile, 3 issued documents and 12 receipt scans a month, without the Tax Authority connection. A new account may be offered, once, a 14-day trial of the Solo plan, with a card: nothing is charged before the trial ends, you can cancel any time before then, and if you don't continue, your account moves to Starter.",
-        "The price is the one shown when you subscribe, or the one in the offer we sent you. Prices exclude VAT, which we add where the law requires. You pay monthly or yearly in advance, by card through our payment provider, and your subscription renews for the same period until you cancel it. Before a price change for your plan takes effect, we'll tell you in advance, and you can cancel before then. [TODO(MUT-700 D1): Narabnd's VAT file and payment provider (today Stripe, on an account Barmajiyat Ltd holds); whether prices shown to consumers in Israel must include VAT; the notice period for a price change.]",
+        "Every account can use the free Starter plan: one business beside your personal profile, 3 issued documents and 12 receipt scans a month, without the Tax Authority connection. Our paid plans, Solo, Business and Firm, raise these limits and include the Tax Authority connection; each plan's limits are shown when you subscribe. A new account may be offered, once, a 14-day trial of the Solo plan, with a card: nothing is charged before the trial ends, and you can cancel any time before then. If you don't cancel, your Solo subscription starts when the trial ends and renews as described below; if you cancel, your account moves to Starter. [TODO(MUT-732, lawyer Q7): the notice and consent a trial that renews into a paid plan needs.]",
+        "The price is the one shown when you subscribe, or the one in the offer we sent you. Prices are shown before VAT. If your billing address is in Israel, we add Israeli VAT (currently 18%); elsewhere, we add any tax the law of your country requires. The country of the billing address you give when you subscribe also sets the currency you pay in. You pay monthly or yearly in advance, by card through Stripe, our payment provider, and your subscription renews for the same period until you cancel it. Before a price change for your plan takes effect, we'll tell you in advance, and you can cancel before then. [TODO(MUT-732, lawyer Q6): whether prices shown to consumers in Israel must include VAT; the notice period for a price change.]",
         "If a payment fails and stays unpaid after we have reminded you, your plan ends and your account moves to the free Starter plan. Businesses beyond Starter's limits stay available to read and download. We never delete your records because a payment lapsed."
       ]
     },
@@ -37,7 +37,7 @@
       "title": "5. Cancelling and refunds",
       "body": [
         "You can cancel your subscription at any time in the web portal (Billing › Cancel plan), or by writing to info@mtb3a.com. Cancelling stops the next renewal. You keep full use of MTB3A until the end of the period you have paid for; after that, your account becomes read-only and your records stay available to read and download, until you subscribe again or continue free on the Starter plan.",
-        "If you are a consumer, you may also cancel in any way the Consumer Protection Law, 5741-1981, allows. You may cancel a new subscription within 14 days of the transaction and get your money back, less any cancellation fee the law permits, but only if you have not used MTB3A since you subscribed: once you have added or changed records, issued a document or downloaded your data under the subscription, the service has been supplied to you and this 14-day right no longer applies. During the free trial nothing is charged: your paid subscription starts only after the 14-day trial, so cancelling during the trial costs nothing.",
+        "If you are a consumer, you may also cancel in any way the Consumer Protection Law, 5741-1981, allows. You may cancel a new subscription within 14 days of the transaction and get your money back, less any cancellation fee the law permits, but only if you have not used MTB3A since you subscribed: once you have added or changed records, issued a document or downloaded your data under the subscription, the service has been supplied to you and this 14-day right no longer applies. [TODO(MUT-732, lawyer Q5): confirm that using the service ends the 14-day right, and this wording.] During the free trial nothing is charged: your paid subscription starts only after the 14-day trial, so cancelling during the trial costs nothing.",
         "Fees for a period that has already started are not refunded, except where the law requires a refund, which we will then make."
       ]
     },
@@ -47,8 +47,8 @@
         "Where issuing is turned on for your business profile, you can issue tax invoices, tax invoice-receipts, receipts and credit notes, and payment requests, which are not tax documents. MTB3A produces each document from the details you enter, numbers it in sequence for its type, and signs its PDF electronically.",
         "You are responsible for every document you issue: that your business details and your client's, the lines, amounts, VAT, dates and the type of document are correct and complete; that you issue it on time and as the law requires; that you report it to the tax authorities and record it in your own books; and that you check it before you send it. An issued document can't be edited or deleted: a mistake is corrected with a credit note or a new document, as the bookkeeping rules require.",
         "Some tax invoices need an allocation number from the Israel Tax Authority before your client may deduct their VAT. To get one through MTB3A, you connect your business profile to the Tax Authority yourself, with your own sign-in there, and you authorize us to ask for allocation numbers in your name for the invoices you issue. The connection lasts as long as the Tax Authority allows (currently 90 days), and you can disconnect at any time. The connection is included on our paid plans (Solo and above). On a plan without it you can still issue every document: you request the allocation number on the Tax Authority's site yourself and enter it. If your plan changes to one without the connection, we pause it and keep it, and it works again when you move back to a paid plan, as long as the Tax Authority's own approval hasn't ended. The Tax Authority decides whether to give a number. If its systems are unavailable, refuse or answer late, we can't give you one, but you may enter a number you obtained from the Tax Authority yourself. We are not responsible for the Tax Authority's decisions or the availability of its systems.",
-        "The Tax Authority connection is for your own profile's documents. Don't pass it on, lend it, resell it, or let anyone outside your profile use it. An accountant you have shared your profile with works inside your profile, which is allowed.",
-        "We are registering MTB3A with the Israel Tax Authority as invoicing software, as its software house. Once it is registered, its registration number will be shown here.",
+        "The Tax Authority connection is for your own profile's documents. Don't pass it on, lend it, resell it, or let anyone outside your profile use it. An accountant you have shared your profile with works inside your profile, which is allowed. [TODO(MUT-732, lawyer Q8): confirm this wording.]",
+        "MTB3A is being registered with the Israel Tax Authority as invoicing software. Its registered software house is Narabnd Studio Ltd (נאראבנד סטודיו בע\"מ), company number 517108775, Az-Zahra St. 18, Jerusalem, a related company that holds the connection to the Tax Authority and signs the documents you issue, under a licence from us. Once MTB3A is registered, its registration number will be shown here. [TODO(MUT-732, lawyer Q3): whether Narabnd is named in these terms, and its role for issued documents (holder or processor).]",
         "We keep the documents you issue for 7 years from each document's date, as our privacy policy describes. The legal duty to keep your books is still yours: download your documents and the uniform file, and keep your own copies."
       ]
     },
@@ -77,7 +77,7 @@
     {
       "title": "10. Our rights in MTB3A",
       "body": [
-        "MTB3A, its software, design, name and logo belong to us or to those who license them to us. While these terms apply, you may use MTB3A for yourself and your business; you get no other right in it. What you enter stays yours, and you allow us only what we need to store, process and show it to run MTB3A for you. [TODO(MUT-700 ע2): the assignment of MTB3A's intellectual property to Narabnd is not yet signed; sign it before release.]"
+        "MTB3A, its software, design, name and logo belong to us or to those who license them to us. While these terms apply, you may use MTB3A for yourself and your business; you get no other right in it. What you enter stays yours, and you allow us only what we need to store, process and show it to run MTB3A for you. [TODO(MUT-732, lawyer Q2): the assignment of MTB3A's intellectual property from its developer to Barmajiyat Ltd, and Barmajiyat's licence to Narabnd, are not yet signed; sign them before publication.]"
       ]
     },
     {
@@ -117,7 +117,7 @@
     {
       "title": "16. Law and language",
       "body": [
-        "These terms are governed by the law of the State of Israel, and the competent courts in Jerusalem decide any dispute about them. If you are a consumer living outside Israel, you also keep the protection of the mandatory consumer law of the country where you live, and you may bring a claim in its courts.",
+        "[TODO(MUT-732, lawyer Q3): a proposal; Israeli law and Jerusalem courts, or England and Wales, now that Barmajiyat Ltd is the party.] These terms are governed by the law of the State of Israel, and the competent courts in Jerusalem decide any dispute about them. If you are a consumer living outside Israel, you also keep the protection of the mandatory consumer law of the country where you live, and you may bring a claim in its courts.",
         "These terms are written in English and Arabic. If the two texts differ, the English text prevails."
       ]
     },
@@ -130,7 +130,7 @@
     {
       "title": "18. Contact",
       "body": [
-        "Write to us at info@mtb3a.com. We reply within 2 working days. By post: Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel."
+        "Write to us at info@mtb3a.com. We reply within 2 working days. By post: Barmajiyat Ltd, [TODO(MUT-732): registered office]."
       ]
     }
   ]
