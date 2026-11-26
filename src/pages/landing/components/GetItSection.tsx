@@ -67,6 +67,7 @@ export function GetItSection({ signupUrl = null, starter = false }: { signupUrl?
 
         <div className="landing-get-it-body">
           {open && options}
+          {open && note}
 
           <div className="landing-get-it-request" data-part="get-it-request">
             <h3 id="get-it-request-title" className="landing-get-it-request-title">
@@ -77,6 +78,7 @@ export function GetItSection({ signupUrl = null, starter = false }: { signupUrl?
           </div>
 
           {!open && options}
+          {!open && note}
         </div>
       </div>
     </section>
