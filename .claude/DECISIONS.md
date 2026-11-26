@@ -7157,3 +7157,26 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** migration `20261125230000_mut735_usage_metering` (additive; backfills this month's counters from issued documents and finished receipts, plan `none` until the payer's next count; events start at release). Merging it restarts the shared dev API. The signed-out portal meters nothing (`metering` off in its `PortalRouteDependencies`).
 
 **Alternatives rejected:** `COUNT(*)` over events on every cap check (a read per action, and no race-free hard cap without an advisory lock); a Postgres enum per vocabulary (a migration per new kind); a separate route middleware in `app-shell.ts` (runs in the browser too); a timer flush (doesn't fire on Cloud Run between requests); server-side PostHog (ADR-090).
+
+---
+
+## ADR-282: Invoicing Is On for Everyone (INVOICING_FOR_ALL); the Tax Authority Connection Is a Paid-Plan Feature; Starter Types Allocation Numbers by Hand (MUT-736)
+
+**Status:** Accepted (2026-11-26; brief `.claude/designs/mut-731-736-starter-plan.md` §3.4–3.5, Basel's answers §11a Q6). Amends ADR-260 D1 and ADR-196's `invoicing` flag; extends ADR-273 (MUT-711) and ADR-264.
+
+**Context:** issuing was switched on per person by the operator (`invoicing`, ADR-196/260), and the Tax Authority connection was tied to no plan. Basel: invoicing for everyone, on every plan including the free Starter (MUT-731); the automatic connection only on paid plans; Starter may still issue at or over the allocation threshold with a number it requests itself. MUT-736 ships before Starter.
+
+**Decision:**
+1. **`INVOICING_FOR_ALL`** (exactly "true"; default off; Terraform `invoicing_for_all`). On: every business profile with an owner that isn't a Malafat firm issues. Off is the kill switch: the owner's `invoicing` grant decides, as before. `invoicingOn(store, org, forAll)` is the single rule; the issuing gate reads the flag from the request (`c.get('invoicingForAll')`), the session-less readers are handed it.
+2. **`/v1/me` names `invoicing` for everyone** while the flag is on (`withInvoicingForAll`), so the portal and shipped phone builds open issuing with no client release. Whether a given profile issues is still the route's rule.
+3. **The connection is a plan feature** (`PLAN_FEATURES.taxAuthority`: false on `starter`, true on Solo, Business, Firm and legacy Freelancer). The plan is the **payer's** (MUT-735's `payerPlanOf`). A payer with no plan (`none`: the lapse gate decides whether they write at all; `malafat`: no issuing) keeps today's answer, so this changes nothing until MUT-731 makes Starter resolve: turning Starter on needs no change here.
+4. **On a plan without it:** connect and held-number decisions refuse with **409 `PLAN_LIMIT`** (`details.limit: taxAuthority`, `plan`, `nextPlan: solo`, `canUpgrade` = Checkout configured here); the public callback stores nothing and redirects with `taxAuthority=plan`; a kept connection reads **`suspended`** and is never deleted (resumes on a paid plan with no new setup, unless the Tax Authority's own consent ended: then `expired`); disconnect always works; the setup step isn't done; reconnect reminders skip it.
+5. **Allocation on Starter is MANUAL** (preview `automaticOn: 'solo'`), whatever is connected. An issue without a typed number answers 409 `ALLOCATION_NUMBER_REQUIRED` with `automaticOn`; it never reaches the automatic allocator or `reportDecision` (a held number's CONTINUE included). A typed number goes through MUT-711's `manualAllocator` unchanged: same normalization, same `forNumber` check, `allocationSource MANUAL`, same PDF.
+6. **`PLAN_LIMIT` is a new 409 code** (not 402: that is the lapse gate's "plan ended"). MUT-731 reuses it for its caps (documents, scans, businesses, partners) and releases the idempotency key on it.
+7. **The accountant guard may read `billing.factsFor`** (`ACCOUNTANT_EXTRA_READS`), so a shared profile's status reads the owner's plan under the accountant's read-only guard; only allowed/next plan is answered. Not `unguarded()` (still lazy posting only).
+
+8. **No explanatory copy** (Basel, 2026-11-26): the clients show only what the person needs to act (the Upgrade and Disconnect buttons, the manual number field and its error). `automaticOn` stays on the wire for a later design. The UI is not final until Basel sees a wireframe.
+
+**Consequences:** API 1.143.0-mut736, additive (`TaxAuthorityStatus.state` gains `suspended` and `plan`; `IssueAllocation.automaticOn`; reminders' `skip: plan`). No migration. Release: API with `invoicing_for_all = false`, then turn it on in `production.tfvars` (Basel's call; before Starter per Q6). The operator console keeps the `invoicing` toggle, now labelled as the kill switch's grant.
+
+**Alternatives rejected:** a Prisma STARTER tier now (MUT-731's S1); a test-only plan override for live QA (the portal flows run on the FakeApi; the server's Starter paths are route-tested with the plan scripted); `unguarded()` for the plan read (a second escape hatch).

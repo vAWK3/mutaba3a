@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — Invoicing for everyone; the Tax Authority connection on paid plans only (MUT-736, ADR-282, API 1.143.0-mut736)
+
+### Added
+- `INVOICING_FOR_ALL` (server config, default off; Terraform `invoicing_for_all`): every business profile issues with no operator grant, and `/v1/me` names `invoicing` in everyone's features so the portal and every shipped phone build open issuing. Off is the kill switch: the operator's per-person `invoicing` grant decides again. MUT-710's two-step issuing gate is unchanged.
+- `PLAN_FEATURES` (`billing/plans.ts`, with `FREE_PLAN = 'starter'` and `cheapestPlanWith`) and `issuing/tax-authority-plan.ts` (`taxAuthorityPlanFor`, `taxAuthorityPlanOf` over MUT-735's `payerPlanOf`, `planLimitError`). Only Starter is refused; a payer with no plan (`none`, `malafat`) keeps today's answer, so nothing changes until MUT-731 makes Starter resolve.
+- New error code `PLAN_LIMIT` (409): `details` limit `taxAuthority`, plan, nextPlan, canUpgrade (a paid plan can be bought here: Checkout configured).
+- On Starter: Tax Authority connect and allocation decisions refuse with PLAN_LIMIT; the callback stores nothing and returns with `taxAuthority=plan`; `GET /v1/issuing/tax-authority` reads `suspended` for a kept connection (never deleted) and carries `plan: { allowed, nextPlan }`; the setup's step 5 isn't done; reconnect reminders skip it (`skip: plan`). Allocation is MANUAL with the preview's new `automaticOn: 'solo'`; an issue without a typed number answers `ALLOCATION_NUMBER_REQUIRED` with `automaticOn` and never reaches the automatic allocator or `reportDecision`.
+- Portal: step 5 on Starter offers Upgrade to Solo (Billing) instead of Connect; a kept (suspended) connection keeps Disconnect; the callback's `taxAuthority=plan` return says "Nothing was connected." The manual allocation panel is unchanged on Starter. No explanatory lines (Basel, 2026-11-26: copy keeps only what the person needs to act). Plan names `hosted.plan.name.*` for the button. ar + en. Not final: Basel hasn't seen a wireframe yet.
+- Phone (mutaba3a-flutter, branch `feat/mut-736-invoicing-for-all`): the model parses `automaticOn`; no screen changes (issuing opens through `/v1/me` features).
+- Terms drafts (`docs/legal/drafts/terms-2026-11-25.*`, unpublished, MUT-732): the connection is on paid plans; on a plan without it numbers are typed by hand; a downgrade pauses it and an upgrade resumes it.
+
+### Changed
+- `invoicingOn(store, organization, forAll)` is the one rule; `issuingProfileOf` and the session-less readers (books split, Reports' figures, the monthly summary, the period pack, client statement tags) pass the server's flag.
+- The accountant store guard may read `billing.factsFor`, so a shared profile's Tax Authority status reads the owner's plan.
+
+### Technical
+- Files: `server/src/{config,app,app-shell,index,errors,schemas}.ts`, `server/src/auth/{middleware,store-guard}.ts`, `server/src/billing/plans.ts`, `server/src/issuing/{invoicing-on,tax-authority-plan}.ts`, `server/src/routes/{issuing,tax-authority,me,portal-routes,…}.ts`, `server/src/israel/tax-authority/reconnect-reminder.ts`, `server/infrastructure/terraform/{main,variables}.tf` (+ `tests/invoicing_for_all.tftest.hcl`), `src/hosted/pages/invoicing/InvoicingSteps.tsx`, `src/hosted/components/ManualAllocationPanel.tsx`, `src/hosted/api/serverErrorCodes.ts`, `qa/support/portalApi.ts`, `qa/{features,specs}/portal/invoicing.*`.
+- Why: Basel (2026-11-25) opens invoicing to everyone ahead of Starter (Q6) and keeps the automatic Tax Authority connection as a paid-plan reason to upgrade; Starter types allocation numbers by hand (MUT-711's path).
+
+---
+
 ## [Unreleased] - 2026-11-25 — Usage metering and Operator › Usage (MUT-735, ADR-281, API 1.142.0-mut735)
 
 ### Added
