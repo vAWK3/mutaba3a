@@ -2092,3 +2092,84 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-price-total { font-weight: var(--weight-semibold); }
 .hp-price-line + .hp-price-total { border-block-start: 1px solid var(--divider); padding-block-start: var(--space-1-5); }
 .hp-price-per { font-weight: var(--weight-normal); color: var(--muted); font-size: var(--text-label); }
+
+/* MUT-734 (docs/design/motion/2026-11-27/undo-toast): the toast rises 14 px (420 ms spring) and fades in (240 ms
+   linear); Undo fades it out in 150 ms linear. Reduced motion: no rise, the fades only. */
+.hp-toast--rise { animation: hp-toast-rise 420ms var(--ease-spring) both, hp-toast-fade-in 240ms linear both; }
+@keyframes hp-toast-rise { from { transform: translateY(14px); } to { transform: none; } }
+@keyframes hp-toast-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.hp-toast--leaving { opacity: 0; transition: opacity 150ms linear; }
+@media (prefers-reduced-motion: reduce) { .hp-toast--rise { animation: hp-toast-fade-in 150ms linear both; } }
+
+/* MUT-734 (docs/design/motion/2026-11-27/plan-upgraded, 1.12 s once, no overshoot): the new level lands, the nuqta
+   hops up to it, its dots appear from inline-start, then the sparkles. Individual transform properties, so the art's
+   own transform attributes stay. Reduced motion: the still (the art) with a 150 ms fade. */
+.hp-scene--plan-upgraded [data-part="tier3"] { animation: hp-pu-land 480ms var(--ease-spring) both, hp-pu-fade 200ms linear both; }
+.hp-scene--plan-upgraded [data-part="nuqta"] { animation: hp-pu-hop 520ms var(--ease-spring) 300ms both; }
+.hp-scene--plan-upgraded [data-part="tier3"] circle { transform-box: fill-box; transform-origin: center; animation: hp-pu-pop 300ms var(--ease-spring) both; }
+.hp-scene--plan-upgraded [data-part="tier3"] circle:nth-of-type(1) { animation-delay: 600ms; }
+.hp-scene--plan-upgraded [data-part="tier3"] circle:nth-of-type(2) { animation-delay: 660ms; }
+.hp-scene--plan-upgraded [data-part="tier3"] circle:nth-of-type(3) { animation-delay: 720ms; }
+[dir="rtl"] .hp-scene--plan-upgraded [data-part="tier3"] circle:nth-of-type(1) { animation-delay: 720ms; }
+[dir="rtl"] .hp-scene--plan-upgraded [data-part="tier3"] circle:nth-of-type(3) { animation-delay: 600ms; }
+.hp-scene--plan-upgraded [data-part="sparkles"] { transform-box: fill-box; transform-origin: center; animation: hp-pu-sparkle 360ms var(--ease-spring) 760ms both; }
+@keyframes hp-pu-land { from { translate: 0 -28px; } to { translate: 0 0; } }
+@keyframes hp-pu-fade { from { opacity: 0; } to { opacity: 1; } }
+/* From tier 2 (y 74) to tier 3 (y 46) on an arc: the key frames' peak (y ≈ 38) at the middle. */
+@keyframes hp-pu-hop { 0% { translate: 0 28px; } 55% { translate: 0 -8px; } 100% { translate: 0 0; } }
+@keyframes hp-pu-pop { from { scale: 0; } to { scale: 1; } }
+@keyframes hp-pu-sparkle { from { scale: 0; opacity: 0; } to { scale: 1; opacity: 1; } }
+
+/* MUT-733 (docs/design/motion/2026-11-27/gift-month, 1.40 s once, a celebration: overshoot on the leaves, the nuqta's
+   pop and the confetti). The leaves are the art's 5th–7th children; confetti pieces fly out from the nuqta (80, 30). */
+.hp-scene--gift-month [data-part="stem"] { stroke-dasharray: 80; animation: hp-gm-stem 560ms var(--ease-spring) both; }
+.hp-scene--gift-month [data-part="nuqta"] { transform-box: fill-box; transform-origin: center; animation: hp-gm-nuqta 940ms both; }
+.hp-scene--gift-month svg > path:nth-child(5) { transform-box: view-box; transform-origin: 80px 90px; animation: hp-gm-leaf 360ms var(--ease-overshoot) 200ms both; }
+.hp-scene--gift-month svg > path:nth-child(6) { transform-box: view-box; transform-origin: 80px 76px; animation: hp-gm-leaf 360ms var(--ease-overshoot) 300ms both; }
+.hp-scene--gift-month svg > path:nth-child(7) { transform-box: view-box; transform-origin: 80px 52px; animation: hp-gm-leaf 360ms var(--ease-overshoot) 420ms both; }
+.hp-scene--gift-month [data-part="limit"] { animation: hp-gm-limit 300ms var(--ease-spring) 360ms both; }
+.hp-scene--gift-month [data-part="confetti"] > * { transform-box: fill-box; transform-origin: center; animation: hp-gm-confetti 760ms var(--ease-overshoot) both; }
+.hp-scene--gift-month [data-part="confetti"] > :nth-child(1) { --dx: 48.96px; --dy: 0px; animation-delay: 640ms; }
+.hp-scene--gift-month [data-part="confetti"] > :nth-child(2) { --dx: -46.8px; --dy: 13px; animation-delay: 670ms; }
+.hp-scene--gift-month [data-part="confetti"] > :nth-child(3) { --dx: -54.56px; --dy: -22.32px; animation-delay: 700ms; }
+.hp-scene--gift-month [data-part="confetti"] > :nth-child(4) { --dx: 51.92px; --dy: -33.04px; animation-delay: 730ms; }
+.hp-scene--gift-month [data-part="confetti"] > :nth-child(5) { --dx: 22.4px; --dy: 20.16px; animation-delay: 760ms; }
+.hp-scene--gift-month [data-part="confetti"] > :nth-child(6) { --dx: -23.32px; --dy: 25.44px; animation-delay: 790ms; }
+@keyframes hp-gm-stem { from { stroke-dashoffset: 80; } to { stroke-dashoffset: 0; } }
+/* Rides the stem tip up from the pot (scale 0.4 → 1, 0–560 ms, spring), pops +25% (540–700 ms, overshoot), settles
+   (700–940 ms, spring). */
+@keyframes hp-gm-nuqta {
+  0% { translate: 0 68px; scale: 0.4; animation-timing-function: var(--ease-spring); }
+  57.4% { translate: 0 0; scale: 1; animation-timing-function: var(--ease-overshoot); }
+  74.5% { scale: 1.25; animation-timing-function: var(--ease-spring); }
+  100% { translate: 0 0; scale: 1; }
+}
+@keyframes hp-gm-leaf { from { scale: 0; } to { scale: 1; } }
+@keyframes hp-gm-limit { from { opacity: 1; } to { opacity: 0.55; } }
+@keyframes hp-gm-confetti { from { translate: var(--dx) var(--dy); scale: 0; opacity: 0; } to { translate: 0 0; scale: 1; opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-scene--plan-upgraded *, .hp-scene--gift-month * { animation: none !important; }
+  .hp-scene--plan-upgraded, .hp-scene--gift-month { animation: hp-pu-fade 150ms linear both; }
+}
+
+/* MUT-734 (wireframe mut-734 A): Change plan, the list and the preview in one pane; the scheduled line with Undo. */
+.hp-change-list { display: grid; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.hp-change-row { display: flex; align-items: center; gap: var(--space-3); min-block-size: 44px; padding: var(--space-2-5) var(--space-3); cursor: pointer; }
+.hp-change-row + .hp-change-row { border-block-start: 1px solid var(--divider); }
+.hp-change-row:has(input:checked) { background: var(--accent-subtle); }
+.hp-change-row:has(input:disabled) { cursor: default; }
+.hp-change-row-text { display: grid; flex: 1 1 auto; min-inline-size: 0; }
+.hp-change-row-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: var(--weight-semibold); }
+.hp-change-row-limits { font-size: var(--text-label); color: var(--muted); }
+.hp-change-row-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hp-change-preview { display: grid; gap: var(--space-1); padding: var(--space-4); border-radius: var(--radius-md); background: var(--surface-2); }
+.hp-change-preview-label { font-size: var(--text-label); color: var(--muted); }
+.hp-change-preview-figure { font-family: var(--font-mono); font-size: var(--text-figure-fluid, var(--text-figure)); font-weight: var(--weight-medium); line-height: 1.1; }
+.hp-change-preview-date { font-family: inherit; font-size: var(--text-headline, 1.25rem); font-weight: var(--weight-semibold); }
+.hp-change-done { justify-items: center; text-align: center; }
+.hp-scheduled { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 350ms var(--ease-spring), opacity 350ms var(--ease-spring); }
+.hp-scheduled[data-leaving] { grid-template-rows: 0fr; opacity: 0; }
+.hp-scheduled-inner { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-block-size: 0; overflow: hidden; }
+.hp-scheduled-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: 0; }
+@media (prefers-reduced-motion: reduce) { .hp-scheduled { transition: opacity 150ms linear; } }

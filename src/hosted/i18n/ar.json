@@ -1678,6 +1678,32 @@
         "price": "السعر",
         "line": "ضريبة القيمة المضافة {percent}%",
         "total": "المجموع"
+      },
+      "change": {
+        "title": "تغيير الخطة",
+        "free": "مجانية",
+        "perYear": "{price} سنويًا",
+        "current": "الحالية",
+        "chargedNow": "يُخصم الآن",
+        "fromDate": "{plan} من {date}",
+        "readOnlyFrom": "للقراءة فقط من {date}",
+        "pay": "ادفع {amount}",
+        "confirm": "تأكيد",
+        "pending": "بانتظار الدفع · {plan}",
+        "completePayment": "إكمال الدفع",
+        "otherCard": "الدفع ببطاقة أخرى",
+        "upgraded": "أنت الآن على خطة {plan}",
+        "done": "تم",
+        "scheduled": "مُجدول",
+        "undo": "تراجع",
+        "undone": "{plan} يتجدد في {date}",
+        "moveToStarter": "الانتقال إلى البداية",
+        "failure": {
+          "declined": "رُفضت البطاقة",
+          "changed": "تحدّث المبلغ",
+          "chooseBusinesses": "اختر الأنشطة التي تبقى فعّالة",
+          "failed": "تعذّر تغيير الخطة"
+        }
       }
     },
     "selfService": {
@@ -2533,6 +2559,23 @@
         "exportWithPasskey": "تصدير CSV بمفتاح المرور",
         "personLevel": "ليس على ملف",
         "profileThisMonth": "هذا الشهر: {documents} مستندات، {scans} مسح"
+      },
+      "planHistory": {
+        "title": "سجل الخطة",
+        "none": "لا تغييرات",
+        "on": "في {date}",
+        "kind": {
+          "UPGRADE": "ترقية",
+          "DOWNGRADE": "تخفيض",
+          "TO_STARTER": "إلى البداية"
+        },
+        "state": {
+          "APPLIED": "مُطبّق",
+          "SCHEDULED": "مُجدول",
+          "PENDING": "معلّق",
+          "UNDONE": "أُلغي",
+          "FAILED": "فشل"
+        }
       }
     },
     "welcome": {

@@ -229,6 +229,11 @@ export type BillingEntitlement = NonNullable<HostedProfile['billing']>;
 export type BillingYearlySwitch = Schemas['BillingYearlySwitch'];
 export type YearlySwitchPreview = Schemas['YearlySwitchPreview'];
 export type YearlySwitchResult = Schemas['YearlySwitchResult'];
+/** MUT-734: change plan (up now, down at the period end, to Starter). */
+export type PlanChangeTarget = Schemas['PlanChangeTarget'];
+export type PlanChangePreview = Schemas['PlanChangePreview'];
+export type PlanChangeResult = Schemas['PlanChangeResult'];
+export type PlanChange = Schemas['PlanChange'];
 export type BillingRetention = Schemas['BillingRetention'];
 export type PauseResult = Schemas['PauseResult'];
 export type PauseEndResult = Schemas['PauseEndResult'];
@@ -829,6 +834,12 @@ export const api = {
   chooseStarter: () => request<Schemas['StarterChoice']>('POST', '/v1/billing/starter'),
   /** MUT-731 (Basel Q5): the business kept active on Starter. */
   setActiveBusinesses: (organizationIds: string[]) => request<Schemas['ActiveBusinesses']>('PUT', '/v1/billing/active-businesses', { body: { organizationIds } }),
+  /** MUT-734: what a change to `plan` would do (the amount charged now, or the date and the businesses to keep). */
+  previewPlanChange: (plan: Schemas['PlanChangeTarget']) => request<Schemas['PlanChangePreview']>('POST', '/v1/billing/plan-change/preview', { body: { plan } }),
+  /** MUT-734: change plan at the preview's `prorationAt` and amount; past the target's business count, the ones kept. */
+  changePlan: (body: Schemas['PlanChangeRequest']) => request<Schemas['PlanChangeResult']>('POST', '/v1/billing/plan-change', { body }),
+  /** MUT-734: take a scheduled change back before its day. */
+  undoPlanChange: () => request<{ change: Schemas['PlanChange'] }>('DELETE', '/v1/billing/plan-change'),
   /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */
   soloTrialOffered: () => request<Schemas['SoloTrialOffer']>('POST', '/v1/billing/solo-trial/offered'),
 

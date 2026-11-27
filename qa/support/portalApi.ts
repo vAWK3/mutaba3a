@@ -820,7 +820,14 @@ export interface PaidSeed {
   businesses?: { active: string[]; readOnly: string[] };
   /** MUT-733: the once-ever over-cap gift; default unused. `running` names the meter it lifts this month. */
   gift?: { used?: boolean; running?: 'documents' | 'scans' };
+  /** MUT-734: a change already scheduled for the period end. */
+  scheduled?: { plan: 'starter' | 'solo' | 'business'; kind: 'DOWNGRADE' | 'TO_STARTER' };
 }
+
+/** MUT-734: the ladder the fake's plan changes rank by (ADR-275 RANK). */
+const PLAN_RANK = { starter: 0, solo: 1, business: 2, firm: 3 } as const;
+/** MUT-734: the fake's proration for any upgrade (Stripe's preview amount, minor units). */
+const QA_PRORATION = 3140;
 
 const PAID_CAPS = {
   solo: { documents: 50, scans: 100, businesses: 1 },
@@ -1206,7 +1213,7 @@ export class FakeApi {
   }
 
   /** MUT-705: GET /v1/billing and the active businesses for a paying person. */
-  private paidAnswer(e: Logged, id?: string) {
+  private paidAnswer(e: Logged, id?: string, sub?: string) {
     const p = this.paid!;
     if (e.method === 'GET' && !id) {
       const plan = this.paidPlan();
@@ -1225,11 +1232,39 @@ export class FakeApi {
         plans: QA_PLANS,
         vatRate: QA_VAT_RATE,
         billingAddress: { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' },
-        scheduledChange: null,
+        scheduledChange: p.scheduled ? { plan: p.scheduled.plan, at: p.periodEnd, kind: p.scheduled.kind } : null,
         pendingChange: null,
-        planChange: { canUpgradeTo: (['business', 'firm'] as const).filter((x) => x !== p.plan && (p.plan === 'solo' || x === 'firm')), canDowngradeTo: [] },
+        planChange: p.scheduled
+          ? { canUpgradeTo: [], canDowngradeTo: [] }
+          : {
+              canUpgradeTo: (['business', 'firm'] as const).filter((x) => PLAN_RANK[x] > PLAN_RANK[p.plan]),
+              canDowngradeTo: (['starter', 'solo', 'business'] as const).filter((x) => PLAN_RANK[x] < PLAN_RANK[p.plan]),
+            },
       });
     }
+    // MUT-734: Change plan: the preview, the change (up applied now, down scheduled), and Undo.
+    if (e.method === 'POST' && id === 'plan-change' && sub === 'preview') return json(this.planChangePreview(((e.body ?? {}) as { plan: 'starter' | 'solo' | 'business' | 'firm' }).plan));
+    if (e.method === 'POST' && id === 'plan-change' && !sub) {
+      const body = (e.body ?? {}) as { plan: 'starter' | 'solo' | 'business' | 'firm'; activeBusinessIds?: string[] };
+      const from = p.plan;
+      const at = new Date().toISOString();
+      if (body.plan !== 'starter' && PLAN_RANK[body.plan] > PLAN_RANK[from]) {
+        p.plan = body.plan as PaidSeed['plan'];
+        return json({ state: 'applied', change: { id: 'aaaaaaaa-7340-4000-8000-000000000001', kind: 'UPGRADE', state: 'APPLIED', fromPlan: from.toUpperCase(), toPlan: body.plan.toUpperCase(), effectiveAt: at, amountMinor: QA_PRORATION, currency: 'ILS', createdAt: at }, hostedInvoiceUrl: null });
+      }
+      const kind = body.plan === 'starter' ? 'TO_STARTER' : 'DOWNGRADE';
+      p.scheduled = { plan: body.plan as 'starter' | 'solo' | 'business', kind };
+      return json({ state: 'scheduled', change: { id: 'aaaaaaaa-7340-4000-8000-000000000002', kind, state: 'SCHEDULED', fromPlan: from.toUpperCase(), toPlan: body.plan.toUpperCase(), effectiveAt: p.periodEnd, amountMinor: null, currency: null, createdAt: at }, hostedInvoiceUrl: null });
+    }
+    if (e.method === 'DELETE' && id === 'plan-change') {
+      if (!p.scheduled) return json({ error: { code: 'CONFLICT', message: 'nothing', details: { reason: 'NOTHING_SCHEDULED' } } }, 409);
+      const undone = p.scheduled;
+      p.scheduled = undefined;
+      const at = new Date().toISOString();
+      return json({ change: { id: 'aaaaaaaa-7340-4000-8000-000000000002', kind: undone.kind, state: 'UNDONE', fromPlan: p.plan.toUpperCase(), toPlan: undone.plan.toUpperCase(), effectiveAt: p.periodEnd, amountMinor: null, currency: null, createdAt: at } });
+    }
+    // MUT-532's cancel flow on a paid plan: no pause or stay offer here, so Why? leads to the confirm.
+    if (e.method === 'GET' && id === 'retention') return json({ endsOn: p.periodEnd, pause: null, stayOffer: null });
     if (e.method === 'PUT' && id === 'active-businesses' && p.businesses) {
       const chosen = ((e.body ?? {}) as { organizationIds?: string[] }).organizationIds ?? [];
       const all = [...p.businesses.active, ...p.businesses.readOnly];
@@ -1238,6 +1273,18 @@ export class FakeApi {
       return json({ cap: PAID_CAPS[p.plan].businesses, active: p.businesses.active, readOnly: p.businesses.readOnly, mustChoose: false });
     }
     return null;
+  }
+
+  /** MUT-734: POST /v1/billing/plan-change/preview, as the server answers it (the proration fixed for QA). */
+  private planChangePreview(plan: 'starter' | 'solo' | 'business' | 'firm') {
+    const p = this.paid!;
+    const limitsOf = (x: typeof plan) => (x === 'starter' ? { businesses: 1, partners: 0, documentsPerMonth: 3, scansPerMonth: 12 } : QA_PLANS.find((q) => q.plan === x)!.limits);
+    if (plan !== 'starter' && PLAN_RANK[plan] > PLAN_RANK[p.plan]) {
+      return { kind: 'upgrade', plan, amountDue: QA_PRORATION, currency: 'ils', prorationAt: new Date().toISOString(), limits: limitsOf(plan) };
+    }
+    const cap = limitsOf(plan).businesses;
+    const owned = this.profiles.filter((s) => s.stub.owned && s.stub.type === 'BUSINESS').map((s) => ({ id: s.stub.id, name: s.stub.name }));
+    return { kind: plan === 'starter' ? 'to_starter' : 'downgrade', plan, effectiveAt: p.periodEnd, limits: limitsOf(plan), cap, businesses: owned, mustChoose: owned.length > cap };
   }
 
   /** MUT-705 / MUT-733: the server's 409 PLAN_LIMIT at a paid plan's doors, and the counters moving on success. */
@@ -1394,7 +1441,7 @@ export class FakeApi {
       if (answered) return answered;
     }
     if (resource === 'billing' && this.paid) {
-      const answered = this.paidAnswer(e, id);
+      const answered = this.paidAnswer(e, id, sub);
       if (answered) return answered;
     }
     if (resource === 'billing' && method === 'GET' && !id) return json(this.billingOverview ?? BILLING_OFF);

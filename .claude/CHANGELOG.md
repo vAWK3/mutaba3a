@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-734 (UI): change plan from Billing
+
+### Added
+- Billing's Change plan step (`?step=change`, wireframe mut-734 A): the plans with the current one marked, the picked plan's preview ("Charged now" or "<plan> from <date>") and Pay / Confirm; the businesses kept on a downgrade (`BusinessChecklist`). `ChangePlan.tsx` (`ChangePlanBody`, `ChangePlanFooter`, `ChangeDoneBody`, `ScheduledChangeLine`), `data/planChangeQueries.ts` (`useChangePlan`, `useUndoPlanChange`, `useScheduledToast`, `changeTargetsOf`).
+- The upgrade's done pane with the `plan-upgraded` scene and its motion; the scheduled line with the `change-scheduled` scene and Undo; the undo toast motion (`Toast` `motion: 'undo'`); `Scene` motions `plan-upgraded` and `gift-month` (CSS from the 2026-11-27 specs).
+- Cancel plan's confirm: Move to Starter (`InPlaceConfirm extraAction`), opening Change plan on Starter.
+- Operator account page: Plan history (`OperatorPlanHistory`).
+- API client `previewPlanChange`, `changePlan`, `undoPlanChange`; analytics `plan_change_previewed/confirmed/undone`; i18n `hosted.billing.change.*`, `hosted.operator.planHistory.*` (ar + en).
+
+### Changed
+- A subscriber's Upgrade to <plan> (Billing meters, Home, cap notices) opens Change plan on that plan (`openChangePlan`).
+- FakeApi `paid` seed answers the preview, the change, Undo and the retention read.
+
+### Technical
+- Tests: `BillingDrawer.mut734.test.tsx`, a Plan history case in `OperatorAccountPage.test.tsx`. QA: `portal.change-plan.upgrade-now`, `downgrade-scheduled`, `cancel-to-starter`, `operator-plan-history` (manual).
+
 ## [Unreleased] - 2026-11-27 — MUT-750 slice A (UI): price, VAT and total before Checkout
 
 ### Added

@@ -2648,3 +2648,14 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 |---|---|---|
 | `src/hosted/data/billingPlans.ts` | `priceLinesOf`, `vatRateOf`, `PriceLines`, `VatRate` | Subscribe step |
 | `src/hosted/components/PriceLinesCard.tsx` | `PriceLinesCard` | Subscribe step (plan mode) |
+
+## MUT-734 — change plan (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/planChangeQueries.ts` | `useChangePlan`, `useUndoPlanChange`, `useScheduledToast`, `changeTargetsOf`, `scheduledChangeOf`, `pendingChangeOf`, `planChangePreviewQuery`, `changeFailureOf` | Billing drawer, `ChangePlan` |
+| `src/hosted/components/ChangePlan.tsx` | `ChangePlanBody`, `ChangePlanFooter`, `ChangeDoneBody`, `ScheduledChangeLine` | Billing drawer |
+| `src/hosted/components/InPlaceConfirm.tsx` | `extraAction` (a third button) | cancel flow's Move to Starter |
+| `src/hosted/components/Toast.tsx` | option `motion: 'undo'` (undo-toast spec) | scheduled plan change |
+| `src/hosted/components/Scene.tsx` | motions `plan-upgraded`, `gift-month` | done pane, MUT-733's gift notice |
+| `src/hosted/pages/operator/OperatorPlanHistory.tsx` | `OperatorPlanHistory` | operator account page |

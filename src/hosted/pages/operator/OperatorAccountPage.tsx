@@ -19,6 +19,7 @@ import { agoText, dayText, instantText } from '../../operator/time';
 import { ME_KEY, useMe } from '../../session/me';
 import { AccountStatusBadge } from './AccountStatusBadge';
 import { OperatorBillingSection } from './OperatorBillingSection';
+import { OperatorPlanHistory } from './OperatorPlanHistory';
 import { OperatorFeaturesSection } from './OperatorFeaturesSection';
 import { OperatorUsageSection } from './OperatorUsageSection';
 
@@ -90,6 +91,8 @@ function AccountDetail({ account, stepUpUntil, grantOpen, onGrantOpen }: { accou
       {/* MUT-527: on your own account the Access actions are never available here (E10), so they aren't shown. */}
       {!own && <AccessGroup account={account} stepUpUntil={stepUpUntil} />}
       <OperatorBillingSection account={account} stepUpUntil={stepUpUntil} own={own} grantOpen={grantOpen} onGrantOpen={onGrantOpen} />
+      {/* MUT-734 (AC12): the person's plan changes. */}
+      <OperatorPlanHistory account={account} />
       <OperatorFeaturesSection account={account} stepUpUntil={stepUpUntil} />
       <OperatorUsageSection userId={account.id} />
       <ProfilesGroup account={account} />

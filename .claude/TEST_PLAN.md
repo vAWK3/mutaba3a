@@ -5085,3 +5085,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Pure | `src/hosted/data/__tests__/billingPlans.vat.test.ts` | 3900 → 702 / 4602; yearly 39000 → 7020; half-up 8925 → 1607; Jordan, no rate, no country → price alone; `vatRateOf` |
 | Portal | `BillingDrawer.plans.test.tsx` | Israel monthly and yearly lines; Jordan price only |
 | QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.vat-lines-israel` (en + ar), `portal.plans.no-vat-abroad` |
+
+## MUT-734 (UI) — change plan (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Portal | `src/hosted/components/__tests__/BillingDrawer.mut734.test.tsx` | Change plan from Billing, Solo current and disabled, Business preview ₪31.40, Pay sends prorationAt + expectedAmountDue, done pane with the plan-upgraded scene; declined card → Pay with another card; 202 pending → Complete payment; downgrade: date as main figure, checklist 0 of 1 → Confirm on, activeBusinessIds sent, scheduled line with the change-scheduled scene and the rising undo toast; Undo on the line (DELETE, collapse, "Business renews"); cancel confirm → Move to Starter → Change plan on Starter |
+| Operator | `OperatorAccountPage.test.tsx` | Plan history rows: from → to, kind, date, state, charge |
+| QA | `qa/specs/portal/change-plan.spec.ts` | `portal.change-plan.upgrade-now`, `downgrade-scheduled`, `cancel-to-starter`; `operator-plan-history` manual |

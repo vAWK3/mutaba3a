@@ -28,7 +28,7 @@ type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' |
  * (`plan_cap_reached`, `limit`), Upgrade shown (`plan_upgrade_offered`, `limit`) and pressed (`plan_upgrade_chosen`,
  * `from`, `to`), and Continue free on Starter after a cancel (`starter_continue_chosen`).
  */
-export type PlanEvent = 'plan_cap_reached' | 'plan_upgrade_offered' | 'plan_upgrade_chosen' | 'starter_continue_chosen';
+export type PlanEvent = 'plan_cap_reached' | 'plan_upgrade_offered' | 'plan_upgrade_chosen' | 'starter_continue_chosen' | 'plan_change_previewed' | 'plan_change_confirmed' | 'plan_change_undone';
 /**
  * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
  * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`); and the owner's Download a period (`period_downloaded`, MUT-314). Definitions:
