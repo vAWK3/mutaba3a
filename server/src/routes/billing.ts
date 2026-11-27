@@ -32,6 +32,7 @@ import {
 } from '../billing/checkout.js';
 import type { BillingProvider } from '../billing/provider.js';
 import { planChangeView } from '../billing/plan-change.js';
+import { PILOT_PRICES, PILOT_PRICES_EXPECTED, pilotOf, pilotPlansOf } from '../billing/pilot.js';
 import { giftAvailable, giftCovers, giftUntil, NO_GIFT } from '../usage/gift.js';
 import { stripeProvider } from '../billing/stripe/provider.js';
 import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
@@ -52,7 +53,7 @@ import type { Logger } from '../logger.js';
 import { ownedProfilesOf, profileTypeOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
-import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema, ProvisionCustomerParamSchema } from '../schemas.js';
+import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PilotWelcomeSeenSchema, PortalSessionRequestSchema, ProvisionCustomerParamSchema } from '../schemas.js';
 
 /**
  * MUT-362 (plan §2.4, ADR-170): Settings › Billing. Signed in only, outside PORTAL_ROUTES (the signed-out portal has
@@ -63,12 +64,14 @@ import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirect
  *   POST /v1/billing/checkout-session  a Stripe Checkout URL (eng review D3: the person's own customer, found or made)
  *   POST /v1/billing/portal-session    a Stripe Customer Portal URL for the linked customer
  *   POST /v1/billing/card-retry        MUT-533 (D5): back from the card form, pay the past-due invoice on the new card
+ *   POST /v1/billing/pilot-welcome     MUT-752 (ADR-296): the pilot Welcome was closed (once per person)
  */
 export const BILLING_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
   'GET /v1/billing',
   'POST /v1/billing/checkout-session',
   'POST /v1/billing/portal-session',
   'POST /v1/billing/card-retry',
+  'POST /v1/billing/pilot-welcome',
 ]);
 
 /** Each session press can cost Stripe calls; ten a minute is far above any person's need. */
@@ -138,7 +141,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         '`comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back ' +
         'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. ' +
         '`currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, ' +
-        'a subscription, or the running trial, which is business); null when nothing covers them.',
+        'a subscription, or the running trial, which is business); null when nothing covers them. ' +
+        '`pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, ' +
+        'and the plans with their Expected prices and limits; null otherwise.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'Billing', content: { 'application/json': { schema: BillingOverviewSchema } } }, 401: refusedResponses[401], 403: refusedResponses[403] },
     }),
@@ -184,6 +189,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           billingAddress,
           // MUT-750 (ADR-290): the rate the portal shows as the VAT line for an Israeli address.
           vatRate: vatRateView(options.countries),
+          // MUT-752 (ADR-296): the free pilot, from the same facts and `now` as the entitlements.
+          pilot: await pilotView(store, user.id, owned, now),
           // MUT-734 (ADR-291): the scheduled change and where the person may move (only while plans are on sale).
           ...(provider ? planChangeView(shown, await store.billing.planChangesOf(user.id)) : { scheduledChange: null, pendingChange: null, planChange: { canUpgradeTo: [], canDowngradeTo: [] } }),
         },
@@ -398,6 +405,31 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/billing/pilot-welcome',
+      tags: ['Billing'],
+      summary: 'The pilot Welcome was closed',
+      description:
+        'MUT-752 (ADR-296, eng review D2): web or phone calls this when the pilot tester closes the Welcome (Later or its main action). From then ' +
+        '`GET /v1/billing` `pilot.welcomeSeenAt` is set and the Welcome does not open again, on any device, also after the pilot is extended. ' +
+        'Idempotent: the first instant is kept. Stored on the person, so it is accepted whether or not a pilot is running. Additive since 1.162.0-mut752.',
+      security: SESSION_ONLY,
+      responses: {
+        200: { description: 'Recorded', content: { 'application/json': { schema: PilotWelcomeSeenSchema } } },
+        401: refusedResponses[401],
+        403: refusedResponses[403],
+      },
+    }),
+    async (c) => {
+      const { user } = c.get('identity');
+      const seen = await store.billing.markPilotWelcomeSeen(user.id, c.get('now')());
+      if (!seen) throw new ApiError('UNAUTHENTICATED', 'No valid session');
+      return c.json({ welcomeSeenAt: seen.toISOString() }, 200);
+    },
+  );
+
   return app;
 }
 
@@ -483,6 +515,20 @@ async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Da
   );
   const { entitlements, facts, businessCaps } = await entitlementsWithFactsFor(store, withMalafat, now, userId);
   return { profiles, entitlements: profiles.map((p) => entitlements.get(p.id)!), facts, businessCaps };
+}
+
+/**
+ * MUT-752 (ADR-296, eng review D1): GET /v1/billing's `pilot`: the person's live pilot grant, while an operator grant
+ * covers their profiles and they don't pay. The Welcome flag is read only for a pilot (one primary-key read).
+ */
+async function pilotView(store: LedgerStore, userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>, now: Date) {
+  const pilot = pilotOf(
+    { userId, grants: owned.facts.grants, subscriptions: owned.facts.subscriptions.filter((s) => s.userId === userId), sources: owned.entitlements.map((e) => e.source) },
+    now,
+  );
+  if (!pilot) return null;
+  const welcomeSeenAt = await store.billing.pilotWelcomeSeenOf(userId);
+  return { cohort: pilot.cohort, endsAt: pilot.endsAt.toISOString(), welcomeSeenAt: welcomeSeenAt?.toISOString() ?? null, pricesExpected: PILOT_PRICES_EXPECTED, plans: pilotPlansOf(PILOT_PRICES) };
 }
 
 /**

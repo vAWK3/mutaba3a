@@ -53,6 +53,24 @@ async function seed(h: AccountantHarness, userId: string, meter: UsageMeter, n: 
 const issue = (h: AccountantHarness, w: { on: Record<string, string>; customerId: string }) => h.app.request('/v1/issued-documents', json(invoice(w.customerId), { ...w.on, ...idem() }));
 const takeGift = (h: AccountantHarness, who: Person, body: Record<string, unknown>) => h.app.request('/v1/billing/over-cap-gift', json(body, who.auth));
 
+describe('MUT-752 a pilot tester is never refused at a paid cap', () => {
+  it('Business pilot at 250/250 with PAID_HARD_CAPS on: the invoice goes through, counted', async () => {
+    const h = harness();
+    const who = await person(h);
+    const expiresAt = new Date(h.now().getTime() + 30 * 86_400_000).toISOString();
+    expect((await h.app.request('/admin/v1/billing/grants', json({ userId: who.userId, tier: 'BUSINESS', reason: 'pilot', cohort: 'dec-2026', expiresAt }, ADMIN))).status).toBe(201);
+    const profileId = await businessOf(h, who, 'Barmajiyat');
+    const on = who.on(profileId);
+    expect((await h.app.request('/v1/issuer', json(ISSUER, on, 'PUT'))).status).toBe(200);
+    expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, on, 'PUT'))).status).toBe(200);
+    const customer = await read(await h.app.request('/v1/customers', json({ name: 'Acme Digital Ltd.' }, { ...on, ...idem() })));
+    await seed(h, who.userId, 'DOCUMENTS', 250, 'business');
+    expect((await issue(h, { on, customerId: customer.id })).status).toBe(201);
+    const usage = (await read(await h.app.request('/v1/billing', { headers: who.auth }))).usage;
+    expect(usage.meters.find((m: { meter: string }) => m.meter === 'documents')).toMatchObject({ used: 251, limit: 250, level: 'at_cap' });
+  });
+});
+
 describe('MUT-733 paid hard caps and the over-cap gift', () => {
   it('Solo at 50/50: refused with gift available; the gift taken, the same invoice and more go through; usage says graceUntil', async () => {
     const h = harness();

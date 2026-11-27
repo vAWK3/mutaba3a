@@ -18,6 +18,11 @@
 
 ## Open Debt
 
+### TD-370: Pilot: no reminder before the end, no "last step reached" (MUT-752, MUT-757)
+**Status**: Open (2026-11-27)
+- **What:** nothing mails a pilot tester before the grant ends (eng review D3 deferred the day-45 and day-55 mails), and plan slice S5's "last step reached" is not recorded (only first scan and first invoice, from usage events).
+- **Why it's acceptable:** a cohort of 5 to 8 testers, watched by the founder; the Pilot panel shows the end date and the operator list shows each tester's end.
+- **Fix:** a daily job like `trial-mail.ts` over live pilot grants (minimal copy), and a closed list of onboarding steps if the watched sessions show it is needed.
 ### TD-361: The claim's Stripe email has no retry, and Checkout's email field is unverified for a customer with none (MUT-766)
 **Status**: Open (2026-11-27)
 - **What:** (1) if Stripe fails when a customer claims, the verified address is not set on their Stripe customer (a `claim_stripe_email_failed` log line), so Stripe receipts and invoices have no address until someone sets it. (2) Stripe's hosted Checkout may ask for an email when the customer has none and save it, which would put the address typed in the room on the customer before the claim (R5's intent).

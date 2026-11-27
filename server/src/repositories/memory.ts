@@ -487,6 +487,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly overCapGifts = new Map<string, { usedAt: Date; meter: 'DOCUMENTS' | 'SCANS'; month: string }>();
   private readonly activeBusinessChoices = new Map<string, string[]>();
   private readonly paidTrials = new Map<string, { offeredAt: Date | null; usedAt: Date | null }>();
+  /** MUT-752: users.pilotWelcomeSeenAt. */
+  private readonly pilotWelcomes = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
   private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
@@ -4902,12 +4904,15 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, s] of this.sessionsById) if (s.userId === id) this.sessionsById.delete(key);
     for (const [key, p] of this.passkeyMap) if (p.userId === id) this.passkeyMap.delete(key);
     this.passkeyPrompts.delete(id);
+    this.pilotWelcomes.delete(id);
     for (const [key, c] of this.challenges) if (c.userId === id) this.challenges.delete(key);
     for (const [key, link] of this.setupLinks) if (('userId' in link && link.userId === id) || (link.purpose === 'SIGNUP' && 'email' in link && link.email === person.email)) this.setupLinks.delete(key);
     for (const [key, entry] of this.inbox) if (entry.userId === id) this.inbox.delete(key);
     for (const [key, claim] of this.userIdem) if (claim.userId === id) this.userIdem.delete(key);
     for (const [key, acceptance] of this.termsAcceptances) if (acceptance.userId === id) this.termsAcceptances.delete(key);
     for (const [key, grant] of this.grants) if (grant.userId === id) this.grants.delete(key);
+    // MUT-752: pilot grants this person referred lose the name (SET NULL).
+    for (const grant of this.grants.values()) if (grant.referredByUserId === id) grant.referredByUserId = null;
     for (const [key, grant] of this.featureGrants) if (grant.userId === id) this.featureGrants.delete(key);
     // MUT-559: the person's grants as an accountant (ON DELETE CASCADE), and invites to their address; those they sent
     // as an owner, on profiles that survive, lose their name (SET NULL).
@@ -5077,6 +5082,15 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
       return true;
     },
+    hasLivePilot: async (userId, at) =>
+      [...this.grants.values()].some((g) => g.userId === userId && g.cohort !== null && g.tier !== 'ACCOUNTANT' && !g.revokedAt && g.expiresAt !== null && g.expiresAt > at),
+    pilotWelcomeSeenOf: async (userId) => this.pilotWelcomes.get(userId) ?? null,
+    markPilotWelcomeSeen: async (userId, at) => {
+      if (!this.people.has(userId)) return null;
+      const seen = this.pilotWelcomes.get(userId) ?? at;
+      this.pilotWelcomes.set(userId, seen);
+      return seen;
+    },
     paidTrialOf: async (userId) => (this.people.has(userId) ? { ...(this.paidTrials.get(userId) ?? { offeredAt: null, usedAt: null }) } : null),
     markPaidTrialOffered: async (userId, at) => {
       if (!this.people.has(userId)) return null;
@@ -5159,8 +5173,14 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('entitlement_grants.userId');
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('entitlement_grants.organizationId');
       const { id, userId, organizationId, tier, reason, expiresAt, grantedBy, at } = input;
+      const cohort = input.cohort ?? null;
+      const referredByUserId = input.referredByUserId ?? null;
+      // MUT-752: the two CHECKs on entitlement_grants.
+      if (cohort !== null && expiresAt === null) throw new StateConflict('entitlement_grant', 'PILOT_NEEDS_EXPIRY');
+      if (referredByUserId !== null && cohort === null) throw new StateConflict('entitlement_grant', 'REFERRAL_NEEDS_PILOT');
+      if (referredByUserId !== null && !this.people.has(referredByUserId)) throw new ForeignKeyViolation('entitlement_grants.referredByUserId');
       if (this.grants.has(id)) throw new UniqueViolation('entitlement_grants.id');
-      const grant: EntitlementGrantRecord = { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at, revokedAt: null };
+      const grant: EntitlementGrantRecord = { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at, revokedAt: null, cohort, referredByUserId };
       this.grants.set(grant.id, grant);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
       return { ...grant };

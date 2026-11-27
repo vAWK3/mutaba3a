@@ -355,6 +355,9 @@ model User {
   accountantProvisioningEnabledAt DateTime?
   provisionCreateLimitPerDay      Int?
   provisionLookupLimitPerDay      Int?
+  /// MUT-752 (ADR-296, eng review D2): when the pilot Welcome was closed; NULL = not yet. On the person, not the grant,
+  /// so an extension (revoke + new grant) never shows it again.
+  pilotWelcomeSeenAt              DateTime?
   createdAt                       DateTime
   updatedAt                       DateTime
 
@@ -392,17 +395,19 @@ model User {
 
   /// MUT-358 (ADR-160): when this person's 14-day trial began. NULL = no trial (every operator-issued account);
   /// MUT-331's self-service signup sets it at email verification.
-  trialStartedAt    DateTime?
+  trialStartedAt      DateTime?
   /// MUT-358: the Stripe customer this person pays through, once linked.
-  billingAccount    BillingAccount?
+  billingAccount      BillingAccount?
   /// MUT-358: operator grants covering this person's own profiles.
-  entitlementGrants EntitlementGrant[]
-  retentionEvents   BillingRetentionEvent[]
-  planChanges       BillingPlanChange[]
+  entitlementGrants   EntitlementGrant[]      @relation("GrantCovers")
+  /// MUT-752 (ADR-296): pilot grants this person (an accountant) referred.
+  referredPilotGrants EntitlementGrant[]      @relation("PilotReferrals")
+  retentionEvents     BillingRetentionEvent[]
+  planChanges         BillingPlanChange[]
   /// MUT-433 (ADR-196): operator-granted feature flags (server/src/features.ts).
-  featureGrants     UserFeatureGrant[]
+  featureGrants       UserFeatureGrant[]
   /// MUT-367: the review a PENDING_REVIEW signup waits on (kept, unlinked, after a decline).
-  signupReview      SignupReview?
+  signupReview        SignupReview?
 
   /// MUT-333 (ADR-188, D18): Close my account. Set together (CHECK); the account is deleted once deleteAfter passes.
   closeRequestedAt          DateTime?
@@ -1867,18 +1872,23 @@ model BillingPlanChange {
 /// MUT-358: an operator grant. Exactly one of userId (the person's own profiles) and organizationId (that profile)
 /// is set (CHECK in the migration). MUT-565: an ACCOUNTANT grant always names the person (CHECK, 20261108120100). Never deleted: revoking sets revokedAt, so "who was covered when" stays answerable.
 model EntitlementGrant {
-  id             String        @id @default(uuid()) @db.Uuid
-  userId         String?       @db.Uuid
-  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId String?       @db.Uuid
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tier           BillingTier
-  reason         String        @db.VarChar(200)
-  expiresAt      DateTime?
+  id               String        @id @default(uuid()) @db.Uuid
+  userId           String?       @db.Uuid
+  user             User?         @relation("GrantCovers", fields: [userId], references: [id], onDelete: Cascade)
+  organizationId   String?       @db.Uuid
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tier             BillingTier
+  reason           String        @db.VarChar(200)
+  expiresAt        DateTime?
+  /// MUT-752 (ADR-296): set = a pilot grant (a lowercase slug, billing/pilot.ts); a pilot always has an expiry (CHECK).
+  cohort           String?       @db.VarChar(64)
+  /// MUT-752: the accountant who referred the tester (SET NULL when that account is deleted); only on a pilot (CHECK).
+  referredByUserId String?       @db.Uuid
+  referredBy       User?         @relation("PilotReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
   /// `admin` for the admin API and CLI; `migration:mut358` for the pre-billing backfill.
-  grantedBy      String        @db.VarChar(64)
-  createdAt      DateTime      @default(now())
-  revokedAt      DateTime?
+  grantedBy        String        @db.VarChar(64)
+  createdAt        DateTime      @default(now())
+  revokedAt        DateTime?
 
   @@index([userId])
   @@index([organizationId])

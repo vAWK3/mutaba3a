@@ -170,6 +170,57 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       await expect(store.billing.createGrant({ id: randomUUID(), userId: null, organizationId: randomUUID(), ...base })).rejects.toThrow(/organizationId/);
     });
 
+    it('MUT-752: a pilot grant keeps its cohort and accountant (read back by listGrants and factsFor); a plain grant has neither', async () => {
+      const store = await makeStore();
+      const { user, personalOrganization } = await store.users.create(userInput());
+      const { user: accountant } = await store.users.create(userInput());
+      const base = { tier: 'BUSINESS' as const, reason: 'pilot', grantedBy: 'admin', at: at(1), audit: [] };
+      const pilot = await store.billing.createGrant({ id: randomUUID(), userId: user.id, organizationId: null, ...base, expiresAt: at(50), cohort: 'dec-2026', referredByUserId: accountant.id });
+      expect(pilot).toMatchObject({ cohort: 'dec-2026', referredByUserId: accountant.id, expiresAt: at(50) });
+      const plain = await store.billing.createGrant({ id: randomUUID(), userId: user.id, organizationId: null, ...base, expiresAt: null });
+      expect(plain).toMatchObject({ cohort: null, referredByUserId: null });
+      expect((await store.billing.listGrants({ userId: user.id })).map((g) => g.cohort).sort()).toEqual(['dec-2026', null].sort());
+      const facts = await store.billing.factsFor({ ownerUserIds: [user.id], organizationIds: [personalOrganization.id] });
+      expect(facts.grants.find((g) => g.id === pilot.id)).toMatchObject({ cohort: 'dec-2026', referredByUserId: accountant.id });
+    });
+
+    it('MUT-752: a pilot needs an expiry, an accountant needs a pilot, and the accountant must exist (the CHECKs and the key)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const { user: accountant } = await store.users.create(userInput());
+      const base = { userId: user.id, organizationId: null, tier: 'BUSINESS' as const, reason: 'pilot', grantedBy: 'admin', at: at(1), audit: [] };
+      await expect(store.billing.createGrant({ id: randomUUID(), ...base, expiresAt: null, cohort: 'dec-2026' })).rejects.toThrow(/PILOT_NEEDS_EXPIRY/);
+      await expect(store.billing.createGrant({ id: randomUUID(), ...base, expiresAt: at(50), referredByUserId: accountant.id })).rejects.toThrow(/REFERRAL_NEEDS_PILOT/);
+      await expect(store.billing.createGrant({ id: randomUUID(), ...base, expiresAt: at(50), cohort: 'dec-2026', referredByUserId: randomUUID() })).rejects.toThrow();
+      expect(await store.billing.listGrants({ userId: user.id })).toEqual([]);
+    });
+
+    it('MUT-752: hasLivePilot: a live pilot grant only (not plain, revoked, expired, or another person’s)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const { user: other } = await store.users.create(userInput());
+      const base = { organizationId: null, tier: 'BUSINESS' as const, reason: 'pilot', grantedBy: 'admin', at: at(1), audit: [] };
+      await store.billing.createGrant({ id: randomUUID(), userId: user.id, ...base, expiresAt: null });
+      expect(await store.billing.hasLivePilot(user.id, at(2))).toBe(false);
+      const pilot = await store.billing.createGrant({ id: randomUUID(), userId: user.id, ...base, expiresAt: at(20), cohort: 'dec-2026' });
+      expect(await store.billing.hasLivePilot(user.id, at(2))).toBe(true);
+      expect(await store.billing.hasLivePilot(user.id, at(20))).toBe(false);
+      expect(await store.billing.hasLivePilot(other.id, at(2))).toBe(false);
+      await store.billing.revokeGrant(pilot.id, at(3), []);
+      expect(await store.billing.hasLivePilot(user.id, at(4))).toBe(false);
+    });
+
+    it('MUT-752: the pilot Welcome is recorded once per person; later calls keep the first instant; unknown is null', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      expect(await store.billing.pilotWelcomeSeenOf(user.id)).toBeNull();
+      expect(await store.billing.markPilotWelcomeSeen(user.id, at(3))).toEqual(at(3));
+      expect(await store.billing.markPilotWelcomeSeen(user.id, at(9))).toEqual(at(3));
+      expect(await store.billing.pilotWelcomeSeenOf(user.id)).toEqual(at(3));
+      expect(await store.billing.markPilotWelcomeSeen(randomUUID(), at(3))).toBeNull();
+      expect(await store.billing.pilotWelcomeSeenOf(randomUUID())).toBeNull();
+    });
+
     it('MUT-565: an ACCOUNTANT grant names a person, never a profile (the CHECK, in both stores)', async () => {
       const store = await makeStore();
       const { user, personalOrganization } = await store.users.create(userInput());

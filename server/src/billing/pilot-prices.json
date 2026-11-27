@@ -1,0 +1,9 @@
+{
+  "expected": true,
+  "source": "MUT-701's decided three-plan list, monthly, excluding VAT (MUT-750); USD as in scripts/stripe-plans.ts. MUT-761 replaces them with the final prices.",
+  "plans": [
+    { "plan": "solo", "monthly": { "ILS": 3900, "USD": 1200 } },
+    { "plan": "business", "monthly": { "ILS": 8900, "USD": 2700 } },
+    { "plan": "firm", "monthly": { "ILS": 24900, "USD": 7500 } }
+  ]
+}

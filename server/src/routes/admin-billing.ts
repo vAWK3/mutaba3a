@@ -79,6 +79,9 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
       path: '/admin/v1/billing/grants',
       tags: ['Admin'],
       summary: 'Grant billing coverage to a person (their own profiles) or to one profile',
+      description:
+        'MUT-752 (ADR-296): with `cohort` it is a pilot grant: a person only, never ACCOUNTANT, ending on `expiresAt` or 60 days from now; `referredByUserId` names ' +
+        'the referring accountant (only with `cohort`; 404 if unknown). Extending a pilot is a revoke and a new grant.',
       security: [{ adminToken: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: CreateEntitlementGrantRequestSchema } } } },
       responses: {
@@ -92,7 +95,7 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
       const body = c.req.valid('json');
       assertFutureExpiry(body.expiresAt, c.get('now')());
       const target = body.organizationId !== undefined ? { userId: null, organizationId: body.organizationId } : { userId: await personId(body), organizationId: null };
-      const grant = await grants.create({ target, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt }, ctxOf(c));
+      const grant = await grants.create({ target, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt, cohort: body.cohort, referredByUserId: body.referredByUserId }, ctxOf(c));
       return c.json(serializeGrant(grant), 201);
     },
   );

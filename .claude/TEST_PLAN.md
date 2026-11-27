@@ -5020,3 +5020,15 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route | `__tests__/paid-caps-gift.test.ts` | scans: 100/100 refused with the gift, taken, scans through with `graceUntil`, documents still hard, hard again from `graceUntil`; a partner takes the owner's gift (a stranger 404), the owner then GIFT_USED |
 | Not yet | | `test:db` concurrent accept |
 | QA | with the UI half | `portal.paid-cap-gift`, `paid-cap-hard-next-month`, `paid-cap-other-meter`, `paid-usage-nudge`, `paid-cap-upgrade-lifts` |
+
+## MUT-752 (server half) — pilot grants, `pilot` on Billing, the Welcome flag (2026-11-27, ADR-296)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/pilot.test.ts` | `pilotOf`: live, expired (at the instant), revoked, ACCOUNTANT, plain grant, two grants (latest expiry), paying subscriber (none), lapsed/never-paid/stale subscription (still a pilot), Accountant-plan subscription, non-OPERATOR sources, another person's or a profile grant, no expiry; 60-day default; cohort slug; prices file parsed, malformed → empty; plans with limits |
+| Route | `__tests__/billing-pilot.test.ts` | admin and operator grants with cohort and accountant (60 days, given expiry kept, audit metadata), 422s and 404; `GET /v1/billing` pilot for a pilot grant, null for nothing/plain grant/trial/payer (back after the lapse)/expired/revoked; extension shows the new end and keeps the Welcome closed; `POST /v1/billing/pilot-welcome` idempotent, 401 signed out |
+| Route | `__tests__/paid-caps-gift.test.ts` | a Business pilot at 250/250 with PAID_HARD_CAPS on still issues (P6) |
+| Store | `repositories/__tests__/store-contract-billing.ts` (memory and Prisma) | cohort and accountant read back by listGrants and factsFor; the two CHECKs and the key; `hasLivePilot`; Welcome once, first instant kept |
+| Migration | `repositories/__tests__/migration-mut752.test.ts` (test:db) | old rows null, CHECKs, SET NULL on the accountant's delete, schema matches |
+| CLI | `scripts/__tests__/users-cli.test.ts` | `billing-grant --cohort --accountant`; `--accountant` without `--cohort` refused |
+| QA | with MUT-759 | the four pilot scenarios in the plan |

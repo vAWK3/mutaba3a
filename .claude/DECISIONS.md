@@ -7453,6 +7453,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** Whether Stripe's Checkout page asks for and stores an email on a customer that has none must be checked in test mode before the flag goes on (TD-361).
 
+## ADR-296: A Pilot Is an Operator Grant With a Cohort: Business, 60 Days by Default, Shown on Billing; the Welcome Flag Is the Person's (MUT-752, epic MUT-751; extends ADR-160's grants, keeps ADR-275's entitlement order)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/pilot-testers-business-plan.md`, APPROVED, eng review D1, D2, D4; build decisions P1–P6).
+
+**Decision:**
+1. The pilot marker lives on `entitlement_grants`: `cohort` (a lowercase slug, at most 64, because it goes to analytics with no personal data) and `referredByUserId` (the referring accountant, SET NULL when that account is deleted). Two CHECKs: a pilot has an expiry; an accountant is named only on a pilot. A pilot is a person's grant (never a profile's), never ACCOUNTANT, and ends on the given expiry or 60 days after the grant. Extending stays a revoke and a new grant.
+2. `resolveEntitlement` is unchanged. `pilotOf` (billing/pilot.ts, pure) reads the facts and `now` GET /v1/billing already used: a pilot only while an OPERATOR entitlement covers one of the person's profiles, they hold no covering profile-plan subscription, and a pilot grant of theirs is live; several: the latest expiry.
+3. `GET /v1/billing` returns `pilot { cohort, endsAt, welcomeSeenAt, pricesExpected, plans[{ plan, expectedMonthly{ILS,USD}, limits }] }` or null. The prices come from `billing/pilot-prices.json` (MUT-701's list, minor units, before VAT), never from a client; a malformed file gives empty `plans`. MUT-761 replaces them.
+4. The Welcome flag is `users.pilotWelcomeSeenAt`, set once by `POST /v1/billing/pilot-welcome` (idempotent, first instant kept), so an extension never shows the Welcome again.
+5. An account an accountant creates (ADR-292) gets no pilot grant on its own: the operator issues it after the account exists (plan open question 3 as amended 2026-11-26). Granting stays an operator act.
+
+**Consequences:** One additive migration (`20261127210000_mut752_pilot_grants`). Nothing reminds a tester before the end (eng D3, TD-370). The tester's usage is the Business plan's, counted and never refused (MUT-735).
 ---
 
 ## ADR-300: Unclaimed Accounts: Reminders With the Same Code, One Digest a Day, Removal at 60 Days Through the Closure Purge, Paid Ones Kept and Flagged (MUT-767, epic MUT-762; eng R1, T6)

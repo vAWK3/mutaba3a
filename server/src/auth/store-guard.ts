@@ -476,6 +476,10 @@ export const STORE_ACCESS: StoreAccess = {
     setActiveBusinesses: 'sessionOnly',
     paidTrialOf: 'sessionOnly',
     markPaidTrialOffered: 'sessionOnly',
+    pilotWelcomeSeenOf: 'sessionOnly',
+    // MUT-752: the paid-cap rule asks it beside overCapGiftOf, for the payer of the write.
+    hasLivePilot: 'sessionOnly',
+    markPilotWelcomeSeen: 'sessionOnly',
     // MUT-362: Settings › Billing reads the person's own account; the route passes the session's user, never a parameter.
     summaryOf: 'sessionOnly',
     // MUT-532: the person's own pause, stay offer and cancel; the route passes the session's user, never a parameter.

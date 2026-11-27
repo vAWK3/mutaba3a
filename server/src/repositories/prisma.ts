@@ -4068,6 +4068,14 @@ export class PrismaLedgerStore implements LedgerStore {
         if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
         return true;
       }),
+    hasLivePilot: async (userId, at) =>
+      (await this.prisma.entitlementGrant.count({ where: { userId, cohort: { not: null }, tier: { not: 'ACCOUNTANT' }, revokedAt: null, expiresAt: { gt: at } }, take: 1 })) > 0,
+    pilotWelcomeSeenOf: async (userId) => (await this.prisma.user.findUnique({ where: { id: userId }, select: { pilotWelcomeSeenAt: true } }))?.pilotWelcomeSeenAt ?? null,
+    markPilotWelcomeSeen: async (userId, at) => {
+      // Conditional: two tabs closing it at once keep the first instant.
+      await this.prisma.user.updateMany({ where: { id: userId, pilotWelcomeSeenAt: null }, data: { pilotWelcomeSeenAt: at } });
+      return (await this.prisma.user.findUnique({ where: { id: userId }, select: { pilotWelcomeSeenAt: true } }))?.pilotWelcomeSeenAt ?? null;
+    },
     paidTrialOf: async (userId) => {
       const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { paidTrialOfferedAt: true, paidTrialUsedAt: true } });
       return row ? { offeredAt: row.paidTrialOfferedAt, usedAt: row.paidTrialUsedAt } : null;
@@ -4160,9 +4168,14 @@ export class PrismaLedgerStore implements LedgerStore {
       translate(() =>
         this.prisma.$transaction(async (tx) => {
           const { id, userId, organizationId, tier, reason, expiresAt, grantedBy, at } = input;
+          const cohort = input.cohort ?? null;
+          const referredByUserId = input.referredByUserId ?? null;
           // MUT-565: the same refusal the memory store gives; the CHECK stays the backstop for a raw insert.
           if (tier === 'ACCOUNTANT' && userId === null) throw new StateConflict('entitlement_grant', 'ACCOUNTANT_PERSON_ONLY');
-          const grant = await tx.entitlementGrant.create({ data: { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at } });
+          // MUT-752: the memory store's refusals for the two pilot CHECKs.
+          if (cohort !== null && expiresAt === null) throw new StateConflict('entitlement_grant', 'PILOT_NEEDS_EXPIRY');
+          if (referredByUserId !== null && cohort === null) throw new StateConflict('entitlement_grant', 'REFERRAL_NEEDS_PILOT');
+          const grant = await tx.entitlementGrant.create({ data: { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at, cohort, referredByUserId } });
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, at) });
           return grant;
         }),
