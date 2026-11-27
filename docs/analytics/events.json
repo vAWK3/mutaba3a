@@ -1,5 +1,5 @@
 {
-  "version": "2.13.0",
+  "version": "2.14.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -277,6 +277,52 @@
       "properties": {
         "from": { "type": "enum", "values": ["starter", "solo", "business", "firm", "freelancer"], "description": "The plan the person was on." },
         "to": { "type": "enum", "values": ["solo", "business", "firm"], "description": "The plan offered." }
+      }
+    },
+    "plan_gift_shown": {
+      "emitters": ["portal"],
+      "description": "MUT-733: a paid plan's monthly limit was reached for the first time and the once-ever gift was shown (the Issue drawer, the receipt upload). Once per page view per limit.",
+      "properties": {
+        "limit": { "type": "enum", "values": ["documents", "scans"], "description": "The meter whose limit was reached." }
+      }
+    },
+    "plan_gift_accepted": {
+      "emitters": ["portal"],
+      "description": "MUT-733: Continue on the gift recorded it; the held request was sent again.",
+      "properties": {
+        "limit": { "type": "enum", "values": ["documents", "scans"], "description": "The meter the gift lifts this month." }
+      }
+    },
+    "plan_change_previewed": {
+      "emitters": ["portal"],
+      "description": "MUT-734: a plan was picked in Billing's Change plan and its preview read (the amount charged now, or the date). Never an amount.",
+      "properties": {
+        "from": { "type": "enum", "values": ["solo", "business", "firm", "freelancer", "starter"], "description": "The plan the person is on." },
+        "to": { "type": "enum", "values": ["starter", "solo", "business", "firm"], "description": "The plan picked." }
+      }
+    },
+    "plan_change_confirmed": {
+      "emitters": ["portal"],
+      "description": "MUT-734: a plan change went through: applied (or waiting for the bank) for an upgrade, scheduled for a downgrade or a move to Starter. Never an amount.",
+      "properties": {
+        "from": { "type": "enum", "values": ["solo", "business", "firm", "freelancer", "starter"], "description": "The plan the person was on." },
+        "to": { "type": "enum", "values": ["starter", "solo", "business", "firm"], "description": "The plan moved to." },
+        "kind": { "type": "enum", "values": ["upgrade", "downgrade", "to_starter"], "description": "Up now, down at the period end, or to Starter at the period end." }
+      }
+    },
+    "plan_change_undone": {
+      "emitters": ["portal"],
+      "description": "MUT-734: a scheduled plan change was taken back before its day (Billing's Undo or the toast's)."
+    },
+    "onboarding_plan_shown": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-737: a new account's first-run plan step was shown (the web's Try Solo / Stay on Starter, the phone's Starter step). Once per account."
+    },
+    "onboarding_plan_chosen": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-737: the first-run plan step was answered. The phone sells nothing, so it only ever sends starter.",
+      "properties": {
+        "choice": { "type": "enum", "values": ["solo", "starter"], "description": "solo = Try Solo (the one-time trial's Checkout); starter = Stay on Starter." }
       }
     },
     "starter_continue_chosen": {

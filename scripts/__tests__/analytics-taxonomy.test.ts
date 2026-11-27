@@ -49,6 +49,10 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.12.0': 'bcaf1dfb50ebfa3d396cb137c5c7d8a24e40d1b2a9a7273e6309742151fff827',
   // MUT-758: the six pilot events (web and phone emit them; the Flutter copy follows with MUT-756).
   '2.13.0': '8c9d0c1fa98f132565bbc809ba9dfc26c7a1bf8d3020cebd3ed55ca086b910b0',
+  // The portal billing lane, one bump for its stack: MUT-705 (plan_upgrade_chosen from/to every plan,
+  // billing_checkout_started.plan solo/business/firm), MUT-733 (plan_cap_reached.plan, plan_gift_shown/accepted),
+  // MUT-734 (plan_change_previewed/confirmed/undone), MUT-737 (onboarding_plan_shown/chosen, portal, ios, android).
+  '2.14.0': '02120d99df27fd9aef24661a3fdc277528d1b0a32be22cb372c792fe8b831aff',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -264,6 +268,14 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       plan_upgrade_offered: ['portal'],
       plan_upgrade_chosen: ['portal'],
       starter_continue_chosen: ['portal'],
+      // MUT-733: the over-cap gift; MUT-734: changing plan in Billing (portal only); MUT-737: the first-run plan step.
+      plan_gift_shown: ['portal'],
+      plan_gift_accepted: ['portal'],
+      plan_change_previewed: ['portal'],
+      plan_change_confirmed: ['portal'],
+      plan_change_undone: ['portal'],
+      onboarding_plan_shown: ['portal', 'ios', 'android'],
+      onboarding_plan_chosen: ['portal', 'ios', 'android'],
       // MUT-758: the pilot's panel, its first scan and invoice, and the 90% line (web and phone).
       pilot_billing_opened: ['portal', 'ios', 'android'],
       pilot_plans_viewed: ['portal', 'ios', 'android'],
@@ -303,7 +315,19 @@ describe('docs/analytics/events.json (ADR-090)', () => {
     const shape = (event: string) =>
       Object.fromEntries(Object.entries(contract.events?.[event]?.properties ?? {}).map(([name, p]) => [name, p.type === 'enum' ? p.values : p.type]));
     expect(shape('accountant_plan_offer_shown')).toEqual({ place: ['invite', 'client_books', 'billing'] });
-    expect(shape('billing_checkout_started')).toEqual({ interval: ['month', 'year'], currency: 'currency', offer: ['launch_2026'], plan: ['freelancer', 'accountant'] });
+    expect(shape('billing_checkout_started')).toEqual({ interval: ['month', 'year'], currency: 'currency', offer: ['launch_2026'], plan: ['freelancer', 'accountant', 'solo', 'business', 'firm'] });
+  });
+
+  it('2.14.0: the plan ladder (MUT-705), the gift (MUT-733), changing plan (MUT-734) and the first-run choice (MUT-737); never an amount', () => {
+    const shape = (event: string) =>
+      Object.fromEntries(Object.entries(contract.events?.[event]?.properties ?? {}).map(([name, p]) => [name, p.type === 'enum' ? p.values : p.type]));
+    expect(shape('plan_upgrade_chosen')).toEqual({ from: ['starter', 'solo', 'business', 'firm', 'freelancer'], to: ['solo', 'business', 'firm'] });
+    expect(shape('plan_cap_reached')).toEqual({ limit: ['documents', 'scans', 'businesses', 'partners', 'tax_authority'], plan: ['starter', 'solo', 'business', 'firm'] });
+    expect(shape('plan_gift_shown')).toEqual({ limit: ['documents', 'scans'] });
+    expect(shape('plan_change_confirmed')).toEqual({ from: ['solo', 'business', 'firm', 'freelancer', 'starter'], to: ['starter', 'solo', 'business', 'firm'], kind: ['upgrade', 'downgrade', 'to_starter'] });
+    expect(shape('plan_change_undone')).toEqual({});
+    expect(shape('onboarding_plan_shown')).toEqual({});
+    expect(shape('onboarding_plan_chosen')).toEqual({ choice: ['solo', 'starter'] });
   });
 
   it('is pinned under its version, so a content change needs a version bump (R2)', () => {
