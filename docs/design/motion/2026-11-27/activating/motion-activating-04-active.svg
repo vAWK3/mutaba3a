@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 96" width="120" height="96">
+<rect id="card" x="18" y="22" width="84" height="54" rx="9" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="chip" x="28" y="34" width="16" height="12" rx="3" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="bars" d="M28 62h22" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="check" d="M68 58l6 6 13-13" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="31" stroke-dashoffset="0.00"/>
+<circle id="nuqta" cx="102.00" cy="22.00" r="6.00" fill="#E89960"/>
+</svg>

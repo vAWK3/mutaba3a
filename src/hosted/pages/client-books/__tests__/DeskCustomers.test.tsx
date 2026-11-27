@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import type { AccountantClientWithStats, Schemas } from '../../../api/client';
 import { emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 import { stripeNavigation } from '../../../data/billingQueries';
@@ -122,7 +122,7 @@ describe('Add customer', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add' }));
 
     expect(await within(dialog).findByText('Link sent to samer@cafenour.ps')).toBeInTheDocument();
-    expect(within(dialog).getByTestId('code-reveal')).toHaveAccessibleName('Code: 4 8 1 7 0 2');
+    expect(within(dialog).getByTestId('claim-code')).toHaveAccessibleName('4 8 1 7 0 2');
     expect(posts).toHaveLength(1);
     expect(posts[0]!.body).toEqual({ email: 'samer@cafenour.ps', displayName: 'Samer Haddad', profileName: 'Café Nour', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale: 'en' });
     expect(posts[0]!.key).toMatch(/^[0-9a-f-]{36}$/);
@@ -137,7 +137,7 @@ describe('Add customer', () => {
     const dialog = await fill(user);
     await user.click(within(dialog).getByRole('button', { name: 'Add' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('An account exists. Ask the customer to share with you.');
-    expect(within(dialog).queryByTestId('code-reveal')).toBeNull();
+    expect(within(dialog).queryByTestId('claim-code')).toBeNull();
   });
 
   it.each([
@@ -160,7 +160,7 @@ describe('Add customer', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add' }));
     const note = await within(dialog).findByText('Added, link not sent');
     await user.click(within(note.closest('[role]') as HTMLElement).getByRole('button', { name: 'Resend link' }));
-    await waitFor(() => expect(within(dialog).getByTestId('code-reveal')).toHaveAccessibleName('Code: 1 3 5 7 9 0'));
+    await waitFor(() => expect(within(dialog).getByTestId('claim-code')).toHaveAccessibleName('1 3 5 7 9 0'));
     expect(api.count(`POST /v1/accountant/customers/${U_CAFE}/link`)).toBe(1);
   });
 });
@@ -181,7 +181,7 @@ describe('the Customer drawer', () => {
     const { user } = desk(`/client-books?customer=${U_CAFE}`, { [`POST /v1/accountant/customers/${U_CAFE}/link`]: () => ok(link('246810')) });
     const dialog = await screen.findByRole('dialog', { name: 'Customer' });
     await user.click(within(dialog).getByRole('button', { name: 'New code' }));
-    expect(await within(dialog).findByTestId('code-reveal')).toHaveAccessibleName('Code: 2 4 6 8 1 0');
+    expect(await within(dialog).findByTestId('claim-code')).toHaveAccessibleName('2 4 6 8 1 0');
   });
 
   it('changes the email after naming what stops working', async () => {
@@ -192,8 +192,19 @@ describe('the Customer drawer', () => {
     expect(within(dialog).getByText('Old link and code stop working.')).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText('New email'), 'New@Cafe.ps');
     await user.click(within(dialog).getByRole('button', { name: 'Change' }));
-    expect(await within(dialog).findByTestId('code-reveal')).toHaveAccessibleName('Code: 9 8 7 6 5 4');
+    expect(await within(dialog).findByTestId('claim-code')).toHaveAccessibleName('9 8 7 6 5 4');
     expect(puts).toEqual([{ email: 'new@cafe.ps' }]);
+  });
+
+  it('shows the Claimed spot once per client: the first time the drawer opens, not again', async () => {
+    desk(`/client-books?customer=${U_STUDIO}`);
+    const dialog = await screen.findByRole('dialog', { name: 'Customer' });
+    expect(dialog.querySelector('[data-scene-art="claimed-spot"]')).not.toBeNull();
+    cleanup();
+
+    desk(`/client-books?customer=${U_STUDIO}`);
+    const again = await screen.findByRole('dialog', { name: 'Customer' });
+    expect(again.querySelector('[data-scene-art]')).toBeNull();
   });
 
   it('hides the setup actions once the customer has claimed, also when they claim while the drawer is open', async () => {

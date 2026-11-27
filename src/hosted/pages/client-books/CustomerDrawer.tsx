@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -7,6 +7,8 @@ import { CodeReveal } from '../../components/CodeReveal';
 import { Drawer } from '../../components/Drawer';
 import { InPlaceConfirm } from '../../components/InPlaceConfirm';
 import { ProfileBanner } from '../../components/ProfileBanner';
+import { Scene } from '../../components/Scene';
+import { hasSeenClaimed, markClaimedSeen } from '../../data/claimedSeen';
 import { ACCOUNTANT_CUSTOMERS_KEY, useChangeCustomerEmail, useReissueLink } from '../../data/accountantCustomersQueries';
 import { useAttemptKey } from '../../data/attemptKey';
 import { DeskBadge } from './DeskBadge';
@@ -37,6 +39,7 @@ export function CustomerDrawer({ row, pane, onClose, onPane }: CustomerDrawerPro
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const customer = row.customer!;
+  const codeLabelId = useId();
   const reissue = useReissueLink();
   const changeEmail = useChangeCustomerEmail();
   const reissueAttempt = useAttemptKey();
@@ -47,6 +50,13 @@ export function CustomerDrawer({ row, pane, onClose, onPane }: CustomerDrawerPro
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
 
+  // The Claimed spot, once per client: read when the drawer opens, marked once the customer is claimed.
+  const [seenAtOpen] = useState(() => hasSeenClaimed(customer.userId));
+  const claimed = customer.state === 'claimed';
+  useEffect(() => {
+    if (claimed) markClaimedSeen(customer.userId);
+  }, [claimed, customer.userId]);
+  const showSpot = claimed && !seenAtOpen;
   const unclaimed = UNCLAIMED.has(customer.state);
   const canTakeCard = !customer.paid && row.state !== 'ended';
 
@@ -100,6 +110,7 @@ export function CustomerDrawer({ row, pane, onClose, onPane }: CustomerDrawerPro
       <p>
         <DeskBadge state={row.state} />
       </p>
+      {showSpot && <Scene name="claimed-spot" size={96} />}
       {pane === 'card' && canTakeCard ? (
         <TakeCardPane userId={customer.userId} onBack={() => onPane(undefined)} />
       ) : (
@@ -109,7 +120,14 @@ export function CustomerDrawer({ row, pane, onClose, onPane }: CustomerDrawerPro
               <p className="hp-muted" dir="auto">
                 {t('hosted.desk.customerDrawer.sent', { email: reveal.email })}
               </p>
-              {reveal.claimCode && <CodeReveal code={reveal.claimCode} label={t('hosted.desk.customerDrawer.code')} />}
+              {reveal.claimCode && (
+                <>
+                  <p id={codeLabelId} className="hp-muted">
+                    {t('hosted.desk.customerDrawer.code')}
+                  </p>
+                  <CodeReveal code={reveal.claimCode} labelledBy={codeLabelId} />
+                </>
+              )}
             </>
           )}
           <div className="hp-desk-next">

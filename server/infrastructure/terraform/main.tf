@@ -51,6 +51,8 @@ locals {
   account_purge_job    = "mutaba3a-account-purge${local.suffix}"
   # MUT-735 (ADR-281 §12): the daily usage retention (events 13 months, counters 25, route statistics 90 days).
   usage_prune_job = "mutaba3a-usage-prune${local.suffix}"
+  # MUT-767 (ADR-300): the daily sweep of accounts an accountant created that nobody claimed.
+  accountant_unclaimed_sweep_job = "mutaba3a-accountant-unclaimed-sweep${local.suffix}"
   # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
   # MUT-525: the launch-offer renewal notices need mail and Stripe; they announce a price, not the lapse gate.
@@ -820,6 +822,30 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
+        # MUT-764..767 (ADR-292): an approved accountant creates customers' accounts; off = those routes answer 404.
+        dynamic "env" {
+          for_each = var.accountant_provisioning ? { ACCOUNTANT_PROVISIONING = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+        # MUT-595 (ADR-254 D1): Sign in with Malafat; off = its routes answer 404.
+        dynamic "env" {
+          for_each = var.malafat_sign_in ? { MALAFAT_SIGN_IN = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+        # MUT-593 (ADR-254 D10): Malafat acting as each person; off = delegated tokens are refused.
+        dynamic "env" {
+          for_each = var.malafat_delegation ? { MALAFAT_DELEGATION = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-702 Part B (ADR-288): Solo, Business and Firm on sale; off = only the legacy Freelancer Checkout.
         dynamic "env" {
           for_each = var.plan_checkout ? { PLAN_CHECKOUT = "true" } : {}
@@ -1385,6 +1411,38 @@ resource "google_cloud_scheduler_job" "usage_prune" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/usage/prune"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-767 (ADR-300): the daily sweep of unclaimed accounts an accountant created, at 10:00 Jerusalem: the customer's
+# reminders on days 3, 10, 30 and 53 (each sent once, the audit row), one digest per accountant a day, and on day 60
+# an unpaid one is closed with its grace over, so the hourly account purge deletes it (paid ones are kept and flagged).
+# Only with accountant_provisioning: while it is off the route answers 404. A retry or a second run sends nothing new.
+resource "google_cloud_scheduler_job" "accountant_unclaimed_sweep" {
+  count = var.accountant_provisioning ? 1 : 0
+
+  project          = var.project_id
+  name             = local.accountant_unclaimed_sweep_job
+  region           = var.region
+  description      = "Daily sweep of unclaimed accountant-created accounts (MUT-767)."
+  schedule         = "0 10 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 2
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/accountants/unclaimed-sweep"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

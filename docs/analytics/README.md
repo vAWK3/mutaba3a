@@ -80,9 +80,11 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 
    On a phone that is offline, the queue waits for the next connection, and nothing new is
    captured meanwhile. Tests prove this order (MUT-155, MUT-157).
-6. **Consent belongs to the signed-in person, not the device.** Signing out or switching account
-   clears the opt-in, the random ID, the "already asked" flag and the phone's "first open already
-   sent" flag, and sends nothing. The next person is asked fresh.
+6. **An accepted "yes" is kept for good on the browser (ADR-301).** Signing out or switching account
+   keeps it with its random ID, sends nothing for the signed-out page, and the next sign-in counts
+   again without asking. Declining the first-run question is not kept: it is asked again next time.
+   A deliberate "off" from You › App is kept for that person, and signing out or another account
+   clears it with the ID. The phone keeps its own rule until the phone follows (Flutter repo).
 7. **SDK features off:**
    - autocapture, including exception autocapture
    - session replay, heatmaps and surveys

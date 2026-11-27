@@ -29,7 +29,12 @@ type Header =
   | 'spot-person'
   | 'spot-calendar'
   | 'spot-schedule'
-  | 'destructive-confirmation';
+  | 'destructive-confirmation'
+  // 2026-11-27: Claude Design's headers for the plans and hand-over mails (sources in assets/mail/source/).
+  | 'plan-change-scheduled'
+  | 'customer-setup'
+  | 'customer-setup-cancelled'
+  | 'accountant-unclaimed-digest';
 type Chip = 'email' | 'edit' | 'pending' | 'success' | 'password' | 'lock' | 'badge' | 'person' | 'calendar' | 'schedule' | 'info' | 'delete';
 
 /** `rtl`: the art has a direction, so Arabic mails use its mirrored `-rtl` file. */
@@ -44,6 +49,10 @@ const HEADERS: Record<Header, { rtl: boolean; alt: Words }> = {
   'spot-calendar': { rtl: false, alt: { en: 'A calendar in a circle', ar: 'تقويم داخل دائرة' } },
   'spot-schedule': { rtl: false, alt: { en: 'A clock in a circle', ar: 'ساعة داخل دائرة' } },
   'destructive-confirmation': { rtl: true, alt: { en: 'A bin with its lid open', ar: 'سلة بغطاء مفتوح' } },
+  'plan-change-scheduled': { rtl: true, alt: { en: 'A calendar with one day circled', ar: 'تقويم وعليه يوم محدد بدائرة' } },
+  'customer-setup': { rtl: true, alt: { en: 'A key on its way to a folder', ar: 'مفتاح في طريقه إلى ملف' } },
+  'customer-setup-cancelled': { rtl: false, alt: { en: 'A folder with a padlock', ar: 'ملف عليه قفل' } },
+  'accountant-unclaimed-digest': { rtl: false, alt: { en: 'Three folders in a stack', ar: 'ثلاثة ملفات فوق بعضها' } },
 };
 
 const CHIPS: Record<Chip, Words> = {
@@ -94,17 +103,18 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'comeback-offer': { mood: 'hello', header: 'milestone-firm', chip: 'success' },
   // MUT-559: an owner shares a profile with their accountant.
   'accountant-invite': { mood: 'hello', header: 'spot-email', chip: 'email' },
-  // MUT-765: the existing art only: an account an accountant set up, and its cancelled link.
-  'customer-setup': { mood: 'hello', header: 'empty-state', chip: 'edit' },
-  'customer-setup-cancelled': { mood: 'safety', header: 'spot-person', chip: 'person' },
-  // MUT-767: the existing art only.
-  'accountant-unclaimed-digest': { mood: 'hello', header: 'spot-pending', chip: 'pending' },
+  // MUT-765: an account an accountant set up, and its cancelled link; MUT-767's day 3/10/30/53 reminders are this same
+  // customer-setup mail. Headers: Claude Design, 2026-11-27.
+  'customer-setup': { mood: 'hello', header: 'customer-setup', chip: 'edit' },
+  'customer-setup-cancelled': { mood: 'safety', header: 'customer-setup-cancelled', chip: 'person' },
+  // MUT-767. Header: Claude Design, 2026-11-27.
+  'accountant-unclaimed-digest': { mood: 'hello', header: 'accountant-unclaimed-digest', chip: 'pending' },
   // MUT-535: a month's summary, so the calendar.
   'monthly-summary': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   // MUT-571 AC3: the existing art only: a consent that ends on a day.
   'tax-authority-reconnect': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
-  // MUT-734: a plan change on a day: the existing calendar art.
-  'plan-change-scheduled': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
+  // MUT-734: a plan change on a day. Header: Claude Design, 2026-11-27.
+  'plan-change-scheduled': { mood: 'trial', header: 'plan-change-scheduled', chip: 'calendar' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

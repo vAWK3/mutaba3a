@@ -188,6 +188,16 @@ async function main() {
       // MUT-593/596: Malafat acting for a person (Connected apps); the stub is its confidential client, keys over http.
       MALAFAT_DELEGATION: 'true',
       OAUTH_CLIENT_LOCAL_HTTP: 'true',
+      // Switch rollout (Basel 2026-11-27, docs/operations/before-release.md): the production target, on here too.
+      // INVOICING_FOR_ALL and ACCOUNTANT_PLAN stay off. STARTER_PLAN and OPEN_SIGNUP stay off in this env until the
+      // flows recorded against the trial and the signup review are re-specced for Starter: signup.create (the trial
+      // step), signup.review-declined, operator.signups-approve and -decline, mail.mail-directional-art and the two
+      // malafat-delegation sign-ins (passTrialWelcome). Turning them on here fails those flows.
+      PLAN_CHECKOUT: 'true',
+      PAID_BUSINESS_CAPS: 'true',
+      PAID_HARD_CAPS: 'true',
+      TWO_FACTOR_ISSUING_GATE_ENABLED: 'true',
+      ACCOUNTANT_PROVISIONING: 'true',
       ...(ocr ? { SERVER_OCR: 'true', OCR_URL, QA_READ_DELAY_MS: String(READ_DELAY_MS) } : {}),
     },
   });

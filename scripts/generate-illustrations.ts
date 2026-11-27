@@ -3,7 +3,8 @@
  * `src/components/illustrations/generated/` from `assets/illustrations/source/*.svg`. Logic lives in
  * `scripts/illustration-set.ts`; `scripts/__tests__/illustration-set.test.ts` exercises it and fails on drift.
  * A new scene from Claude Design: drop its SVG in the source folder, add it to `MOMENTS` in
- * `scripts/validate_illustrations.mjs`, and rerun this. `Scene` stops showing its placeholder on its own.
+ * `scripts/validate_illustrations.mjs`, and rerun this. `Scene` stops showing its placeholder on its own. A scene with
+ * a reading direction also ships `<name>-rtl.svg`; it is generated like any other and `Scene` picks it in RTL.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

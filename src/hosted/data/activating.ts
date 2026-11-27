@@ -42,7 +42,7 @@ export function activatingIds(now = Date.now()): Set<string> {
   return new Set(Object.entries(read()).flatMap(([id, at]) => (now - at < ACTIVATING_WINDOW_MS ? [id] : [])));
 }
 
-/** Sent to Stripe longer ago than the window: the desk says "Check back shortly" for them. */
-export function lapsedActivationIds(now = Date.now()): Set<string> {
-  return new Set(Object.entries(read()).flatMap(([id, at]) => (now - at >= ACTIVATING_WINDOW_MS ? [id] : [])));
+/** Every customer sent to Stripe this session, with the moment (ms). MUT-770's poll and status read these (late ones included). */
+export function activationMarks(): Record<string, number> {
+  return read();
 }

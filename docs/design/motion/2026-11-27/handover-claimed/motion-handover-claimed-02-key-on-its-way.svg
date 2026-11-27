@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="ground" d="M20 146h120" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="tab" d="M28 80V70a5 5 0 0 1 5-5h16l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(38.00 80.00) scale(1.0000) translate(-38.00 -80.00)"/>
+<rect id="back" x="26" y="78" width="108" height="68" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="front" x="26" y="92" width="108" height="54" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="label" d="M40 110h32" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="key" transform="rotate(-2.26 108.61 110.04)"><path d="M97.61 110.04H63.61M71.61 110.04v8M64.61 110.04v7" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="108.61" cy="110.04" r="11" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle id="nuqta" cx="108.61" cy="110.04" r="5" fill="#E89960"/></g>
+</svg>

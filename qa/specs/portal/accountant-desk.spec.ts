@@ -9,7 +9,7 @@ import { CAFE_CUSTOMER, CAFE_USER, CARD_CUSTOMER, CARD_USER, ClientBooksApi, NEW
  */
 
 const PHONE = { width: 375, height: 812 };
-const spoken = (code: string) => `Code: ${code.split('').join(' ')}`;
+const spoken = (code: string) => code.split('').join(' ');
 
 test('An approved accountant adds a customer and gets the code to say out loud', { tag: '@portal.accountant-desk.add' }, async ({ page, step }) => {
   const api = new ClientBooksApi({ clients: [], customers: [] });
@@ -34,7 +34,7 @@ test('An approved accountant adds a customer and gets the code to say out loud',
   await step('Read the code and where the link went, then Done', async () => {
     const dialog = page.getByRole('dialog', { name: 'Add customer' });
     await expect(dialog.getByText('Link sent to samer@cafenour.ps')).toBeVisible();
-    await expect(dialog.getByTestId('code-reveal')).toHaveAttribute('aria-label', spoken('481702'));
+    await expect(dialog.getByTestId('claim-code')).toHaveAttribute('aria-label', spoken('481702'));
     const [post] = api.calls('POST', '/v1/accountant/customers');
     expect(post?.body).toMatchObject({ email: 'samer@cafenour.ps', displayName: 'Samer Haddad', profileName: 'Café Nour', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale: 'en' });
     expect(post?.headers['idempotency-key']).toBeTruthy();
@@ -69,7 +69,7 @@ test('A new code and a changed email, from the Customer drawer', { tag: '@portal
   await step('Make a new code', async () => {
     const dialog = page.getByRole('dialog', { name: 'Customer' });
     await dialog.getByRole('button', { name: 'New code' }).click();
-    await expect(dialog.getByTestId('code-reveal')).toHaveAttribute('aria-label', spoken(NEW_CODE));
+    await expect(dialog.getByTestId('claim-code')).toHaveAttribute('aria-label', spoken(NEW_CODE));
     await expect(dialog.getByText('Link sent to samer@cafenour.ps')).toBeVisible();
   });
 

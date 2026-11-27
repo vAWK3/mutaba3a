@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 96" width="120" height="96">
+<g transform="matrix(-1 0 0 1 120 0)">
+<path id="tab" d="M22 34V24a5 5 0 0 1 5-5h16l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(32.00 34.00) scale(1.0000) translate(-32.00 -34.00)"/>
+<path id="tab-claimed" d="M22 34V24a5 5 0 0 1 5-5h16l9 15z" fill="#E89960" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(32.00 34.00) scale(1.0000) translate(-32.00 -34.00)"/>
+<rect id="back" x="20" y="32" width="80" height="52" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="front" x="20" y="46" width="80" height="38" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="check" d="M48 64l7 7 15-15" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="nuqta" cx="98" cy="16" r="5" fill="#E89960"/>
+<circle cx="16" cy="40" r="2.5" fill="#795DBA"/>
+</g>
+</svg>

@@ -7515,3 +7515,12 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. Resend link and New code are one server call (a fresh link and code). The drawer offers both labels, as the approved wireframe draws them.
 
 **Consequences:** The server stores no plan intent, so a customer who chose the free Starter plan reads Needs card like any claimed customer who has not paid. The two buttons that make one call stay until Basel picks one label. Both are noted for a later ticket, not hidden. The activation `returnPath` pattern accepts `/client-books` although the OpenAPI text names only `/` and profile paths.
+## ADR-301: An Accepted Analytics Choice Is Kept for Good on the Browser; Declining the First Question Is Asked Again (Basel, 2026-11-27; overrides ADR-090 rule 6 for the portal)
+
+**Status**: Active
+**Context**: The portal asked about anonymous usage again after every sign-out and for every other account on the same browser (README rule 6), so a person who had said yes kept being asked. Basel: once someone accepts, always count and don't ask again; ask again only after a rejection.
+**Decision**:
+1. A stored "on" belongs to the browser: sign-out keeps it and the random ID and sends nothing; the next sign-in, any account, counts `portal_opened` without a prompt.
+2. "Not now" at the first-run prompt is not stored: the prompt returns next time. Turning it off from You › App is a deliberate choice, stored for that person; sign-out or another account clears it and the ID.
+3. Unchanged: opt-in before any send (the portal's SDK starts opted out), the contract guard, the cookieless counts on the landing and the welcome before any answer, release-only telemetry (ADR-236).
+**Override log**: ADR-090 rule 6 ("consent belongs to the signed-in person"), 2026-11-27, replaced by 1–2 above. Not done: a per-account server record (cross-device) and the phone app; both need their own change.

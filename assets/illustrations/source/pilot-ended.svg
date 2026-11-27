@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="ground" d="M18 140h124" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="calendar"><rect x="38" y="40" width="44" height="50" rx="7" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M38 52h44M50 35v9M70 35v9" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="48" cy="62" r="2.5" fill="#795DBA"/><circle cx="60" cy="62" r="2.5" fill="#795DBA"/><circle cx="72" cy="62" r="2.5" fill="#795DBA"/></g>
+<g id="receipt"><path d="M88 48h30v50h-30z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M96 58h14M96 67h9" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g id="sheet"><rect x="64" y="58" width="34" height="44" rx="5" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M72 68h12M72 77h18" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g id="box"><rect x="28" y="84" width="104" height="56" rx="14" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 98L80 110L132 98" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<circle id="nuqta" cx="80" cy="124" r="8" fill="#E89960"/>
+<g id="sparkles"><path d="M136 46v10M131 51h10" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22" cy="64" r="3" fill="#795DBA"/></g>
+</svg>

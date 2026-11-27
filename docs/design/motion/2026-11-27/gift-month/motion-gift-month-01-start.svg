@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="ground" d="M24 140h112" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="limit" d="M26 62h108" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7"/>
+<path id="pot" d="M60 116h40l-4 24h-32z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="pot-rim" x="54" y="106" width="52" height="12" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="bow"><path d="M80 112l-11-7v14zM80 112l11-7v14z" fill="#E89960" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80" cy="112" r="3.5" fill="#795DBA"/></g>
+<circle id="nuqta" cx="80" cy="97.95" r="3.60" fill="#E89960"/>
+<g id="confetti"></g>
+</svg>

@@ -131,3 +131,65 @@ run "paid_hard_caps_on" {
   }
 }
 
+# MUT-764..767 (ADR-292), MUT-595 and MUT-593 (ADR-254): the accountant channel and the two Malafat switches ship off
+# and reach Cloud Run only with their variables, each as "true" alone (Switch rollout, docs/operations/before-release.md).
+run "accountant_and_malafat_switches_off_by_default" {
+  command = apply
+
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if contains(["ACCOUNTANT_PROVISIONING", "MALAFAT_SIGN_IN", "MALAFAT_DELEGATION"], e.name)]) == 0
+    error_message = "With the three switches off the service gets none of ACCOUNTANT_PROVISIONING, MALAFAT_SIGN_IN, MALAFAT_DELEGATION."
+  }
+}
+
+run "accountant_provisioning_on" {
+  command = apply
+
+  variables {
+    accountant_provisioning = true
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "ACCOUNTANT_PROVISIONING"] == ["true"]
+    error_message = "With accountant_provisioning on the service gets ACCOUNTANT_PROVISIONING=true, exactly once."
+  }
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if contains(["MALAFAT_SIGN_IN", "MALAFAT_DELEGATION"], e.name)]) == 0
+    error_message = "accountant_provisioning turns on nothing else."
+  }
+}
+
+run "malafat_sign_in_on" {
+  command = apply
+
+  variables {
+    malafat_sign_in = true
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "MALAFAT_SIGN_IN"] == ["true"]
+    error_message = "With malafat_sign_in on the service gets MALAFAT_SIGN_IN=true, exactly once."
+  }
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "MALAFAT_DELEGATION"]) == 0
+    error_message = "Sign in with Malafat does not turn on delegation."
+  }
+}
+
+run "malafat_delegation_on" {
+  command = apply
+
+  variables {
+    malafat_delegation = true
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "MALAFAT_DELEGATION"] == ["true"]
+    error_message = "With malafat_delegation on the service gets MALAFAT_DELEGATION=true, exactly once."
+  }
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "MALAFAT_SIGN_IN"]) == 0
+    error_message = "Delegation does not turn on Sign in with Malafat."
+  }
+}
+

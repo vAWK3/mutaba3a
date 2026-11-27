@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="ground" d="M24 140h112" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="limit" d="M26 62h108" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7" opacity="0.925"/>
+<path id="pot" d="M60 116h40l-4 24h-32z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="stem" d="M80 106Q75 72.47 80 38.95" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M80 90q-18-2-22-14q16-2 22 14z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(80.00 90.00) scale(1.0874) translate(-80.00 -90.00)"/>
+<path d="M80 76q18-2 22-14q-16-2-22 14z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(80.00 76.00) scale(0.7562) translate(-80.00 -76.00)"/>
+<rect id="pot-rim" x="54" y="106" width="52" height="12" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="bow"><path d="M80 112l-11-7v14zM80 112l11-7v14z" fill="#E89960" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80" cy="112" r="3.5" fill="#795DBA"/></g>
+<circle id="nuqta" cx="80" cy="30.90" r="8.92" fill="#E89960"/>
+<g id="confetti"></g>
+</svg>

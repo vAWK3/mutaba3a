@@ -2574,7 +2574,6 @@
       "emptyOr": "أو اطلب من العميل المشاركة",
       "required": "مطلوب",
       "invalidEmail": "تحقق من البريد",
-      "checkBack": "عُد بعد قليل",
       "addDrawer": {
         "title": "إضافة عميل",
         "name": "اسم العميل",
@@ -3954,6 +3953,35 @@
         "start": "جرّب خطة مستقل مجانًا 14 يومًا",
         "skip": "تابع على خطة البداية",
         "back": "رجوع"
+      }
+    },
+    "accountantChannel": {
+      "code": {
+        "label": "الرمز",
+        "copyFailed": "تعذّر النسخ."
+      },
+      "activating": {
+        "activating": "جارٍ التفعيل…",
+        "active": "نشط",
+        "late": "تحقّق بعد قليل",
+        "announce": "{name}: {state}",
+        "close": "إغلاق"
+      },
+      "state": {
+        "awaiting_claim": "لم يُفعَّل بعد",
+        "link_expired": "انتهى الرابط",
+        "code_locked": "الرمز مقفل",
+        "claimed": "نشط",
+        "needsCard": "بحاجة إلى بطاقة",
+        "paid": "مدفوع",
+        "activating": "جارٍ التفعيل"
+      },
+      "chips": {
+        "label": "عرض",
+        "all": "الكل",
+        "awaiting": "بانتظار التفعيل",
+        "needsCard": "بحاجة إلى بطاقة",
+        "active": "نشط"
       }
     }
   }

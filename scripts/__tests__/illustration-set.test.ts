@@ -31,6 +31,34 @@ describe('sceneComponentName', () => {
     expect(sceneComponentName('empty-state.svg')).toBe('EmptyStateScene');
     expect(sceneComponentName('accountant-empty.svg')).toBe('AccountantEmptyScene');
   });
+
+  it('names an -rtl variant and a numbered scene (2026-11-27 art)', () => {
+    expect(sceneComponentName('gift-used-rtl.svg')).toBe('GiftUsedRtlScene');
+    expect(sceneComponentName('pilot-welcome-1.svg')).toBe('PilotWelcome1Scene');
+    expect(sceneComponentName('pilot-welcome-1-rtl.svg')).toBe('PilotWelcome1RtlScene');
+  });
+});
+
+describe('generateSceneComponent: size', () => {
+  const wide = SCENE.replace('viewBox="0 0 160 160"', 'viewBox="0 0 120 96"');
+
+  it('a square scene defaults to 160 and keeps height equal to width', () => {
+    const tsx = generateSceneComponent('EmptyStateScene', sceneFromSvg(SCENE, 'empty-state.svg'), 'empty-state.svg');
+    expect(tsx).toContain('{ size = 160, className }');
+    expect(tsx).toContain('width={size} height={size}');
+  });
+
+  it('a 120x96 scene defaults to its drawn width and keeps its aspect ratio', () => {
+    const tsx = generateSceneComponent('ClaimedSpotScene', sceneFromSvg(wide, 'claimed-spot.svg'), 'claimed-spot.svg');
+    expect(tsx).toContain('{ size = 120, className }');
+    expect(tsx).toContain('width={size} height={Math.round((size * 96) / 120)}');
+    expect(tsx).toContain('viewBox={"0 0 120 96"}');
+  });
+
+  it('fails on a viewBox it cannot size from', () => {
+    const bad = SCENE.replace('viewBox="0 0 160 160"', 'viewBox="0 0 0 160"');
+    expect(() => generateSceneComponent('X', sceneFromSvg(bad, 'x.svg'), 'x.svg')).toThrow(/x\.svg.*viewBox/);
+  });
 });
 
 describe('sceneFromSvg', () => {
@@ -73,10 +101,30 @@ describe('sceneFromSvg', () => {
     expect(() => sceneFromSvg(off, 'bad.svg')).toThrow(/bad\.svg.*#ff0000/i);
   });
 
-  it('fails on anything outside the dialect: other elements, opacity, a transform that is not a rotation', () => {
+  it('fails on anything outside the dialect: other elements, an opacity outside 0..1, a skew or a malformed transform', () => {
     expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><text>x</text></svg>', 'a.svg')).toThrow(/a\.svg/);
-    expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><circle cx="1" cy="1" r="1" opacity="0.5"/></svg>', 'b.svg')).toThrow(/opacity/);
-    expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><circle cx="1" cy="1" r="1" transform="scale(-1 1)"/></svg>', 'c.svg')).toThrow(/rotate/);
+    expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><circle cx="1" cy="1" r="1" opacity="1.5"/></svg>', 'b.svg')).toThrow(/opacity/);
+    expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><circle cx="1" cy="1" r="1" transform="skewX(10)"/></svg>', 'c.svg')).toThrow(/c\.svg.*transform/);
+    expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><circle cx="1" cy="1" r="1" transform="rotate(1 2)"/></svg>', 'd.svg')).toThrow(/transform/);
+    expect(() => sceneFromSvg('<svg viewBox="0 0 160 160"><circle cx="1" cy="1" r="1" transform="matrix(1 0 0 1)"/></svg>', 'e.svg')).toThrow(/transform/);
+  });
+
+  it("keeps the 2026-11-27 art's dialect: opacity, dash offset, and pivot / flip transforms", () => {
+    const svg = `<svg viewBox="0 0 120 96">
+  <path id="limit" d="M24 62h62" fill="none" stroke="#795DBA" stroke-dasharray="6 7" opacity="0.55"/>
+  <path id="check" d="M68 58l6 6" fill="none" stroke="#795DBA" stroke-dasharray="31" stroke-dashoffset="0.00"/>
+  <g id="dot" transform="translate(38.00 80.00) scale(1.0000) translate(-38.00 -80.00)"><circle cx="1" cy="1" r="1" fill="#E89960"/></g>
+  <g transform="rotate(20 108.72 14.80) translate(108.72 14.80) scale(1.000) translate(-108.72 -14.80)"/>
+  <g transform="matrix(-1 0 0 1 120 0)"/>
+  <g transform="translate(12 -6) rotate(10 96 72)"/>
+  <g transform="rotate(-0.00 106.00 114.00)"/>
+</svg>`;
+    const tsx = generateSceneComponent('X', sceneFromSvg(svg, 'x.svg'), 'x.svg');
+    expect(tsx).toContain('opacity={"0.55"}');
+    expect(tsx).toContain('strokeDashoffset={"0.00"}');
+    expect(tsx).toContain('transform={"translate(38.00 80.00) scale(1.0000) translate(-38.00 -80.00)"}');
+    expect(tsx).toContain('transform={"matrix(-1 0 0 1 120 0)"}');
+    expect(tsx).toContain('transform={"translate(12 -6) rotate(10 96 72)"}');
   });
 });
 
@@ -86,6 +134,12 @@ describe('generateSceneBarrel', () => {
     expect(barrel).toContain("import { EmptyStateScene } from './EmptyStateScene';");
     expect(barrel.indexOf("'empty-state': EmptyStateScene")).toBeLessThan(barrel.indexOf("onboarding: OnboardingScene"));
     expect(barrel).toContain('export type SceneArtName = keyof typeof SCENE_ART;');
+  });
+
+  it('registers -rtl variants under their own file name', () => {
+    const barrel = generateSceneBarrel(['gift-used.svg', 'gift-used-rtl.svg']);
+    expect(barrel).toContain("'gift-used': GiftUsedScene,");
+    expect(barrel).toContain("'gift-used-rtl': GiftUsedRtlScene,");
   });
 });
 

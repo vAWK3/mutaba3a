@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -43,6 +43,7 @@ export function AddCustomerDrawer({ onClose }: { onClose: () => void }) {
   const [banner, setBanner] = useState<DeskBanner | null>(null);
   const [added, setAdded] = useState<Schemas['ProvisionedCustomer'] | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const codeLabelId = useId();
   // Synchronous: two quick clicks both pass validation before the mutation reports pending.
   const submitting = useRef(false);
 
@@ -140,7 +141,14 @@ export function AddCustomerDrawer({ onClose }: { onClose: () => void }) {
             </Button>
           </ProfileBanner>
         )}
-        {added.claimCode && <CodeReveal code={added.claimCode} label={t('hosted.desk.addDrawer.code')} />}
+        {added.claimCode && (
+          <>
+            <p id={codeLabelId} className="hp-muted">
+              {t('hosted.desk.addDrawer.code')}
+            </p>
+            <CodeReveal code={added.claimCode} labelledBy={codeLabelId} />
+          </>
+        )}
       </Drawer>
     );
   }

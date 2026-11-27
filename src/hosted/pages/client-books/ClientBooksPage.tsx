@@ -14,12 +14,13 @@ import { InPlaceConfirm } from '../../components/InPlaceConfirm';
 import { QueryView, Skeleton } from '../../components/QueryView';
 import { Scene } from '../../components/Scene';
 import { useAccountantCustomers } from '../../data/accountantCustomersQueries';
-import { activatingIds, clearActivating, lapsedActivationIds } from '../../data/activating';
+import { activatingIds, activationMarks, clearActivating } from '../../data/activating';
 import { useClientBooks, useRemoveClientBook } from '../../data/clientBooksQueries';
 import type { DeskSearch } from '../../data/filters';
 import { PageHeader } from '../views/shared';
 import { AddCustomerDrawer } from './AddCustomerDrawer';
 import { CustomerDrawer } from './CustomerDrawer';
+import { DeskActivating } from './DeskActivating';
 import { DeskBadge } from './DeskBadge';
 import { buildDeskRows, filterCounts, matchesDeskFilter, matchesDeskRow, nextActionOf, type DeskFilter, type DeskRow } from './deskRules';
 import { addMonths, dayLabel, monthOfDate, periodLabel } from './clientBooksRules';
@@ -38,8 +39,8 @@ import { addMonths, dayLabel, monthOfDate, periodLabel } from './clientBooksRule
  * of {freeLimit} free client books" under the title while no plan covers, and a row past the free ones (`needsPlan`)
  * is faded with Subscribe (the Accountant plan, back to the desk).
  */
-/** After Stripe the list is re-read this often, for up to two minutes (DR-5). */
-const ACTIVATING_POLL_MS = 5_000;
+/** How often the page re-checks which customers are still inside their two-minute Activating window (DR-5). */
+const ACTIVATING_TICK_MS = 5_000;
 
 export function ClientBooksPage() {
   const { t } = useLanguage();
@@ -51,17 +52,18 @@ export function ClientBooksPage() {
   const summary = clientBooksOf(useMe());
   const [subscribing, setSubscribing] = useState(false);
 
-  // Activating (DR-5): the customers sent to Stripe in the last two minutes. A tick re-evaluates the window.
+  // Activating (DR-5): the customers sent to Stripe in the last two minutes. MUT-770's poll (DeskActivating) re-reads
+  // the list; this tick only re-evaluates who is still inside the window, so a row falls back to Needs card on time.
   const [now, setNow] = useState(() => Date.now());
   const activating = activatingIds(now);
-  const lapsed = lapsedActivationIds(now);
+  const marks = activationMarks();
   const waiting = activating.size > 0;
   useEffect(() => {
     if (!waiting) return;
-    const timer = setInterval(() => setNow(Date.now()), ACTIVATING_POLL_MS);
+    const timer = setInterval(() => setNow(Date.now()), ACTIVATING_TICK_MS);
     return () => clearInterval(timer);
   }, [waiting]);
-  const customersQuery = useAccountantCustomers(waiting ? ACTIVATING_POLL_MS : false);
+  const customersQuery = useAccountantCustomers();
   const customers = customersQuery.data;
   const approved = customers?.approved === true;
 
@@ -70,11 +72,6 @@ export function ClientBooksPage() {
     () => buildDeskRows(books.data?.items ?? [], customers?.items ?? [], new Set(activatingKey ? activatingKey.split(',') : [])),
     [books.data, customers, activatingKey],
   );
-  // Paid customers need no mark any more.
-  useEffect(() => {
-    for (const customer of customers?.items ?? []) if (customer.paid) clearActivating(customer.userId);
-  }, [customers]);
-
   const goTo = (next: DeskSearch, replace = false) => void navigate({ to: '/client-books', search: next, replace });
   const closeDrawers = () => goTo({}, true);
   const customerRow = search.customer ? rows.find((row) => row.customer?.userId === search.customer) : undefined;
@@ -103,6 +100,15 @@ export function ClientBooksPage() {
           <AccountantPlanOffer returnPath="/client-books" place="client_books" />
         </section>
       )}
+      <DeskActivating
+        rows={rows}
+        marks={marks}
+        poll={() => void customersQuery.refetch()}
+        onClose={(userId) => {
+          clearActivating(userId);
+          setNow(Date.now());
+        }}
+      />
       {approved && rows.length > 0 && <DeskChips rows={rows} filter={filter} onFilter={setFilter} />}
       <QueryView
         queries={[books]}
@@ -129,7 +135,6 @@ export function ClientBooksPage() {
             items={items}
             query={query}
             filter={approved ? filter : 'all'}
-            lapsed={lapsed}
             onSubscribe={() => setSubscribing(true)}
             onOpen={(row, pane) => goTo({ customer: row.customer!.userId, ...(pane ? { pane } : {}) })}
           />
@@ -162,12 +167,11 @@ interface TableProps {
   items: DeskRow[];
   query: string;
   filter: DeskFilter;
-  lapsed: ReadonlySet<string>;
   onSubscribe: () => void;
   onOpen: (row: DeskRow, pane?: 'card') => void;
 }
 
-function ClientBooksTable({ items, query, filter, lapsed, onSubscribe, onOpen }: TableProps) {
+function ClientBooksTable({ items, query, filter, onSubscribe, onOpen }: TableProps) {
   const { t, language } = useLanguage();
   const rows = useMemo(() => items.filter((row) => matchesDeskFilter(row, filter) && matchesDeskRow(row, query)), [items, query, filter]);
   const columns = useMemo<Column<DeskRow>[]>(
@@ -193,12 +197,7 @@ function ClientBooksTable({ items, query, filter, lapsed, onSubscribe, onOpen }:
       {
         key: 'state',
         header: t('hosted.desk.cols.state'),
-        cell: (row) => (
-          <>
-            <DeskBadge state={row.state} />
-            {row.state === 'card' && row.customer && lapsed.has(row.customer.userId) && <div className="hp-ended-note">{t('hosted.desk.checkBack')}</div>}
-          </>
-        ),
+        cell: (row) => <DeskBadge state={row.state} />,
       },
       {
         key: 'thisMonth',
@@ -236,7 +235,7 @@ function ClientBooksTable({ items, query, filter, lapsed, onSubscribe, onOpen }:
         },
       },
     ],
-    [t, language, lapsed, onSubscribe, onOpen],
+    [t, language, onSubscribe, onOpen],
   );
   if (rows.length === 0) return <p className="hp-muted">{t('hosted.clientBooks.searchEmpty', { query: query.trim() })}</p>;
   return (

@@ -176,10 +176,14 @@ function writeRecord(owner: string, choice: UsageChoice) {
   }
 }
 
-/** The choice this browser holds for `owner`, as any tab last wrote it. */
+/**
+ * The choice this browser holds for `owner`, as any tab last wrote it. An "on" belongs to the browser (accepted once,
+ * kept across sign-outs and accounts, never asked again); an "off" belongs to the person who chose it.
+ */
 function storedChoiceFor(owner: string): UsageChoice | null {
   const record = readRecord();
-  return record && record.owner === owner ? record.choice : null;
+  if (!record) return null;
+  return record.choice === 'on' || record.owner === owner ? record.choice : null;
 }
 
 /** Still on for the same person, in this tab and in storage (another tab may have turned it off). */
@@ -259,7 +263,8 @@ export async function syncPortalUsage(userId: string): Promise<void> {
   }
   listenToOtherTabs();
   let record = readRecord();
-  if (record && record.owner !== userId) {
+  if (record && record.choice === 'off' && record.owner !== userId) {
+    // Another person's "off" is theirs alone: this person is asked for themselves
     clearEverything();
     record = null;
   }
@@ -276,7 +281,9 @@ export async function syncPortalUsage(userId: string): Promise<void> {
 export async function choosePortalUsage(choice: UsageChoice, prompt: UsagePrompt): Promise<void> {
   const { owner, choice: current } = usePortalUsage.getState();
   if (!POSTHOG_KEY || !owner || current === 'unavailable') return;
-  writeRecord(owner, choice);
+  // Accepting is kept for good. Declining the first-run question is not: it is asked again next time. Turning it off
+  // from the account menu is a deliberate choice and is kept.
+  if (choice === 'on' || prompt !== 'first_run') writeRecord(owner, choice);
   usePortalUsage.setState({ choice });
   if (choice === 'on') {
     if (current === 'on') return;
@@ -296,9 +303,12 @@ export async function choosePortalUsage(choice: UsageChoice, prompt: UsagePrompt
   forgetPosthogStorage();
 }
 
-/** Sign-out on this tab or another: forget the choice and the ID, sending nothing (rule 6). */
+/**
+ * Sign-out on this tab or another: nothing is sent for the signed-out page. A kept "on" stays on this browser (the
+ * next sign-in, any account, counts again without asking); otherwise the ID and the choice are forgotten (rule 6).
+ */
 export function endPortalUsage(): void {
-  clearEverything();
+  if (readRecord()?.choice !== 'on') clearEverything();
   openedCounted = false;
   usePortalUsage.setState({ choice: null, owner: null });
 }

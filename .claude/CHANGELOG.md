@@ -37,7 +37,7 @@ Plan `docs/designs/accountant-channel.md` (DR-2..DR-6, B22). Wireframe `.claude/
 - Add customer drawer (`?newCustomer=true`): customer, business, email, mail language, country; then the spoken claim code and where the link went. Refusals (existing address, daily limit, not approved, refused address, "added, link not sent" with Resend) are banners at the top of the drawer.
 - Customer drawer (`?customer=<id>`): Resend link, New code, Change email (confirmed in place), and the Take card pane (`&pane=card`: plan, payment, customer type, country, address, then Stripe). Setup actions vanish once the customer claims.
 - Activating after Stripe: the row reads Activating and the list is re-read every 5 s for 2 minutes (`data/activating.ts`), then "Check back shortly".
-- Files: `pages/client-books/{deskRules,deskCountries,DeskBadge,AddCustomerDrawer,CustomerDrawer,TakeCardPane}`, `components/{accountantErrors.ts,CodeReveal.tsx}` (CodeReveal is a stand-in until MUT-770's lands), `data/{accountantCustomersQueries,activating}.ts`, `parseDeskSearch`, the `hosted.desk.*` strings in Arabic and English, `api.accountantCustomers` and its four siblings, and `leaveFor` exported from `billingQueries`.
+- Files: `pages/client-books/{deskRules,deskCountries,DeskBadge,AddCustomerDrawer,CustomerDrawer,TakeCardPane}`, `pages/client-books/DeskActivating.tsx` (MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer), `components/accountantErrors.ts`, MUT-770's `CodeReveal` and the `claimed-spot` Scene (once per client, `data/claimedSeen.ts`), `data/{accountantCustomersQueries,activating}.ts`, `parseDeskSearch`, the `hosted.desk.*` strings in Arabic and English, `api.accountantCustomers` and its four siblings, and `leaveFor` exported from `billingQueries`.
 - release-qa: `qa/features/portal/accountant-desk.yaml` and `qa/specs/portal/accountant-desk.spec.ts` (add, code, take-card, claimed), with the customer routes in `qa/support/clientBooksApi.ts`.
 
 ### Changed
@@ -45,6 +45,74 @@ Plan `docs/designs/accountant-channel.md` (DR-2..DR-6, B22). Wireframe `.claude/
 
 ### Known gaps
 - A free-plan (Starter) customer reads Needs card (the server stores no plan intent). Resend link and New code are one server call. See ADR-325.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-770: CodeReveal, the Activating poll and motion, live regions, ar/en strings (accountant channel, portal)
+
+Plan `docs/designs/accountant-channel.md` (DR-5, DR-8, DR-11; DT5, DT6). Shared parts the desk (MUT-768) and `/setup` (MUT-769) use.
+
+### Added
+- `CodeReveal` (`src/hosted/components/CodeReveal.tsx`, props `{ code, labelledBy? }`): the claim code shown once, Plex Mono at `--text-figure-fluid` on the field ground, `dir="ltr"`, grouped 3 and 3, `role="img"` named by the spaced digits; Copy → Copied for 2 s in a polite status. Rules in `claimCode.ts` (`codeGroups`, `spokenCode`, `bareCode`, `COPIED_HOLD_MS`).
+- `motion-claim-code` in CSS from its spec (digits settle 10 px / 320 ms spring / 60 ms stagger, leftmost first; label cross-fade 150 ms linear; check 0.6 → 1 in 240 ms spring); reduced motion: the still with a 150 ms fade.
+- `useActivatingPoll` / `activatingPhase` (`src/hosted/data/activatingPoll.ts`): poll every 4 s for at most 2 min; `activating` → `active` (paid) or `late` ("Check back shortly").
+- `ActivatingMotion` (`src/hosted/components/ActivatingMotion.tsx`, timing in `activatingHop.ts`): `motion-activating` from its spec and key frames (1.5 s loop of three 500 ms hops; on done it finishes the current hop, then a 600 ms resolve onto the `activating` scene's pose); the `-rtl` key frames in Arabic (an in-SVG flip, as delivered); reduced motion shows the `activating` scene (the still).
+- `ActivatingStatus`: the motion, the customer's name and one line, announced in a polite live region; Close once it settles.
+- `hosted.accountantChannel.*` strings (ar + en): code, activating, the desk states and chips.
+
+### Technical
+- Tests: `src/hosted/components/__tests__/CodeReveal.test.tsx`, `Activating.test.tsx` (spec values pinned against `hosted.css`); `src/styles/__tests__/direction.test.ts` lists the two new `dir` sites.
+
+---
+
+## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
+
+Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.
+
+### Added
+- 17 scenes and 11 `-rtl` drawings in `assets/illustrations/source/` (160×160: gift-month, gift-used, plan-upgraded, handover-welcome, handover-claimed, pilot-ended, link-expired, code-locked, ledger-empty; 120×96: claimed-spot, pilot-welcome-1..3, milestone-first-scan, milestone-first-invoice, activating, change-scheduled), generated into `src/components/illustrations/generated/`; `MOMENTS` in `scripts/validate_illustrations.mjs` (`rtl: true` expects `<name>-rtl.svg`).
+- `Scene` picks `<name>-rtl` in an RTL document when that art exists, else the plain art; never a CSS mirror. `SCENE_NAMES`; `sceneArtFor(name, direction)`. `useOptionalDirection()` in `src/lib/i18n/core.tsx`.
+- `docs/design/motion/2026-11-27/`: the ten moments' specs, key frames and stills (no video), with an index README (ticket, direction, total duration).
+- Mail headers in `src/hosted/public/mail/v2/` (named `mail-header-<mood>-<header>[-rtl]-2x.png` like the rest) for plan-change-scheduled (MUT-734), customer-setup and its reminders, customer-setup-cancelled (MUT-765/767), accountant-unclaimed-digest (MUT-767); SVG sources in `assets/mail/source/`.
+
+### Changed
+- `scripts/illustration-set.ts`: `size` is the width and the height keeps the viewBox's aspect ratio (default: the drawn width); the scene dialect also takes `opacity` (0..1), `stroke-dashoffset`, and translate/scale/matrix transforms (Claude Design's motion pivots and in-drawing flips). The 11 existing generated scenes are byte-identical.
+- `Scene` without `size` shows the art at its drawn size (160 for every existing scene, so no page changes).
+- `src/styles/theme.css`: under reduced motion `--ease-overshoot` is `linear` (durations were already 0). `--m-ease-overshoot` itself already existed (Brand v2 kit) at `cubic-bezier(.34,1.56,.64,1)`, next to `--m-ease-spring` `cubic-bezier(.32,.72,0,1)`.
+- `server/src/email/templates/look.ts`: the four mails above use their new headers (Arabic takes `-rtl` for plan-change-scheduled and customer-setup); chips and moods unchanged.
+- DESIGN.md › Scenes (the RTL rule, sizes, motion specs), COMPONENT_REGISTRY (`Scene`), PATTERNS (art with direction ships -rtl).
+
+### Technical
+- Tests: `scripts/__tests__/illustration-set.test.ts`, `scripts/validate_illustrations.test.mjs`, `src/hosted/components/__tests__/Scene.test.tsx`, `src/styles/__tests__/brand.test.ts`, `server/src/email/__tests__/look.test.ts`.
+
+---
+
+## [Unreleased] - 2026-11-27 — Portal: an accepted analytics choice is kept, no repeat prompt (ADR-301)
+
+### Changed
+- `src/hosted/analytics/portalAnalytics.ts`: a stored "on" survives sign-out and other accounts; "Not now" at the first-run prompt isn't stored; a deliberate "off" still clears on sign-out. Tests in `portalAnalytics.test.ts`, `UsageConsent.test.tsx`; `docs/analytics/README.md` rule 6.
+
+---
+
+## [Unreleased] - 2026-11-27 — Switch rollout: Terraform switches, the unclaimed sweep job, the staged order, dev and QA defaults (Basel)
+
+Infra and docs only; no production change. Basel chose a staged switch-on at release time. Target state:
+- **On:** STARTER_PLAN, PLAN_CHECKOUT, OPEN_SIGNUP, PAID_BUSINESS_CAPS, PAID_HARD_CAPS, ACCOUNTANT_PROVISIONING, TWO_FACTOR_ISSUING_GATE_ENABLED, MALAFAT_SIGN_IN, MALAFAT_DELEGATION.
+- **Off:** INVOICING_FOR_ALL, and ACCOUNTANT_PLAN until MUT-747.
+- **Removed:** PORTAL_LEGACY_REDIRECT, tracked in MUT-779.
+
+### Added
+- **Terraform variables:** `accountant_provisioning`, `malafat_sign_in` and `malafat_delegation` (bool, default false). Each sends only `"true"` to Cloud Run, as `open_signup` does. All three are listed, commented and off, in `production.tfvars.example`.
+- **Scheduler job:** `google_cloud_scheduler_job.accountant_unclaimed_sweep` (MUT-767, ADR-300). It is created only with `accountant_provisioning`, runs daily at 10:00 Jerusalem, posts to `/jobs/v1/accountants/unclaimed-sweep` with the job token, and pauses with the other jobs.
+- **Terraform tests:** the three switches in `tests/starter_plan.tftest.hcl`, and `tests/accountant_unclaimed_sweep.tftest.hcl` (142 pass).
+- **Rollout doc:** `docs/operations/before-release.md` "Switch rollout (Basel, 2026-11-27)", six stages. Each stage lists what must be live, the operator commands, the tfvars lines and the check. Stages 4 and 5 are marked waiting for UI. Stage 6 notes that MAL-1539 and MAL-1541 are still "Idea". A pointer item under `## server` makes `make release server` print it. The live catalog run is recorded as done on 2026-11-27, with nothing to change.
+- **Config test:** `config.test.ts` checks that `server/.env.example` boots with the target switches on, and with INVOICING_FOR_ALL and ACCOUNTANT_PLAN off.
+
+### Changed
+- **Dev defaults:** `server/.env.example` turns on STARTER_PLAN, PLAN_CHECKOUT, OPEN_SIGNUP, PAID_BUSINESS_CAPS, PAID_HARD_CAPS, TWO_FACTOR_ISSUING_GATE_ENABLED and MALAFAT_SIGN_IN (with the stub's origin template). ACCOUNTANT_PLAN is now off. The stale duplicate STARTER_PLAN block is gone.
+- **QA defaults:** `qa/support/selfservice-live.mjs` turns on PLAN_CHECKOUT, PAID_BUSINESS_CAPS, PAID_HARD_CAPS, TWO_FACTOR_ISSUING_GATE_ENABLED and ACCOUNTANT_PROVISIONING. STARTER_PLAN and OPEN_SIGNUP stay off until the trial and review flows are re-specced (TD-371).
+- **before-release items:** "Turning the Malafat switches on needs a code change first" now points to the new variables. The MUT-764/767 item names the variable and the job.
+- The root `.env.example` is unchanged: it holds no server switches.
 
 ---
 

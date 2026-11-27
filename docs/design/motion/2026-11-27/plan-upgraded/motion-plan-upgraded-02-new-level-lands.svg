@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="ground" d="M20 140h120" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="tier1"><rect x="30" y="114" width="100" height="26" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80.0" cy="127" r="3.00" fill="#795DBA"/></g>
+<g id="tier2"><rect x="40" y="86" width="80" height="24" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="74.0" cy="98" r="3.00" fill="#795DBA"/><circle cx="86.0" cy="98" r="3.00" fill="#795DBA"/></g>
+<g id="tier3" transform="translate(0 -0.14)"><rect x="50" y="58" width="60" height="24" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="68.0" cy="70" r="0.00" fill="#795DBA"/><circle cx="80.0" cy="70" r="0.00" fill="#795DBA"/><circle cx="92.0" cy="70" r="0.00" fill="#795DBA"/></g>
+<circle id="nuqta" cx="80" cy="38.82" r="8" fill="#E89960"/>
+</svg>

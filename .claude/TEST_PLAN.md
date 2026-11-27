@@ -5062,3 +5062,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Integration | `pages/client-books/__tests__/ClientBooks.test.tsx` (existing) | the plain desk still works with the new columns |
 | Parity | `i18n/__tests__/parity.test.ts` | the `hosted.desk.*` keys in both languages |
 | release-qa | `qa/features/portal/accountant-desk.yaml`, `qa/specs/portal/accountant-desk.spec.ts` | add (with Arabic at 375 px), code, take-card, claimed |
+
+## MUT-770 — CodeReveal, the Activating poll and motion (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/components/__tests__/CodeReveal.test.tsx` | 3+3 groups, spaced aria-label, LTR in ar and en, stagger order, Copy → Copied → Copy after 2 s, a failed copy, the claim-code spec values and the reduced-motion still in CSS |
+| Unit | `src/hosted/components/__tests__/Activating.test.tsx` | `activatingPhase`; the poll every 4 s, late at 2 min, active when paid, late on a late reload; `hopEnd`; loop → finish the hop → resolve; -rtl key frames; reduced motion shows the scene; the activating spec values; the polite live region in ar and en |
+| Guard | `src/styles/__tests__/direction.test.ts`, `brand.test.ts` | the two `dir` sites; the Copy pill's contrast |
