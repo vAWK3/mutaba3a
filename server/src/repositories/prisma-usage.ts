@@ -150,6 +150,12 @@ export function prismaUsage(prisma: () => PrismaClient): UsageRepository {
       const rows = await prisma().usageEvent.groupBy({ by: ['organizationId', 'month', 'kind'], where: { subjectKey, month: { in: [...months] } }, _count: { _all: true }, orderBy: [{ month: 'asc' }, { kind: 'asc' }] });
       return rows.map((r) => ({ organizationId: r.organizationId, month: r.month, kind: r.kind as UsageKind, events: r._count._all }));
     },
+    firstEventsOf: async (subjectKeys, kinds) => {
+      if (subjectKeys.length === 0 || kinds.length === 0) return [];
+      // One grouped read over the (subjectKey, month, kind) index.
+      const rows = await prisma().usageEvent.groupBy({ by: ['subjectKey', 'kind'], where: { subjectKey: { in: [...subjectKeys] }, kind: { in: [...kinds] } }, _min: { occurredAt: true } });
+      return rows.flatMap((r) => (r._min.occurredAt ? [{ subjectKey: r.subjectKey, kind: r.kind as UsageKind, firstAt: r._min.occurredAt }] : []));
+    },
     addRouteUsage: async (deltas) => {
       if (deltas.length === 0) return;
       const values = deltas.map((d) => {

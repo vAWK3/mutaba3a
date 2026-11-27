@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Operator Pilot filter, chip data and first-scan / first-invoice ticks (MUT-757 server, epic MUT-751, ADR-297, API 1.171.0-mut757)
+
+Server only; the console's filter, chip and ticks are UI work for later. No migration.
+
+### Added
+- `GET /v1/operator/accounts?pilot=1`: only accounts that ever held a pilot grant, same order and cursor (memory and Prisma).
+- `pilot { cohort, startedAt, endsAt, referredBy }` (or null) on every account-list row; with `pilot=1`, `milestones { firstScanAt, firstInvoiceAt }` from one grouped usage read per page.
+- `store.usage.firstEventsOf` (operator only), `OperatorAccountListItem.pilotGrants`; `pilotChipOf` (operator/account-list.ts).
+
 ## [Unreleased] - 2026-11-27 — Unclaimed accounts: reminders, digest, removal at 60 days (MUT-767 server half, epic MUT-762, ADR-300, API 1.170.0-mut767)
 
 Plan `docs/designs/accountant-channel.md` (eng T6, R1; build decisions B17–B21). Server only, dark behind `ACCOUNTANT_PROVISIONING`. No migration. Needs a Cloud Scheduler job before the switch goes on (before-release.md).

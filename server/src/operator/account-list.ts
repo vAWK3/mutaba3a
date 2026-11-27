@@ -1,5 +1,5 @@
 import { ApiError } from '../errors.js';
-import type { OperatorAccountCursor } from '../repositories/ports.js';
+import type { OperatorAccountCursor, OperatorPilotGrant } from '../repositories/ports.js';
 
 /**
  * MUT-527: the operator console's list of every account. Newest sign-in first, never signed in last, then newest
@@ -75,4 +75,32 @@ function dateOf(value: unknown): Date {
 
 function invalidCursor(): ApiError {
   return new ApiError('VALIDATION_FAILED', 'cursor is not a cursor this API issued', { field: 'cursor' });
+}
+
+/** MUT-757 (ADR-297): a row's Pilot chip. */
+export interface PilotChip {
+  cohort: string;
+  /** The first pilot grant's start: what the time to a first scan or invoice is measured from. */
+  startedAt: Date;
+  /** When the latest pilot ends or ended: its expiry, or its revoke when that came first. */
+  endsAt: Date;
+  referredBy: OperatorPilotGrant['referredBy'];
+}
+
+/**
+ * MUT-757: the chip from the pilot grant that ends last (an extension is a revoke and a new grant, so the new one wins);
+ * null without a pilot grant. Whether it is running, in its last 14 days or ended is the console's, from `endsAt`.
+ */
+export function pilotChipOf(grants: readonly OperatorPilotGrant[]): PilotChip | null {
+  if (grants.length === 0) return null;
+  const endOf = (g: OperatorPilotGrant) => Math.min(g.revokedAt?.getTime() ?? Infinity, g.expiresAt?.getTime() ?? Infinity);
+  const latest = [...grants].sort((a, b) => endOf(b) - endOf(a) || b.createdAt.getTime() - a.createdAt.getTime())[0]!;
+  const end = endOf(latest);
+  return {
+    cohort: latest.cohort,
+    startedAt: new Date(Math.min(...grants.map((g) => g.createdAt.getTime()))),
+    // A pilot always has an expiry (the CHECK); the fallback only keeps the type total.
+    endsAt: new Date(Number.isFinite(end) ? end : latest.createdAt.getTime()),
+    referredBy: latest.referredBy,
+  };
 }

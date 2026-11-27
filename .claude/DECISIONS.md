@@ -7465,6 +7465,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. An account an accountant creates (ADR-292) gets no pilot grant on its own: the operator issues it after the account exists (plan open question 3 as amended 2026-11-26). Granting stays an operator act.
 
 **Consequences:** One additive migration (`20261127210000_mut752_pilot_grants`). Nothing reminds a tester before the end (eng D3, TD-370). The tester's usage is the Business plan's, counted and never refused (MUT-735).
+
+## ADR-297: The Operator's Pilot View Is a Filter on Accounts; the First-Scan and First-Invoice Ticks Come From the Usage Events (MUT-757, epic MUT-751; extends ADR-296 and MUT-527's list, reads ADR-281's events)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/pilot-testers-business-plan.md`, design 5A, eng finding 5; build decisions P7–P9).
+
+**Decision:**
+1. `GET /v1/operator/accounts?pilot=1` keeps the accounts that ever held a pilot grant (a cohort, not ACCOUNTANT; running, extended, revoked or ended) in the list's own order and cursor, in both stores. No new page or table.
+2. Every row carries `pilot { cohort, startedAt, endsAt, referredBy }` or null: from the pilot grant that ends last (a revoke counts as its end), the first grant's start, and the referring accountant's id, email and name, read with the page (no extra query per row).
+3. With the filter only, each row carries `milestones { firstScanAt, firstInvoiceAt }`: the person's first SCAN and first DOCUMENT_ISSUED event as the payer, from one grouped read of `usage_events` per page (`store.usage.firstEventsOf`). Any issued document counts as the first invoice (an exempt dealer issues receipts only). Nothing new is recorded: MUT-735 already writes these events, kept 13 months.
+
+**Consequences:** No migration. "Last step reached" (plan S5) is not recorded (TD-370). A tester who acts only on someone else's business has no ticks (their events count to that owner).
+
 ---
 
 ## ADR-300: Unclaimed Accounts: Reminders With the Same Code, One Digest a Day, Removal at 60 Days Through the Closure Purge, Paid Ones Kept and Flagged (MUT-767, epic MUT-762; eng R1, T6)

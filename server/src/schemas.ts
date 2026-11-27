@@ -2214,6 +2214,10 @@ export const OperatorAccountListQuerySchema = z.object({
   q: z.string().max(320).optional().openapi({ description: 'MUT-527: any part of the email or the display name, ignoring case. Blank lists everyone.' }),
   limit: z.coerce.number().int().min(1).max(OPERATOR_LIST_MAX_LIMIT).optional().openapi({ description: `MUT-527: 1–${OPERATOR_LIST_MAX_LIMIT}, default ${OPERATOR_LIST_DEFAULT_LIMIT}.` }),
   cursor: z.string().max(512).optional().openapi({ description: 'MUT-527: `nextCursor` from the previous page.' }),
+  pilot: z
+    .enum(['1', 'true'])
+    .optional()
+    .openapi({ description: 'MUT-757: only accounts that ever held a pilot grant (running, extended or ended), each with `milestones`. Same order and cursor.' }),
 });
 
 /** MUT-527: one row of the operator's account list. */
@@ -2227,6 +2231,27 @@ export const OperatorAccountListItemSchema = z
     lastSignInAt: z.string().datetime().nullable(),
     /** The per-user flags that are on (MUT-433), sorted. */
     features: z.array(z.string()),
+    /**
+     * MUT-757 (ADR-297): the Pilot chip, from the pilot grant that ends last: its cohort, when the first pilot grant
+     * started, when the pilot ends or ended (`endsAt`, a revoke counting as the end), and the referring accountant.
+     * Null for an account that never held one. Additive since 1.171.0-mut757.
+     */
+    pilot: z
+      .union([
+        z.object({
+          cohort: z.string(),
+          startedAt: z.string().datetime(),
+          endsAt: z.string().datetime(),
+          referredBy: z.union([z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string() }), z.null()]),
+        }),
+        z.null(),
+      ])
+      .optional(),
+    /**
+     * MUT-757: with `pilot=1` only: when the person first scanned and first issued a document (any type) as the payer,
+     * from the usage events; null = not yet. Additive since 1.171.0-mut757.
+     */
+    milestones: z.object({ firstScanAt: z.string().datetime().nullable(), firstInvoiceAt: z.string().datetime().nullable() }).optional(),
   })
   .openapi('OperatorAccountListItem');
 

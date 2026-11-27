@@ -119,6 +119,17 @@ export class MemoryUsage implements UsageRepository {
     return [...groups.values()].sort((a, b) => a.month.localeCompare(b.month) || a.kind.localeCompare(b.kind));
   };
 
+  readonly firstEventsOf: UsageRepository['firstEventsOf'] = async (subjectKeys, kinds) => {
+    const first = new Map<string, { subjectKey: string; kind: UsageEventInput['kind']; firstAt: Date }>();
+    for (const e of this.events.values()) {
+      if (!subjectKeys.includes(e.subjectKey) || !kinds.includes(e.kind)) continue;
+      const key = `${e.subjectKey}:${e.kind}`;
+      const seen = first.get(key);
+      if (!seen || e.occurredAt < seen.firstAt) first.set(key, { subjectKey: e.subjectKey, kind: e.kind, firstAt: e.occurredAt });
+    }
+    return [...first.values()];
+  };
+
   readonly addRouteUsage: UsageRepository['addRouteUsage'] = async (deltas) => {
     for (const d of deltas) {
       const key = `${d.day}|${d.routeKey}|${d.plan}|${d.statusClass}`;

@@ -215,6 +215,41 @@ export function describeLedgerStoreOperatorContract(name: string, makeStore: () 
       expect(pages).toBe(3);
     });
 
+    it('MUT-757: pilot keeps only accounts with a pilot grant (ended and revoked too), with each grant and its accountant, and pages exactly', async () => {
+      const store = await makeStore();
+      const marker = unique();
+      const accountant = (await store.users.create(marked(marker, 'accountant', 'Nasser', 0))).user;
+      const testers: string[] = [];
+      for (let i = 0; i < 3; i++) testers.push((await store.users.create(marked(marker, `tester${i}`, `Tester ${i}`, i + 1))).user.id);
+      const plain = (await store.users.create(marked(marker, 'plain', 'Plain', 5))).user;
+      const base = { organizationId: null, tier: 'BUSINESS' as const, reason: 'pilot', grantedBy: 'admin', audit: [] };
+      await store.billing.createGrant({ id: crypto.randomUUID(), userId: testers[0]!, ...base, at: at(6), expiresAt: at(50), cohort: 'dec-2026', referredByUserId: accountant.id });
+      const revoked = await store.billing.createGrant({ id: crypto.randomUUID(), userId: testers[1]!, ...base, at: at(6), expiresAt: at(50), cohort: 'dec-2026' });
+      await store.billing.revokeGrant(revoked.id, at(7), []);
+      await store.billing.createGrant({ id: crypto.randomUUID(), userId: testers[2]!, ...base, at: at(6), expiresAt: at(8), cohort: 'nov-2026' });
+      await store.billing.createGrant({ id: crypto.randomUUID(), userId: plain.id, ...base, at: at(6), expiresAt: null });
+      await store.billing.createGrant({ id: crypto.randomUUID(), userId: accountant.id, ...base, tier: 'ACCOUNTANT', at: at(6), expiresAt: at(50) });
+
+      const all = await store.users.listForOperator({ q: marker, limit: 10, cursor: null, pilot: true });
+      expect(all.items.map((i) => i.user.id)).toEqual([testers[2], testers[1], testers[0]]);
+      expect(all.items[2]!.pilotGrants).toEqual([{ cohort: 'dec-2026', createdAt: at(6), expiresAt: at(50), revokedAt: null, referredBy: { id: accountant.id, email: accountant.email, displayName: 'Nasser' } }]);
+      expect(all.items[1]!.pilotGrants[0]).toMatchObject({ revokedAt: at(7), referredBy: null });
+
+      const seen: string[] = [];
+      let cursor: OperatorAccountCursor | null = null;
+      do {
+        const page: Awaited<ReturnType<LedgerStore['users']['listForOperator']>> = await store.users.listForOperator({ q: marker, limit: 2, cursor, pilot: true });
+        seen.push(...page.items.map((i) => i.user.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      expect(seen).toEqual([testers[2], testers[1], testers[0]]);
+
+      const everyone = await store.users.listForOperator({ q: marker, limit: 10, cursor: null });
+      expect(everyone.items).toHaveLength(5);
+      expect(everyone.items.find((i) => i.user.id === plain.id)!.pilotGrants).toEqual([]);
+      expect(everyone.items.find((i) => i.user.id === accountant.id)!.pilotGrants).toEqual([]);
+    });
+
     it('q matches any part of the email or the display name, ignoring case; wildcards are plain text', async () => {
       const store = await makeStore();
       const marker = unique();

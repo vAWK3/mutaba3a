@@ -510,24 +510,37 @@ export class PrismaLedgerStore implements LedgerStore {
         latestClientRelease: u.termsAcceptances[0]?.clientRelease ?? null,
       })),
     // MUT-527: a sequential scan of users is fine at this size (13 in production); TD notes an index if it grows.
-    listForOperator: async ({ q, limit, cursor }) => {
+    listForOperator: async ({ q, limit, cursor, pilot }) => {
       const pattern = q ? escapeLike(q) : null;
+      // MUT-757: a pilot grant is one with a cohort that isn't ACCOUNTANT, revoked or ended ones included.
+      const pilotGrant: Prisma.EntitlementGrantWhereInput = { cohort: { not: null }, tier: { not: 'ACCOUNTANT' } };
       const where: Prisma.UserWhereInput = {
         AND: [
           pattern ? { OR: [{ email: { contains: pattern, mode: 'insensitive' } }, { displayName: { contains: pattern, mode: 'insensitive' } }] } : {},
           cursor ? afterOperatorCursor(cursor) : {},
+          pilot ? { entitlementGrants: { some: pilotGrant } } : {},
         ],
       };
       const rows = await this.prisma.user.findMany({
         where,
         orderBy: [{ lastSignInAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
         take: limit + 1,
-        include: { featureGrants: { where: { revokedAt: null, feature: { in: [...FEATURES] } }, select: { feature: true }, orderBy: { feature: 'asc' } } },
+        include: {
+          featureGrants: { where: { revokedAt: null, feature: { in: [...FEATURES] } }, select: { feature: true }, orderBy: { feature: 'asc' } },
+          entitlementGrants: {
+            where: pilotGrant,
+            select: { cohort: true, createdAt: true, expiresAt: true, revokedAt: true, referredBy: { select: { id: true, email: true, displayName: true } } },
+          },
+        },
       });
       const page = rows.slice(0, limit);
       const last = page.at(-1);
       return {
-        items: page.map(({ featureGrants, ...row }) => ({ user: toUser(row), features: featureGrants.map((g) => g.feature) })),
+        items: page.map(({ featureGrants, entitlementGrants, ...row }) => ({
+          user: toUser(row),
+          features: featureGrants.map((g) => g.feature),
+          pilotGrants: entitlementGrants.map((g) => ({ ...g, cohort: g.cohort! })),
+        })),
         nextCursor: rows.length > limit && last ? { lastSignInAt: last.lastSignInAt, createdAt: last.createdAt, id: last.id } : null,
       };
     },

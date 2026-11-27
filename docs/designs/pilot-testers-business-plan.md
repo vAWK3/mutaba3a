@@ -250,6 +250,10 @@ Built without Basel (approved plan, away); each takes the conservative reading w
 - **P5 (MUT-752):** `pilot` carries `welcomeSeenAt` (so clients need no second read) and `pricesExpected` (true until MUT-761); `plans` carry each plan's limits beside the Expected monthly price (minor units, ILS and USD, before VAT). `POST /v1/billing/pilot-welcome` is accepted whether or not a pilot runs (the flag is the person's). The pilot is hidden while the person pays for a profile plan, even though the grant outranks Stripe.
 - **P6 (MUT-752):** with `PAID_HARD_CAPS` on (MUT-733, dark), a payer on a live pilot grant is counted and never refused, so "no tester is blocked by a limit" holds whatever that flag says. One extra read, only where a paid cap could refuse.
 
+- **P7 (MUT-757):** the Pilot filter keeps every account that ever held a pilot grant, ended and revoked ones included, so the operator sees a whole cohort to its end. Every row (filter or not) carries the chip data; only the filtered list carries the ticks (one grouped read per page).
+- **P8 (MUT-757):** the chip comes from the pilot grant that ends last (a revoke is an end), with the first grant's start for "time to first scan". The console derives "Pilot · ends", "N days left" and "Ended" from `endsAt`; the server sends no wording.
+- **P9 (MUT-757, S5):** no new recording. First scan and first invoice are read from the usage events MUT-735 already writes (as the payer); any issued document counts as the first invoice, since an exempt dealer issues receipts only. "Last step reached" is not built (TD-370).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

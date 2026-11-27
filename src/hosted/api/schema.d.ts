@@ -24790,6 +24790,8 @@ export interface paths {
                     limit?: number;
                     /** @description MUT-527: `nextCursor` from the previous page. */
                     cursor?: string;
+                    /** @description MUT-757: only accounts that ever held a pilot grant (running, extended or ended), each with `milestones`. Same order and cursor. */
+                    pilot?: "1" | "true";
                 };
                 header?: never;
                 path?: never;
@@ -35782,6 +35784,25 @@ export interface components {
             /** Format: date-time */
             lastSignInAt: string | null;
             features: string[];
+            pilot?: {
+                cohort: string;
+                /** Format: date-time */
+                startedAt: string;
+                /** Format: date-time */
+                endsAt: string;
+                referredBy: {
+                    /** Format: uuid */
+                    id: string;
+                    email: string;
+                    displayName: string;
+                } | unknown;
+            } | unknown;
+            milestones?: {
+                /** Format: date-time */
+                firstScanAt: string | null;
+                /** Format: date-time */
+                firstInvoiceAt: string | null;
+            };
         };
         OperatorAccountSearch: {
             account: {

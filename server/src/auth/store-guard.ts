@@ -585,6 +585,7 @@ export const STORE_ACCESS: StoreAccess = {
     standing: 'operator',
     people: 'operator',
     byProfile: 'operator',
+    firstEventsOf: 'operator',
     routeTotals: 'operator',
     prune: 'operator',
     purgeSubject: 'operator',

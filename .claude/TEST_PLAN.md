@@ -5032,3 +5032,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Migration | `repositories/__tests__/migration-mut752.test.ts` (test:db) | old rows null, CHECKs, SET NULL on the accountant's delete, schema matches |
 | CLI | `scripts/__tests__/users-cli.test.ts` | `billing-grant --cohort --accountant`; `--accountant` without `--cohort` refused |
 | QA | with MUT-759 | the four pilot scenarios in the plan |
+
+## MUT-757 (server half) — the operator's Pilot filter, chip and ticks (2026-11-27, ADR-297)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `operator/__tests__/pilot-chip.test.ts` | no grant, one running, an extension (new end, first start), revoked before expiry |
+| Route | `__tests__/routes-operator-pilot.test.ts` | `pilot=1` keeps testers only with chip, accountant and ticks (first of several scans); without the filter `pilot` on every row and no ticks; ended pilots stay; cursor continues exactly; unknown value 422 |
+| Store | `store-contract-operator.ts` (memory and Prisma) | filter keeps running, revoked and ended pilots, not plain or ACCOUNTANT grants; grants with the accountant; cursor paging under the filter |
+| Store | `store-contract-usage.ts` (memory and Prisma) | `firstEventsOf`: first per payer and kind, other kinds and quiet payers absent, empty input |
+| QA | with the console UI | Pilot filter, chip and ticks on the Accounts rows |

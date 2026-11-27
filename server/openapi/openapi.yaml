@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.170.0-mut767
+  version: 1.171.0-mut757
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -14738,6 +14738,54 @@ components:
           type: array
           items:
             type: string
+        pilot:
+          anyOf:
+            - type: object
+              properties:
+                cohort:
+                  type: string
+                startedAt:
+                  type: string
+                  format: date-time
+                endsAt:
+                  type: string
+                  format: date-time
+                referredBy:
+                  anyOf:
+                    - type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        email:
+                          type: string
+                        displayName:
+                          type: string
+                      required:
+                        - id
+                        - email
+                        - displayName
+                    - nullable: true
+              required:
+                - cohort
+                - startedAt
+                - endsAt
+                - referredBy
+            - nullable: true
+        milestones:
+          type: object
+          properties:
+            firstScanAt:
+              type: string
+              nullable: true
+              format: date-time
+            firstInvoiceAt:
+              type: string
+              nullable: true
+              format: date-time
+          required:
+            - firstScanAt
+            - firstInvoiceAt
       required:
         - id
         - email
@@ -34607,6 +34655,16 @@ paths:
           required: false
           description: "MUT-527: `nextCursor` from the previous page."
           name: cursor
+          in: query
+        - schema:
+            type: string
+            enum:
+              - "1"
+              - "true"
+            description: "MUT-757: only accounts that ever held a pilot grant (running, extended or ended), each with `milestones`. Same order and cursor."
+          required: false
+          description: "MUT-757: only accounts that ever held a pilot grant (running, extended or ended), each with `milestones`. Same order and cursor."
+          name: pilot
           in: query
       responses:
         "200":
