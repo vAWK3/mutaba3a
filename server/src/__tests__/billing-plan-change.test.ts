@@ -106,7 +106,7 @@ describe('POST /v1/billing/plan-change/preview', () => {
     await subscribed(h, u.userId, 'SOLO');
     const res = await u.send('POST', '/v1/billing/plan-change/preview', { plan: 'business' });
     expect(res.status).toBe(200);
-    expect(await read(res)).toEqual({ kind: 'upgrade', plan: 'business', amountDue: 27100, currency: 'ILS', prorationAt: NOW.toISOString(), limits: { businesses: 3, partners: 2, documentsPerMonth: 250, scansPerMonth: 500 } });
+    expect(await read(res)).toEqual({ kind: 'upgrade', plan: 'business', amountDue: 27100, currency: 'ILS', prorationAt: NOW.toISOString(), limits: { businesses: 3, partners: 2, documentsPerMonth: 250, scansPerMonth: 500 }, offerEnds: null });
   });
 
   it('a downgrade previews the period end and whether the person must pick businesses', async () => {
@@ -141,7 +141,7 @@ describe('POST /v1/billing/plan-change', () => {
     expect(res.status).toBe(200);
     const body = await read(res);
     expect(body).toMatchObject({ state: 'applied', change: { kind: 'UPGRADE', state: 'APPLIED', fromPlan: 'solo', toPlan: 'business', amountMinor: 27100, currency: 'ILS' }, hostedInvoiceUrl: null });
-    expect(h.plan.planChanges).toEqual([{ subscriptionId: id, customer: expect.any(String), itemId: `si_${id}`, yearlyPriceId: 'price_business_m_ils', prorationDate: NOW, taxRates: ['txr_il_vat'], plan: 'business' }]);
+    expect(h.plan.planChanges).toEqual([{ subscriptionId: id, customer: expect.any(String), itemId: `si_${id}`, yearlyPriceId: 'price_business_m_ils', prorationDate: NOW, taxRates: ['txr_il_vat'], plan: 'business', dropDiscounts: false }]);
     expect((await h.store.billing.planChangesOf(u.userId))[0]).toMatchObject({ kind: 'UPGRADE', state: 'APPLIED', fromTier: 'SOLO', toTier: 'BUSINESS' });
   });
 
@@ -173,7 +173,7 @@ describe('POST /v1/billing/plan-change', () => {
     const res = await u.send('POST', '/v1/billing/plan-change', { plan: 'solo', activeBusinessIds: [a] });
     expect(res.status).toBe(200);
     expect(await read(res)).toMatchObject({ state: 'scheduled', change: { kind: 'DOWNGRADE', state: 'SCHEDULED', toPlan: 'solo', effectiveAt: END.toISOString() } });
-    expect(h.plan.downgrades).toEqual([{ subscriptionId: id, currentPriceId: 'price_business_m_ils', targetPriceId: 'price_solo_m_ils', interval: 'month', periodEnd: END, plan: 'solo', taxRates: [] }]);
+    expect(h.plan.downgrades).toEqual([{ subscriptionId: id, currentPriceId: 'price_business_m_ils', targetPriceId: 'price_solo_m_ils', interval: 'month', periodEnd: END, plan: 'solo', taxRates: [], discountIds: [] }]);
     expect((await h.store.billing.factsFor({ ownerUserIds: [u.userId], organizationIds: [] })).activeBusinesses?.get(u.userId)).toEqual([a]);
     expect(h.outbox.list({ to: u.email }).filter((m) => /changes to Solo/.test(m.subject))).toHaveLength(1);
     const billing = await read(await u.billing());

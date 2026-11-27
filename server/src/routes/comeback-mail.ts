@@ -33,6 +33,8 @@ export interface ComebackMailRouteOptions {
   checkout: CheckoutGateway | null;
   plan: PlanGateway | null;
   offers?: readonly OfferEntry[];
+  /** MUT-703 (PLAN_CHECKOUT): mail the lapsed plan's come-back (the plans' coupon). Absent = off (the legacy offer). */
+  planSales?: boolean;
   /** Production: refuse a real operator run whose links would point at a loopback origin (the trial mail's R11). */
   refuseLoopbackLinks: boolean;
 }
@@ -56,10 +58,11 @@ export function comebackMailRoutes(options: ComebackMailRouteOptions): OpenAPIHo
       mailer: options.mailer,
       logger: options.logger,
       now,
-      stripe: { offer: () => comebackOfferOrNothing(checkout, offers, options.logger), paidInvoices: (id) => plan.paidInvoiceCount(id, { fresh: true }) },
+      stripe: { offer: (offerPlan) => comebackOfferOrNothing(checkout, offers, options.logger, { plan: offerPlan }), paidInvoices: (id) => plan.paidInvoiceCount(id, { fresh: true }) },
       subscribeLink: `${origin}/?billing=true&step=subscribe`,
       optOut: { portalOrigin: origin, pepper: options.pepper },
       offers,
+      planSales: options.planSales ?? false,
       dryRun,
     });
   };
@@ -71,8 +74,8 @@ export function comebackMailRoutes(options: ComebackMailRouteOptions): OpenAPIHo
       tags: ['Billing'],
       summary: 'Daily come-back mails (Cloud Scheduler)',
       description:
-        'Mails each person whose latest paid Freelancer plan Stripe ended 30–44 or 90–104 days ago, in their language: their records are ' +
-        'still there, and the first month back costs the list price less the come-back coupon. Each stage is recorded once per person, ' +
+        'Mails each person whose latest paid plan Stripe ended 30–44 or 90–104 days ago, in their language: their records are ' +
+        'still there, and the first month back costs the list price less the come-back coupon (MUT-703: with PLAN_CHECKOUT on, the plan they lapsed from, Solo for a legacy Freelancer lapse, Firm included). Each stage is recorded once per person, ' +
         'ever, and that record opens the offer at Checkout. Answers counts only. Always 200 once it ran; `incomplete` means its time ' +
         'budget ran out and the next run continues.',
       security: [{ jobToken: [] }],

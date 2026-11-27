@@ -10,13 +10,71 @@ import { ClientBooksEmptyScene } from './ClientBooksEmptyScene';
 import { CodeLockedScene } from './CodeLockedScene';
 import { DestructiveConfirmationScene } from './DestructiveConfirmationScene';
 import { EmptyStateScene } from './EmptyStateScene';
+import { GetstartedDoneRtlScene } from './GetstartedDoneRtlScene';
+import { GetstartedDoneScene } from './GetstartedDoneScene';
 import { GiftMonthScene } from './GiftMonthScene';
 import { GiftUsedRtlScene } from './GiftUsedRtlScene';
 import { GiftUsedScene } from './GiftUsedScene';
+import { GuideAccountant1RtlScene } from './GuideAccountant1RtlScene';
+import { GuideAccountant1Scene } from './GuideAccountant1Scene';
+import { GuideAccountant2RtlScene } from './GuideAccountant2RtlScene';
+import { GuideAccountant2Scene } from './GuideAccountant2Scene';
+import { GuideAccountant3RtlScene } from './GuideAccountant3RtlScene';
+import { GuideAccountant3Scene } from './GuideAccountant3Scene';
+import { GuideAccountantHeroRtlScene } from './GuideAccountantHeroRtlScene';
+import { GuideAccountantHeroScene } from './GuideAccountantHeroScene';
+import { GuideBanktext1RtlScene } from './GuideBanktext1RtlScene';
+import { GuideBanktext1Scene } from './GuideBanktext1Scene';
+import { GuideBanktext2RtlScene } from './GuideBanktext2RtlScene';
+import { GuideBanktext2Scene } from './GuideBanktext2Scene';
+import { GuideBanktext3RtlScene } from './GuideBanktext3RtlScene';
+import { GuideBanktext3Scene } from './GuideBanktext3Scene';
+import { GuideBanktextHeroRtlScene } from './GuideBanktextHeroRtlScene';
+import { GuideBanktextHeroScene } from './GuideBanktextHeroScene';
+import { GuideClaude1RtlScene } from './GuideClaude1RtlScene';
+import { GuideClaude1Scene } from './GuideClaude1Scene';
+import { GuideClaude2RtlScene } from './GuideClaude2RtlScene';
+import { GuideClaude2Scene } from './GuideClaude2Scene';
+import { GuideClaude3RtlScene } from './GuideClaude3RtlScene';
+import { GuideClaude3Scene } from './GuideClaude3Scene';
+import { GuideClaude4RtlScene } from './GuideClaude4RtlScene';
+import { GuideClaude4Scene } from './GuideClaude4Scene';
+import { GuideClaudeHeroRtlScene } from './GuideClaudeHeroRtlScene';
+import { GuideClaudeHeroScene } from './GuideClaudeHeroScene';
+import { GuideScan1RtlScene } from './GuideScan1RtlScene';
+import { GuideScan1Scene } from './GuideScan1Scene';
+import { GuideScan2RtlScene } from './GuideScan2RtlScene';
+import { GuideScan2Scene } from './GuideScan2Scene';
+import { GuideScan3RtlScene } from './GuideScan3RtlScene';
+import { GuideScan3Scene } from './GuideScan3Scene';
+import { GuideScanHeroRtlScene } from './GuideScanHeroRtlScene';
+import { GuideScanHeroScene } from './GuideScanHeroScene';
+import { GuideTax1RtlScene } from './GuideTax1RtlScene';
+import { GuideTax1Scene } from './GuideTax1Scene';
+import { GuideTax2RtlScene } from './GuideTax2RtlScene';
+import { GuideTax2Scene } from './GuideTax2Scene';
+import { GuideTax3RtlScene } from './GuideTax3RtlScene';
+import { GuideTax3Scene } from './GuideTax3Scene';
+import { GuideTax4RtlScene } from './GuideTax4RtlScene';
+import { GuideTax4Scene } from './GuideTax4Scene';
+import { GuideTaxHeroRtlScene } from './GuideTaxHeroRtlScene';
+import { GuideTaxHeroScene } from './GuideTaxHeroScene';
 import { HandoverClaimedRtlScene } from './HandoverClaimedRtlScene';
 import { HandoverClaimedScene } from './HandoverClaimedScene';
 import { HandoverWelcomeRtlScene } from './HandoverWelcomeRtlScene';
 import { HandoverWelcomeScene } from './HandoverWelcomeScene';
+import { HelpClusterAllocationRtlScene } from './HelpClusterAllocationRtlScene';
+import { HelpClusterAllocationScene } from './HelpClusterAllocationScene';
+import { HelpClusterDocumentsScene } from './HelpClusterDocumentsScene';
+import { HelpClusterReceiptsRtlScene } from './HelpClusterReceiptsRtlScene';
+import { HelpClusterReceiptsScene } from './HelpClusterReceiptsScene';
+import { HelpExplainerAllocationRtlScene } from './HelpExplainerAllocationRtlScene';
+import { HelpExplainerAllocationScene } from './HelpExplainerAllocationScene';
+import { HelpExplainerDocumentsScene } from './HelpExplainerDocumentsScene';
+import { HelpExplainerReceiptsRtlScene } from './HelpExplainerReceiptsRtlScene';
+import { HelpExplainerReceiptsScene } from './HelpExplainerReceiptsScene';
+import { HelpNotFoundRtlScene } from './HelpNotFoundRtlScene';
+import { HelpNotFoundScene } from './HelpNotFoundScene';
 import { LedgerEmptyScene } from './LedgerEmptyScene';
 import { LinkClosedScene } from './LinkClosedScene';
 import { LinkExpiredScene } from './LinkExpiredScene';
@@ -51,13 +109,71 @@ export const SCENE_ART = {
   'code-locked': CodeLockedScene,
   'destructive-confirmation': DestructiveConfirmationScene,
   'empty-state': EmptyStateScene,
+  'getstarted-done-rtl': GetstartedDoneRtlScene,
+  'getstarted-done': GetstartedDoneScene,
   'gift-month': GiftMonthScene,
   'gift-used-rtl': GiftUsedRtlScene,
   'gift-used': GiftUsedScene,
+  'guide-accountant-1-rtl': GuideAccountant1RtlScene,
+  'guide-accountant-1': GuideAccountant1Scene,
+  'guide-accountant-2-rtl': GuideAccountant2RtlScene,
+  'guide-accountant-2': GuideAccountant2Scene,
+  'guide-accountant-3-rtl': GuideAccountant3RtlScene,
+  'guide-accountant-3': GuideAccountant3Scene,
+  'guide-accountant-hero-rtl': GuideAccountantHeroRtlScene,
+  'guide-accountant-hero': GuideAccountantHeroScene,
+  'guide-banktext-1-rtl': GuideBanktext1RtlScene,
+  'guide-banktext-1': GuideBanktext1Scene,
+  'guide-banktext-2-rtl': GuideBanktext2RtlScene,
+  'guide-banktext-2': GuideBanktext2Scene,
+  'guide-banktext-3-rtl': GuideBanktext3RtlScene,
+  'guide-banktext-3': GuideBanktext3Scene,
+  'guide-banktext-hero-rtl': GuideBanktextHeroRtlScene,
+  'guide-banktext-hero': GuideBanktextHeroScene,
+  'guide-claude-1-rtl': GuideClaude1RtlScene,
+  'guide-claude-1': GuideClaude1Scene,
+  'guide-claude-2-rtl': GuideClaude2RtlScene,
+  'guide-claude-2': GuideClaude2Scene,
+  'guide-claude-3-rtl': GuideClaude3RtlScene,
+  'guide-claude-3': GuideClaude3Scene,
+  'guide-claude-4-rtl': GuideClaude4RtlScene,
+  'guide-claude-4': GuideClaude4Scene,
+  'guide-claude-hero-rtl': GuideClaudeHeroRtlScene,
+  'guide-claude-hero': GuideClaudeHeroScene,
+  'guide-scan-1-rtl': GuideScan1RtlScene,
+  'guide-scan-1': GuideScan1Scene,
+  'guide-scan-2-rtl': GuideScan2RtlScene,
+  'guide-scan-2': GuideScan2Scene,
+  'guide-scan-3-rtl': GuideScan3RtlScene,
+  'guide-scan-3': GuideScan3Scene,
+  'guide-scan-hero-rtl': GuideScanHeroRtlScene,
+  'guide-scan-hero': GuideScanHeroScene,
+  'guide-tax-1-rtl': GuideTax1RtlScene,
+  'guide-tax-1': GuideTax1Scene,
+  'guide-tax-2-rtl': GuideTax2RtlScene,
+  'guide-tax-2': GuideTax2Scene,
+  'guide-tax-3-rtl': GuideTax3RtlScene,
+  'guide-tax-3': GuideTax3Scene,
+  'guide-tax-4-rtl': GuideTax4RtlScene,
+  'guide-tax-4': GuideTax4Scene,
+  'guide-tax-hero-rtl': GuideTaxHeroRtlScene,
+  'guide-tax-hero': GuideTaxHeroScene,
   'handover-claimed-rtl': HandoverClaimedRtlScene,
   'handover-claimed': HandoverClaimedScene,
   'handover-welcome-rtl': HandoverWelcomeRtlScene,
   'handover-welcome': HandoverWelcomeScene,
+  'help-cluster-allocation-rtl': HelpClusterAllocationRtlScene,
+  'help-cluster-allocation': HelpClusterAllocationScene,
+  'help-cluster-documents': HelpClusterDocumentsScene,
+  'help-cluster-receipts-rtl': HelpClusterReceiptsRtlScene,
+  'help-cluster-receipts': HelpClusterReceiptsScene,
+  'help-explainer-allocation-rtl': HelpExplainerAllocationRtlScene,
+  'help-explainer-allocation': HelpExplainerAllocationScene,
+  'help-explainer-documents': HelpExplainerDocumentsScene,
+  'help-explainer-receipts-rtl': HelpExplainerReceiptsRtlScene,
+  'help-explainer-receipts': HelpExplainerReceiptsScene,
+  'help-not-found-rtl': HelpNotFoundRtlScene,
+  'help-not-found': HelpNotFoundScene,
   'ledger-empty': LedgerEmptyScene,
   'link-closed': LinkClosedScene,
   'link-expired': LinkExpiredScene,

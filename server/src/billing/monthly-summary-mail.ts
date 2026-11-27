@@ -8,7 +8,8 @@ import type { Logger } from '../logger.js';
 import { verdictProfilesOf } from '../personal-profile.js';
 import type { LedgerStore, MonthlySummaryCandidate, Organization, UserLocale } from '../repositories/ports.js';
 import { readProfileFigures, type PostingDoor } from '../summaries/profile-figures.js';
-import { currentSubscription, type Catalog } from './checkout.js';
+import { currentSubscription } from './checkout.js';
+import type { OfferCatalogs } from './offer.js';
 import { entitlementsFor, memberProfilesForBilling } from './coverage.js';
 import { profilePlanSubscriptions, TRIAL_DAYS } from './entitlement.js';
 import { mailProfilesOf, monthEndedFor, profileBlockOf, summaryMonthOf, SUMMARY_ZONE, type ProfileBlock, type SummaryMonth } from './monthly-summary.js';
@@ -70,7 +71,7 @@ export interface MonthlySummaryRunOptions {
   /** SESSION_TOKEN_PEPPER: keys the opt-out token. */
   pepper: string;
   /** Null: no Stripe on this server; the mail goes without the yearly line (D9). */
-  stripe: { catalog(): Promise<Catalog>; plan: PlanGateway } | null;
+  stripe: { catalog(): Promise<OfferCatalogs>; plan: PlanGateway } | null;
   dryRun: boolean;
   /** MUT-736: the server's INVOICING_FOR_ALL, so the books split reads as the portal's Reports do. Absent = off. */
   invoicingForAll?: boolean;
@@ -138,7 +139,7 @@ export async function runMonthlySummaryMail(options: MonthlySummaryRunOptions): 
   return { summary, rows };
 }
 
-async function catalogOf(options: MonthlySummaryRunOptions): Promise<Catalog | null> {
+async function catalogOf(options: MonthlySummaryRunOptions): Promise<OfferCatalogs | null> {
   if (!options.stripe) return null;
   try {
     return await options.stripe.catalog();
@@ -149,7 +150,7 @@ async function catalogOf(options: MonthlySummaryRunOptions): Promise<Catalog | n
   }
 }
 
-async function personRow(options: MonthlySummaryRunOptions, candidate: MonthlySummaryCandidate, month: SummaryMonth, catalog: Catalog | null): Promise<MonthlySummaryRow> {
+async function personRow(options: MonthlySummaryRunOptions, candidate: MonthlySummaryCandidate, month: SummaryMonth, catalog: OfferCatalogs | null): Promise<MonthlySummaryRow> {
   const { userId, email, locale } = candidate;
   const row: MonthlySummaryRow = { userId, email, locale, profiles: 0, action: 'skip', skip: null, outcome: null };
   try {
@@ -190,7 +191,7 @@ async function blocksFor(options: MonthlySummaryRunOptions, candidate: MonthlySu
   return blocks.length > 0 ? { blocks } : { skip: 'nothing-to-show' };
 }
 
-async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummaryCandidate, month: SummaryMonth, blocks: readonly ProfileBlock[], catalog: Catalog | null): Promise<SendResult> {
+async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummaryCandidate, month: SummaryMonth, blocks: readonly ProfileBlock[], catalog: OfferCatalogs | null): Promise<SendResult> {
   const origin = options.portalOrigin.replace(/\/+$/, '');
   const [year, monthNumber] = month.key.split('-').map(Number) as [number, number];
   const [asOfYear, asOfMonth, asOfDay] = todayIn(SUMMARY_ZONE, options.now).split('-').map(Number) as [number, number, number];
@@ -215,7 +216,7 @@ async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummary
 }
 
 /** D9: MUT-531's own line, as Billing shows it; nothing without Stripe, prices or a saving to name. */
-async function yearlyLine(options: MonthlySummaryRunOptions, userId: string, catalog: Catalog | null, origin: string): Promise<{ savings: number; currency: string; link: string } | null> {
+async function yearlyLine(options: MonthlySummaryRunOptions, userId: string, catalog: OfferCatalogs | null, origin: string): Promise<{ savings: number; currency: string; link: string } | null> {
   if (!options.stripe || !catalog) return null;
   const summary = await options.store.billing.summaryOf(userId);
   const shown = currentSubscription(profilePlanSubscriptions(summary.subscriptions), options.now);

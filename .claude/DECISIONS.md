@@ -7503,6 +7503,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** A customer who claims between the sweep and the purge (at most an hour) cannot: the sweep cancelled the links. Reminder days are constants in `UNCLAIMED_POLICY`.
 
+## ADR-320: The Customer Claims on the Existing /setup: Who Set It Up, the Code, the Password, the Passkey Nudge, Then the Card Through Billing › Subscribe; a Dead Accountant's Link Points Back to Him (MUT-769, epic MUT-762; extends ADR-294, keeps ADR-088 and MUT-619)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md` DR-1, DR-7, B7, B9; wireframe approved).
+
+**Decision:**
+1. No new page (DR-1). `/setup` takes the provisioned branch when the check answers `claim`: the context line ("{accountant} set up MTB3A for {business}", with the `handover-welcome` scene; either name may be missing) and step 1 of 3, the six-digit code (`PinBoxes` with a fixed six, each box "Digit n of 6", LTR, a paste fills all) checked on `POST /v1/account-setup/claim-code` (B9), then the existing password form (step 2 of 3) with `claimCode` sent again on the redeem. A wrong code says the tries left; CLAIM_CODE_LOCKED, now or at the redeem, or `codeLocked` on the check, ends on the `code-locked` screen ("ask your accountant for a new code"). A redeem refused with CLAIM_CODE_WRONG (the accountant sent a new code meanwhile) returns to the code step. Operator, recovery and signup links are unchanged.
+2. Once signed in (DR-7): the `handover-claimed` moment (`motion-handover-claimed`) sits on the MUT-619 passkey nudge when a passkey is offerable, else on its own card with Continue; then the card step when one is due, else the app. The card step is the customer's own Checkout through the Billing drawer's Subscribe step on the business profile the accountant made (`/p/{id}?billing=true&step=subscribe`), where the free plan goes on without a card (ACCT-4); no second plan picker is built. "Due" means `GET /v1/billing` is configured and shows no covering subscription (active, trialing, past due); billing that can't be read never blocks the app.
+3. `POST /v1/account-setup/check` adds `provisioned: true` to a dead link (expired, used, superseded) that was an accountant's customer's, to the token's holder only, like `purpose` (API 1.211.0-mut769). `/setup` then shows the `link-expired` screen with "ask your accountant for a new one" and never Send a new link: recovery mails nothing for an unclaimed provisioned account (ADR-294 d3), so the self-service door would be a dead end. A used one keeps "go to sign in".
+
+**Consequences:** A customer who closes the tab after the password lands on the app without the card step; the Billing banner and the trial rules (MUT-418) still apply. The moment's motion is CSS from Claude Design's spec (PATTERNS: a Claude Design motion is built in CSS from its spec).
+
+---
+
 ## ADR-325: The Accountant's Desk Joins Two Lists in the Portal; Activating Is the Portal's Own Wait; Take Card Is a Pane of the Customer Drawer (MUT-768, epic MUT-762; DR-2..DR-6, B13, B15, B22)
 
 **Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`; wireframe extension B22 approved by Basel in the session).
@@ -7524,3 +7537,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 2. "Not now" at the first-run prompt is not stored: the prompt returns next time. Turning it off from You › App is a deliberate choice, stored for that person; sign-out or another account clears it and the ID.
 3. Unchanged: opt-in before any send (the portal's SDK starts opted out), the contract guard, the cookieless counts on the landing and the welcome before any answer, release-only telemetry (ADR-236).
 **Override log**: ADR-090 rule 6 ("consent belongs to the signed-in person"), 2026-11-27, replaced by 1–2 above. Not done: a per-account server record (cross-device) and the phone app; both need their own change.
+
+## ADR-340: Offers Per Plan: One Coupon per Kind on Solo, Business and Firm, Made Only by the Catalog Script; Dropped on an Upgrade, Kept Through a Downgrade (MUT-703, epic MUT-701; amends ADR-237 d1/d3/d4, ADR-238 d2, ADR-240 d5/d7, ADR-243 d1/d8, ADR-291 d6)
+
+**Status:** Accepted (2026-11-27; plan `.claude/designs/mut-703-offers-plan.md`, Basel approved all 12 §13 defaults; spikes S1/S2 in the plan's "Build decisions").
+
+**Decision:**
+1. `offers.json` entries name the plans they cover (`plans`, non-empty, all on sale or all legacy; `tier: "freelancer"` reads as `["freelancer"]`). An offer is looked up by (kind, plan, interval). The legacy Freelancer entries and coupons are unchanged (Q12); the plans share one entry and one coupon per kind (Q1).
+2. A coupon is an offer on a plan only if its `applies_to` is non-empty, inside the entry's plans' products, and covers the product of the plan sold or held; anything else is no offer, warned (ADR-237 d5 still: an offer never stops a payment).
+3. **The catalog script is the one place offer amounts and dates are written** (amends ADR-237 d1 "the dashboard holds the campaign"): `COUPON_SPEC` in `scripts/stripe-plans.ts`: launch 50% once, `redeem_by` 2027-02-22 00:59 Jerusalem (Q3); stay 50% repeating 2 months; come-back 67% once. A live coupon whose percent, duration, months, `redeem_by` or products differ is never "fixed": the run refuses (exit 2) and asks for a new id; name or metadata drift is updated; `RETIRED_COUPON_IDS` are deleted. No promotion codes (Q9).
+4. Launch: yearly plan Checkouts only (Q2), for someone who never had a subscription that took money (Q6: an incomplete one, or a trial cancelled at or before its end, doesn't count; a running trial does). Never on the Solo trial or an accountant's activation (ADR-300 d2, Q10). GET `offer` describes the plans' launch while `PLAN_CHECKOUT` is on (Solo's first year, for older portals); `plans[].launch` gives each plan's.
+5. Stay and pause on any plan's monthly list price, from that plan's catalog (Q11); the legacy stay coupon for ₪29 payers. Once per person, whichever plan (Q8). New refusal `SCHEDULED` for stay, pause and the yearly switch while a MUT-734 change waits on a Stripe schedule.
+6. Come-back: any paid plan's lapse counts, Firm included (Q5; the old Firm refusal is gone); "already had" reads every come-back id, legacy and the plans'. The plans' come-back is a percent, monthly only (Q4); the mail offers the lapsed plan, Solo for a legacy Freelancer lapser. With `PLAN_CHECKOUT` off the legacy offer runs as before.
+7. Plan change (Q7, spikes S1/S1b/S2): an upgrade removes running discounts in the same `subscriptions.update` (`discounts: ''`), previewed the same way, and the preview names the offer it ends (`offerEnds`); a downgrade's schedule carries the subscription's discounts (`di_…`) into both phases, so a running stay offer runs to its own end. S1: Stripe credits unused time at the discounted amount paid, so no cap is needed after a spent launch coupon.
+8. The renewal notice covers any plan's list price and names the plan; `renewsAtListPrice` is true on any plan's list price.
+
+**Consequences:** One coupon per kind means one percent for every plan and currency; a per-plan amount would need one coupon per (kind, plan) and one entry each (the plan's §4 reserve). The live key needs Write on Coupons before the first run (before-release stage 1).

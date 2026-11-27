@@ -4,6 +4,7 @@ import type { CouponFact } from '../offer.js';
 import {
   cycleBoundaryAfter,
   listMonthlyCurrencyOf,
+  listPriceOf,
   PAUSE_RESUME_LEAD_MS,
   pauseOptionsOf,
   stayOfferOf,
@@ -64,8 +65,8 @@ describe('yearlySavingsOf (D3: computed from the catalog, never written down)', 
 
 describe('yearlySwitchOf (D2: from the 2nd paid invoice, a monthly list price only)', () => {
   it('offers the yearly price of the same currency with the saving', () => {
-    expect(yearlySwitchOf(monthly(), facts(), CATALOG)).toEqual({ ok: true, currency: 'ILS', yearly: CATALOG.ILS!.year, savings: 5800 });
-    expect(yearlySwitchOf(monthly({ priceLookupKey: 'freelancer_list_monthly_usd' }), facts(), CATALOG)).toEqual({ ok: true, currency: 'USD', yearly: CATALOG.USD!.year, savings: 1800 });
+    expect(yearlySwitchOf(monthly(), facts(), CATALOG)).toEqual({ ok: true, plan: 'freelancer', currency: 'ILS', yearly: CATALOG.ILS!.year, savings: 5800 });
+    expect(yearlySwitchOf(monthly({ priceLookupKey: 'freelancer_list_monthly_usd' }), facts(), CATALOG)).toEqual({ ok: true, plan: 'freelancer', currency: 'USD', yearly: CATALOG.USD!.year, savings: 1800 });
   });
 
   it(`needs ${SWITCH_AFTER_PAID_INVOICES} paid invoices: before that it is too early`, () => {
@@ -98,7 +99,7 @@ describe('yearlySwitchOf (D2: from the 2nd paid invoice, a monthly list price on
 
   it('still offers the switch when the year saves nothing, with no saving to show', () => {
     const flat: Catalog = { ...CATALOG, ILS: { month: CATALOG.ILS!.month, year: { ...CATALOG.ILS!.year, unitAmount: 34800 } } };
-    expect(yearlySwitchOf(monthly(), facts(), flat)).toEqual({ ok: true, currency: 'ILS', yearly: flat.ILS!.year, savings: null });
+    expect(yearlySwitchOf(monthly(), facts(), flat)).toEqual({ ok: true, plan: 'freelancer', currency: 'ILS', yearly: flat.ILS!.year, savings: null });
   });
 });
 
@@ -252,5 +253,87 @@ describe('stayOfferOf (D11: 2 months at 50%, once per person ever, monthly list 
 
   it('needs the monthly price on sale in that currency', () => {
     expect(stayOfferOf(subject(), [], stayCoupon(), { ILS: null, USD: CATALOG.USD })).toEqual({ ok: false, refusal: 'NO_PRICE' });
+  });
+});
+
+/** MUT-703 (ADR-340): the switch, pause and stay offer on Solo, Business and Firm, each from its own plan's catalog. */
+const planCatalog = (plan: string, month: number, usd: number): Catalog => ({
+  ILS: { month: { id: `price_${plan}_m_ils`, unitAmount: month, productId: `prod_${plan}` }, year: { id: `price_${plan}_y_ils`, unitAmount: month * 10, productId: `prod_${plan}` } },
+  USD: { month: { id: `price_${plan}_m_usd`, unitAmount: usd, productId: `prod_${plan}` }, year: { id: `price_${plan}_y_usd`, unitAmount: usd * 10, productId: `prod_${plan}` } },
+});
+const PLAN_CATALOGS = { solo: planCatalog('solo', 3900, 1200), business: planCatalog('business', 8900, 2700), firm: planCatalog('firm', 24900, 7500) } as const;
+const PLAN_PRODUCTS = new Set(['prod_solo', 'prod_business', 'prod_firm']);
+
+describe('listPriceOf (MUT-703 §3.3): a list price of any plan, never a founder or Accountant price', () => {
+  it.each([
+    ['freelancer_list_monthly_ils', { plan: 'freelancer', interval: 'month', currency: 'ILS' }],
+    ['freelancer_list_yearly_usd', { plan: 'freelancer', interval: 'year', currency: 'USD' }],
+    ['solo_list_monthly_ils', { plan: 'solo', interval: 'month', currency: 'ILS' }],
+    ['business_list_yearly_usd', { plan: 'business', interval: 'year', currency: 'USD' }],
+    ['firm_list_monthly_usd', { plan: 'firm', interval: 'month', currency: 'USD' }],
+  ])('%s', (key, expected) => {
+    expect(listPriceOf(key)).toEqual(expected);
+  });
+
+  it.each(['freelancer_founder_monthly_ils', 'firm_founder_monthly_ils', 'accountant_list_monthly_ils', 'starter_list_monthly_ils', 'solo_list_weekly_ils', ''])('%s is not a list price', (key) => {
+    expect(listPriceOf(key)).toBeNull();
+  });
+
+  it('null is none, and the monthly currency follows it on every plan', () => {
+    expect(listPriceOf(null)).toBeNull();
+    expect(listMonthlyCurrencyOf('business_list_monthly_usd')).toBe('USD');
+    expect(listMonthlyCurrencyOf('business_list_yearly_usd')).toBeNull();
+  });
+});
+
+describe('yearlySwitchOf on the plans (MUT-703 AC4)', () => {
+  it.each([
+    ['solo', 'ILS', 7800],
+    ['business', 'ILS', 17800],
+    ['firm', 'USD', 15000],
+  ] as const)('%s monthly in %s saves its own plan’s twelve months less its year', (plan, currency, savings) => {
+    const sub = monthly({ priceLookupKey: `${plan}_list_monthly_${currency.toLowerCase()}` });
+    expect(yearlySwitchOf(sub, facts(), PLAN_CATALOGS[plan])).toEqual({ ok: true, plan, currency, yearly: PLAN_CATALOGS[plan][currency]!.year, savings });
+  });
+
+  it('refuses SCHEDULED while a plan change waits on a Stripe schedule', () => {
+    expect(yearlySwitchOf(monthly({ priceLookupKey: 'solo_list_monthly_ils' }), facts({ scheduled: true }), PLAN_CATALOGS.solo)).toEqual({ ok: false, refusal: 'SCHEDULED' });
+  });
+});
+
+describe('pause and the stay offer on the plans (MUT-703 AC2, §13 Q11)', () => {
+  const planCoupon = (over: Partial<CouponFact> = {}) => stayCoupon({ id: 'mtb3a_stay_monthly_plans_50', appliesToProducts: [...PLAN_PRODUCTS], ...over });
+
+  it.each(['solo', 'business', 'firm'] as const)('%s monthly may pause', (plan) => {
+    expect(pauseOptionsOf(subject({ priceLookupKey: `${plan}_list_monthly_ils` }), 1, [], NOW)).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ['solo', 'ILS', 1950, 3900],
+    ['business', 'USD', 1350, 2700],
+    ['firm', 'ILS', 12450, 24900],
+  ] as const)('%s monthly in %s: the plans’ coupon on that plan’s own monthly price', (plan, currency, monthlyAmount, listAmount) => {
+    const sub = subject({ priceLookupKey: `${plan}_list_monthly_${currency.toLowerCase()}` });
+    expect(stayOfferOf(sub, [], planCoupon(), PLAN_CATALOGS[plan], PLAN_PRODUCTS)).toEqual({
+      ok: true,
+      offer: { couponId: 'mtb3a_stay_monthly_plans_50', percentOff: 50, months: 2, currency, monthlyAmount, listAmount },
+    });
+  });
+
+  it('a coupon outside the plans’ products, or not covering the plan held, is no stay offer', () => {
+    const sub = subject({ priceLookupKey: 'firm_list_monthly_ils' });
+    expect(stayOfferOf(sub, [], planCoupon({ appliesToProducts: ['prod_solo', 'prod_business', 'prod_firm', 'prod_F'] }), PLAN_CATALOGS.firm, PLAN_PRODUCTS)).toEqual({ ok: false, refusal: 'NO_COUPON' });
+    expect(stayOfferOf(sub, [], planCoupon({ appliesToProducts: ['prod_solo', 'prod_business'] }), PLAN_CATALOGS.firm, PLAN_PRODUCTS)).toEqual({ ok: false, refusal: 'NO_COUPON' });
+  });
+
+  it('one stay offer per person, whichever plan (§13 Q8)', () => {
+    const sub = subject({ priceLookupKey: 'business_list_monthly_ils' });
+    expect(stayOfferOf(sub, [{ kind: 'STAY_OFFER', startsAt: at('2025-01-01T00:00:00.000Z'), endedEarlyAt: null }], planCoupon(), PLAN_CATALOGS.business, PLAN_PRODUCTS)).toEqual({ ok: false, refusal: 'ALREADY_HAD' });
+  });
+
+  it('refuses SCHEDULED for pause and stay while a plan change waits on a schedule', () => {
+    const sub = subject({ priceLookupKey: 'business_list_monthly_ils', scheduled: true });
+    expect(pauseOptionsOf(sub, 3, [], NOW)).toEqual({ ok: false, refusal: 'SCHEDULED' });
+    expect(stayOfferOf(sub, [], planCoupon(), PLAN_CATALOGS.business, PLAN_PRODUCTS)).toEqual({ ok: false, refusal: 'SCHEDULED' });
   });
 });

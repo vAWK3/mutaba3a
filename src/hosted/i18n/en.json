@@ -3729,6 +3729,34 @@
         "awaiting": "Awaiting claim",
         "needsCard": "Needs card",
         "active": "Active"
+      },
+      "claim": {
+        "context": "{accountant} set up MTB3A for {business}.",
+        "contextNoAccountant": "Your accountant set up MTB3A for {business}.",
+        "contextNoBusiness": "{accountant} set up MTB3A for you.",
+        "contextNone": "Your accountant set up MTB3A for you.",
+        "codeTitle": "Enter the code your accountant gave you",
+        "digit": "Digit {n} of {total}",
+        "verify": "Verify",
+        "verifying": "Checking…",
+        "required": "Enter all six digits.",
+        "wrong": {
+          "one": "Wrong code. {count} try left.",
+          "other": "Wrong code. {count} tries left."
+        },
+        "locked": {
+          "title": "Too many tries",
+          "body": "Ask your accountant for a new code."
+        },
+        "dead": {
+          "title": "This link is no longer valid",
+          "body": "Ask your accountant for a new one."
+        },
+        "step": "Step {n} of {total}",
+        "claimed": {
+          "title": "The account is yours",
+          "continue": "Continue"
+        }
       }
     }
   }

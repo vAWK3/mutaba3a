@@ -5052,6 +5052,20 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route | `__tests__/billing-pilot.test.ts` | `pilot.startedAt`, `firstScanAt` (first of several), `firstInvoiceAt` null until the first document |
 | Client | with MUT-753/755/756 | each event fires once in a production-gate test and never in dev or QA |
 
+## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/offer.test.ts` | `parseOffers` plans/tier alias, mixed/unknown/repeated/empty plans refused, the percent come-back shape; lookup by (kind, plan, interval) for every plan and legacy; coupon inside the entry's products and covering the plan sold; `resolveOffer` per plan; Q6 eligibility (incomplete, unpaid trial, running trial); 67% rounding |
+| Rule | `billing/__tests__/retention.test.ts` | `listPriceOf` for every key family; switch savings per plan; pause and stay on each plan from its own catalog; coupon outside or not covering; one stay per person; `SCHEDULED` |
+| Rule | `billing/__tests__/comeback.test.ts` | Firm lapses count; already-had across legacy and plan ids; the percent come-back per plan and currency, monthly only, shapes refused; the plan a come-back names |
+| Script | `scripts/__tests__/stripe-plans.test.ts` | `COUPON_SPEC` values (Jerusalem `redeem_by`); offers.json ↔ spec tie; create (with products made in the same run), nothing to do, each differing field refused with the new-id message, missing products, name/metadata update, retired delete, legacy coupons untouched |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | `discounts: ''` on an upgrade's preview and update; a downgrade's phases carry `di_…`; `discountIds` read |
+| Mail | `billing/__tests__/renewal-mail.test.ts`, `comeback-mail.test.ts` | a plan launch subscription is due and the mail names the plan (en, ar); the come-back mail per lapsed plan (Firm; legacy → Solo), no yearly line, one offer read per plan; plans off = legacy |
+| Route | `__tests__/billing-plan-offers.test.ts` | GET `plans[].launch`/`.comeback`, `offer` and `comeback` under PLAN_CHECKOUT, `yearlySwitch.plan`, `renewsAtListPrice`; yearly plan Checkout carries the coupon, metadata, pay-page line, audit; monthly none; OFFER_ENDED; Stripe-held paid sub; unpaid trial; come-back monthly on the plan picked, yearly none; already had; stay/pause per plan, legacy stay for ₪29; `SCHEDULED`; plan change `offerEnds`, drop on upgrade, carry on downgrade |
+| Route | `__tests__/routes-accountant-activation.test.ts` | an activation carries no offer (no coupon read); the customer's own Checkout later does |
+| QA | with the UI half | §10's `portal.billing.plan-launch-yearly`, `plan-launch-monthly-none`, `plan-offer-ended`, `stay-offer-plan`, `switch-yearly-plan`, `comeback-plan`, `change-plan-offer-ends`; live flows after TD-347 |
+
 ## The accountant's desk (MUT-768, epic MUT-762, ADR-325)
 
 | Level | Test | Covers |
@@ -5078,3 +5092,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Portal | `src/hosted/pages/__tests__/clientBalances.test.tsx` | currencies stacked and never summed, in credit without a minus, settled, "—" without movement, one request; Arabic |
 | Component | `src/hosted/components/ledger/__tests__/LedgerCard.test.tsx` | no movements and no currency show the `ledger-empty` scene |
 
+## MUT-769 — /setup for an accountant's customer (2026-11-27, ADR-320)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/pages/auth/__tests__/claimStep.test.ts` | the context line's four forms, code failures, `claimNext` (card when due, never blocked), motion-handover-claimed's spec values and reduced-motion still in CSS |
+| Component | `src/hosted/pages/auth/__tests__/SetupClaim.test.tsx` | context line, step count, six LTR boxes named "Digit n of 6", focus, paste, wrong/required/locked, Arabic RTL; the code sent with the password; the moment then Billing › Subscribe or the business; the moment on the passkey nudge; lock and replaced code at the redeem; dead accountant's link vs operator link |
+| Route | `server/src/__tests__/routes-accountant-claim.test.ts` | `provisioned: true` on superseded and expired accountant links, nothing on unknown or operator links |
+| Release QA | `qa/specs/portal/setup.spec.ts` | `portal.setup.claim-code` (en + ar, 375 px, axe), `portal.setup.claim-refused` |
