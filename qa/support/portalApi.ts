@@ -784,6 +784,11 @@ export interface StubSetupLink {
   email?: string;
   locale?: 'en' | 'ar';
   purpose?: 'SETUP' | 'RESET';
+  /**
+   * MUT-769: an account an accountant created (MUT-764/765): the check names him and the business, the code is checked
+   * on /v1/account-setup/claim-code (five tries) and again with the password. On a dead link it adds `provisioned`.
+   */
+  claim?: { accountantName: string | null; businessName: string | null; code: string; triesLeft?: number };
 }
 
 /** MUT-731: a Starter person's month and choices, as the fake server holds them. */
@@ -1849,17 +1854,37 @@ export class FakeApi {
   private setupAnswer(e: Logged) {
     const link = this.setupLink ?? { state: 'invalid' as const };
     const email = link.email ?? 'nour@office.ps';
+    const claim = 'claim' in link ? link.claim : undefined;
     if (e.path === '/v1/account-setup/check') {
-      if (link.state !== 'valid') return json({ state: link.state });
-      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: this.termsVersion });
+      if (link.state !== 'valid') return json(claim && link.state !== 'invalid' ? { state: link.state, purpose: 'SETUP', provisioned: true } : { state: link.state });
+      const named = claim ? { claim: { accountantName: claim.accountantName, businessName: claim.businessName, codeLocked: (claim.triesLeft ?? 5) <= 0 } } : {};
+      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: this.termsVersion, ...named });
     }
     if (link.state !== 'valid') return json({ error: { code: 'SETUP_LINK_UNUSABLE', message: 'Ask for a new link', details: { state: link.state } } }, 410);
+    // MUT-765: the claim code on its own route, and again with the password; the fifth wrong one locks it
+    if (e.path === '/v1/account-setup/claim-code' && !claim) return json({ error: { code: 'CONFLICT', message: 'No code', details: { reason: 'NO_CLAIM_CODE' } } }, 409);
+    if (claim) {
+      const refused = this.claimCodeRefusal(claim, (e.body as { claimCode?: string } | null)?.claimCode);
+      if (refused) return refused;
+      if (e.path === '/v1/account-setup/claim-code') return json({ ok: true });
+    }
     // MUT-324: the real server checks the version after the link state
     if ((e.body as { acceptedTermsVersion?: string } | null)?.acceptedTermsVersion !== this.termsVersion) {
       return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
     }
     this.markSetupLink('used');
     return json({ email });
+  }
+
+  /** MUT-765: null when the code is right; the refusal otherwise, counting a wrong one. */
+  private claimCodeRefusal(claim: NonNullable<StubSetupLink['claim']>, typed: string | undefined) {
+    const locked = () => json({ error: { code: 'CLAIM_CODE_LOCKED', message: 'Ask your accountant for a new code' } }, 403);
+    if ((claim.triesLeft ?? 5) <= 0) return locked();
+    if (!typed) return json({ error: { code: 'VALIDATION_FAILED', message: 'claimCode', details: { fields: ['claimCode'] } } }, 422);
+    if (typed.replace(/\s+/g, '') === claim.code) return null;
+    claim.triesLeft = (claim.triesLeft ?? 5) - 1;
+    if (claim.triesLeft <= 0) return locked();
+    return json({ error: { code: 'CLAIM_CODE_WRONG', message: 'Wrong code', details: { triesLeft: claim.triesLeft } } }, 403);
   }
 
   private nextId(kind: number) {

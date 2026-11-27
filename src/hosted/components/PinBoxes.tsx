@@ -38,20 +38,25 @@ interface PinBoxesProps {
   disabled?: boolean;
   describedBy?: string;
   autoFocus?: boolean;
+  /** MUT-769: a fixed number of boxes (the claim code's six) instead of a PIN's four that grow to eight. */
+  length?: number;
+  /** MUT-769: each box's own name ("Digit 2 of 6"); without it, "{label}, {n}". */
+  boxLabel?: (position: number, total: number) => string;
 }
 
-export function PinBoxes({ value, onChange, label, onSubmit, invalid = false, disabled = false, describedBy, autoFocus = false }: PinBoxesProps) {
+export function PinBoxes({ value, onChange, label, onSubmit, invalid = false, disabled = false, describedBy, autoFocus = false, length, boxLabel }: PinBoxesProps) {
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
-  const count = boxCount(value.length);
+  const max = length ?? PIN_MAX;
+  const count = length ?? boxCount(value.length);
   const focusBox = (index: number) => {
     // After the render that adds the box
-    queueMicrotask(() => boxes.current[Math.max(0, Math.min(index, PIN_MAX - 1))]?.focus());
+    queueMicrotask(() => boxes.current[Math.max(0, Math.min(index, max - 1))]?.focus());
   };
 
   function typeAt(index: number, typed: string) {
     const digits = pinDigits(typed);
     if (!digits) return;
-    const next = (value.slice(0, index) + digits).slice(0, PIN_MAX);
+    const next = (value.slice(0, index) + digits).slice(0, max);
     onChange(next);
     focusBox(next.length);
   }
@@ -88,8 +93,8 @@ export function PinBoxes({ value, onChange, label, onSubmit, invalid = false, di
           type="text"
           inputMode="numeric"
           autoComplete={index === 0 ? 'one-time-code' : 'off'}
-          maxLength={PIN_MAX}
-          aria-label={`${label}, ${index + 1}`}
+          maxLength={max}
+          aria-label={boxLabel ? boxLabel(index + 1, count) : `${label}, ${index + 1}`}
           aria-invalid={invalid || undefined}
           disabled={disabled}
           autoFocus={autoFocus && index === 0}

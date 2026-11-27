@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useT } from '../../../lib/i18n/core';
 import type { Me } from '../../api/client';
@@ -42,7 +42,8 @@ function reasonOf(outcome: Exclude<AddPasskeyOutcome, { kind: 'added' }>): 'canc
   return outcome.kind === 'unreachable' ? 'offline' : 'other';
 }
 
-export function SetupPasskeyStep({ link, password, onDone }: { link: SetupLinkKind; password?: string; onDone: () => void }) {
+/** `art` (MUT-769): what sits above the title, e.g. the hand-over moment once an accountant's customer claims. */
+export function SetupPasskeyStep({ link, password, onDone, art }: { link: SetupLinkKind; password?: string; onDone: () => void; art?: ReactNode }) {
   const t = useT();
   const ids = useId();
   const showToast = useToast();
@@ -96,6 +97,7 @@ export function SetupPasskeyStep({ link, password, onDone }: { link: SetupLinkKi
   const titleId = `${ids}-title`;
   return (
     <section className="hp-card hp-signin-card" aria-labelledby={titleId}>
+      {art}
       <h1 id={titleId} ref={headingRef} tabIndex={-1}>
         {t('hosted.setup.passkey.title')}
       </h1>
