@@ -3374,7 +3374,7 @@ export interface ProvisionApproval {
 /** The setup link a provisioned account was created with (the claim step's server side reads and updates it). */
 export interface ProvisionedSetupLink {
   tokenDigest: string;
-  purpose: PersonSetupLinkPurpose;
+  purpose: SetupLinkPurpose;
   claimCodeDigest: string | null;
   claimCodeAttempts: number;
   /** PENDING until the mail is sent; null on a link that is not a provisioned account's. */
