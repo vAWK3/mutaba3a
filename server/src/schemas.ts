@@ -1778,6 +1778,12 @@ export const SetupLinkCheckResponseSchema = z
        * 1.58.0-mut368.
        */
       purpose: SetupLinkPurposeSchema.optional(),
+      /**
+       * MUT-769 (ADR-320): true when the dead link was one an accountant's customer was sent (MUT-764). The page says to
+       * ask the accountant for a new one and offers no self-service link: recovery mails nothing for an unclaimed
+       * provisioned account (B7). Like `purpose`, only the token's holder learns it. Additive since 1.211.0-mut769.
+       */
+      provisioned: z.literal(true).optional(),
     }),
   ])
   .openapi('SetupLinkCheckResponse');

@@ -120,6 +120,24 @@ describe('the claim step (MUT-765)', () => {
     expect((await redeem(h, c.token, { claimCode: c.code })).status).toBe(410);
   });
 
+  it('MUT-769: a dead provisioned link says it was an accountant’s (ask him), to its holder only; an operator link does not', async () => {
+    const h = harness();
+    const accountant = await approved(h);
+    const c = await customer(h, accountant);
+    await reissue(h, accountant, c.userId);
+    expect(await read(await check(h, c.token))).toEqual({ state: 'superseded', purpose: 'SETUP', provisioned: true });
+    h.setNow(new Date(h.now().getTime() + 14 * DAY + 1000));
+    expect(await read(await check(h, lastToken(h, c.email)))).toEqual({ state: 'expired', purpose: 'SETUP', provisioned: true });
+    // An unknown token names nothing.
+    expect(await read(await check(h, 'A'.repeat(43)))).toEqual({ state: 'invalid' });
+
+    const plain = await person(h, { sharing: false });
+    const issued = await h.app.request(`/admin/v1/users/${plain.userId}/setup-link`, json({ validHours: 1 }, { 'x-admin-token': 'test-admin-token-with-at-least-32-characters' }));
+    const token = tokenIn((await read(issued)).setupLink.url);
+    h.setNow(new Date(h.now().getTime() + 2 * 60 * 60 * 1000));
+    expect(await read(await check(h, token))).toEqual({ state: 'expired', purpose: 'RESET' });
+  });
+
   it('leaves an operator link without a code (409 NO_CLAIM_CODE on the code route)', async () => {
     const h = harness();
     const plain = await person(h, { sharing: false });
