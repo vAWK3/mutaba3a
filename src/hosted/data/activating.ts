@@ -32,8 +32,9 @@ export function markActivating(userId: string, now = Date.now()): void {
 }
 
 export function clearActivating(userId: string): void {
-  const { [userId]: _gone, ...rest } = read();
-  write(rest);
+  const marks = read();
+  delete marks[userId];
+  write(marks);
 }
 
 /** The customers sent to Stripe within the last two minutes. */

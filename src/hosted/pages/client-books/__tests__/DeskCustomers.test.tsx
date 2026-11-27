@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import type { AccountantClientWithStats, Schemas } from '../../../api/client';
-import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
+import { emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 import { stripeNavigation } from '../../../data/billingQueries';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 

@@ -7502,3 +7502,16 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. Day 60 with a covering subscription: kept; the run counts it `flagged` and logs a warning; Operator › provisioned accounts shows `flagged`. That list is the operator's follow-up; push reminders wait for the phone (T11).
 
 **Consequences:** A customer who claims between the sweep and the purge (at most an hour) cannot: the sweep cancelled the links. Reminder days are constants in `UNCLAIMED_POLICY`.
+
+## ADR-325: The Accountant's Desk Joins Two Lists in the Portal; Activating Is the Portal's Own Wait; Take Card Is a Pane of the Customer Drawer (MUT-768, epic MUT-762; DR-2..DR-6, B13, B15, B22)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`; wireframe extension B22 approved by Basel in the session).
+
+**Decision:**
+1. The desk (`/client-books`) is one table over `GET /v1/clients` (the client books, with this month's stats) joined by profile with `GET /v1/accountant/customers` (the accounts the accountant created, up to 400). A customer with no client book still shows, under their own name. An ended client book wins over every customer state.
+2. The state is derived in `deskRules.ts`: awaiting claim (and a locked code) → New code; link expired → Resend link; claimed and not paid → Needs card → Take card; claimed and paid → Active; the portal's own Activating in between. A person the operator has not approved gets 404 or 403 on the customers list; the desk then shows no chips and no Add customer, exactly as before.
+3. Activating is not a server state (B15). Leaving for Stripe marks the customer in `sessionStorage` (a convenience: without it the row reads Needs card); the desk re-reads the list every 5 seconds for 2 minutes or until the list says paid, then says "Check back shortly".
+4. The Add customer drawer asks five things; its country sets the account's currency and time zone (the create route takes those, B13). Take card is a pane of the Customer drawer (`?customer=<id>&pane=card`) asking plan, payment, customer type, country and the billing address, then opens Checkout with `returnPath` `/client-books`.
+5. Resend link and New code are one server call (a fresh link and code). The drawer offers both labels, as the approved wireframe draws them.
+
+**Consequences:** The server stores no plan intent, so a customer who chose the free Starter plan reads Needs card like any claimed customer who has not paid. The two buttons that make one call stay until Basel picks one label. Both are noted for a later ticket, not hidden. The activation `returnPath` pattern accepts `/client-books` although the OpenAPI text names only `/` and profile paths.
