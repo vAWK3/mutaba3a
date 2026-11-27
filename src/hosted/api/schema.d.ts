@@ -26680,6 +26680,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/accountants/unclaimed-sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily: reminders for accounts an accountant created that nobody claimed, and removal of the unpaid ones after 60 days (Cloud Scheduler)
+         * @description Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant, and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UnclaimedSweepSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The feature is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/grants": {
         parameters: {
             query?: never;
@@ -35994,6 +36060,7 @@ export interface components {
                     email: string;
                 } | null;
                 paid: boolean;
+                flagged: boolean;
             }[];
         };
         UsagePruneSummary: {
@@ -36012,6 +36079,15 @@ export interface components {
                 counterMonths: number;
                 routeDays: number;
             };
+        };
+        UnclaimedSweepSummary: {
+            looked: number;
+            reminded: number;
+            removed: number;
+            flagged: number;
+            digests: number;
+            failed: number;
+            incomplete: boolean;
         };
         CreateEntitlementGrantRequest: {
             /** Format: uuid */

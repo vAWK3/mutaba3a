@@ -958,6 +958,30 @@ const customerSetupCancelled: Copy<'customer-setup-cancelled'> = {
   }),
 };
 
+/** MUT-767 (ADR-300): the accountant's daily digest of customers who have not claimed. Counts only. */
+const accountantUnclaimedDigest: Copy<'accountant-unclaimed-digest'> = {
+  en: ({ waiting, removingSoon, deskLink }) => ({
+    subject: waiting === 1 ? '1 customer hasn’t claimed their MTB3A account' : `${waiting} customers haven’t claimed their MTB3A accounts`,
+    preheader: removingSoon > 0 ? `${removingSoon} removed within a week unless they claim or pay.` : 'Send them a new link from your desk.',
+    headline: 'Customers waiting to claim',
+    intro: [
+      [waiting === 1 ? '1 customer you set up hasn’t claimed the account yet.' : `${waiting} customers you set up haven’t claimed their accounts yet.`],
+      ...(removingSoon > 0 ? [[removingSoon === 1 ? '1 of them hasn’t paid and is removed within a week.' : `${removingSoon} of them haven’t paid and are removed within a week.`]] : []),
+    ],
+    action: { label: 'Open my desk', href: deskLink },
+  }),
+  ar: ({ waiting, removingSoon, deskLink }) => ({
+    subject: waiting === 1 ? 'زبون واحد لم يستلم حسابه في متابعة بعد' : `${waiting} من زبائنك لم يستلموا حساباتهم في متابعة بعد`,
+    preheader: removingSoon > 0 ? `${removingSoon} منها تُحذف خلال أسبوع ما لم يُستلم أو يُدفع.` : 'أرسل لهم رابطًا جديدًا من مكتبك.',
+    headline: 'زبائن بانتظار استلام حساباتهم',
+    intro: [
+      [waiting === 1 ? 'زبون واحد أعددت حسابه لم يستلمه بعد.' : `${waiting} من الزبائن الذين أعددت حساباتهم لم يستلموها بعد.`],
+      ...(removingSoon > 0 ? [[removingSoon === 1 ? 'واحد منها غير مدفوع ويُحذف خلال أسبوع.' : `${removingSoon} منها غير مدفوعة وتُحذف خلال أسبوع.`]] : []),
+    ],
+    action: { label: 'فتح مكتبي', href: deskLink },
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -986,4 +1010,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'plan-change-scheduled': planChangeScheduled,
   'customer-setup': customerSetup,
   'customer-setup-cancelled': customerSetupCancelled,
+  'accountant-unclaimed-digest': accountantUnclaimedDigest,
 };

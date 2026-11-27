@@ -3507,6 +3507,20 @@ export interface ProvisionRepository {
   setMailStatus(tokenDigest: string, status: 'SENT' | 'FAILED'): Promise<void>;
   /** MUT-765 (R6): links made for the customer at or after `since` other than the one their account was created with (each reissue and change of address makes one), for the reissue cap. */
   countReissuesSince(userId: string, since: Date): Promise<number>;
+  /**
+   * MUT-767 (R1): unclaimed provisioned accounts that are not closing, oldest first, after `after` (provisionedAt, then
+   * id) for paging: the daily sweep's input.
+   */
+  sweepRows(input: { limit: number; after?: { provisionedAt: Date; userId: string } | undefined }): Promise<UnclaimedSweepRow[]>;
+  /** MUT-767: the reminder stages (days) each customer was already sent (`accountant.customer_reminded` audit rows). */
+  remindedStages(userIds: readonly string[]): Promise<Map<string, number[]>>;
+  /**
+   * MUT-767 (R1): one transaction under the user-row lock. Only while the account is still unclaimed, provisioned at or
+   * before `provisionedBefore` and not closing: closes it with its grace already over (`requestedAt` = when it was
+   * created, `deleteAfter` = `at`), so the hourly purge (accounts/purge-run.ts) deletes it with its Stripe customers;
+   * cancels its open links and writes `audit`. False (nothing written) otherwise.
+   */
+  expireUnclaimed(input: { userId: string; provisionedBefore: Date; at: Date; audit: AuditEventInput[] }): Promise<boolean>;
   /** MUT-766: the customer, when this accountant created the account and nobody has claimed it yet; else null. */
   unclaimedCustomerOf(accountantUserId: string, customerUserId: string): Promise<UserRecord | null>;
   /** MUT-765: the customers this accountant created, newest first, claimed or not (the desk's list). `before` pages by provisionedAt. */
@@ -3519,8 +3533,11 @@ export interface ReissueProvisionedLinkInput {
   /** A new address (normalised) for a change of email; omitted to keep the current one. */
   email?: string | undefined;
   setupLink: { tokenDigest: string; expiresAt: Date };
-  /** HMAC of the new claim code, bound to the address the link goes to (known inside the transaction). */
-  claimCodeDigestFor(email: string): string;
+  /**
+   * HMAC of the new claim code, bound to the address the link goes to (known inside the transaction). Null (MUT-767,
+   * a customer reminder) keeps the current code and its wrong tries on the fresh link.
+   */
+  claimCodeDigestFor: ((email: string) => string) | null;
   at: Date;
   /** Written in the same transaction. `organizationId` is the customer's business profile the grant reads. */
   auditFor(context: { organizationId: string; grant: AccountantGrantRecord; previousEmail: string }): AuditEventInput[];
@@ -3531,6 +3548,16 @@ export type ReissueProvisionedLinkResult =
   | { kind: 'not_found' }
   | { kind: 'claimed' }
   | { kind: 'email_taken' };
+
+/** MUT-767: one unclaimed provisioned account, as the daily sweep reads it. */
+export interface UnclaimedSweepRow {
+  userId: string;
+  email: string;
+  displayName: string;
+  locale: UserLocale;
+  accountantUserId: string | null;
+  provisionedAt: Date;
+}
 
 /** One customer an accountant created, with what the desk shows about their claim. */
 export interface ProvisionedCustomerRow {

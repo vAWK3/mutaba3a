@@ -7476,3 +7476,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 3. With the filter only, each row carries `milestones { firstScanAt, firstInvoiceAt }`: the person's first SCAN and first DOCUMENT_ISSUED event as the payer, from one grouped read of `usage_events` per page (`store.usage.firstEventsOf`). Any issued document counts as the first invoice (an exempt dealer issues receipts only). Nothing new is recorded: MUT-735 already writes these events, kept 13 months.
 
 **Consequences:** No migration. "Last step reached" (plan S5) is not recorded (TD-370). A tester who acts only on someone else's business has no ticks (their events count to that owner).
+
+---
+
+## ADR-300: Unclaimed Accounts: Reminders With the Same Code, One Digest a Day, Removal at 60 Days Through the Closure Purge, Paid Ones Kept and Flagged (MUT-767, epic MUT-762; eng R1, T6)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`, R1 as answered by Basel: remove if unpaid, flag if paid, 60 days, reminders to customer, accountant and operator; build decisions B17–B21).
+
+**Decision:**
+1. `POST /jobs/v1/accountants/unclaimed-sweep` (Cloud Scheduler, daily, job token; 404 while `ACCOUNTANT_PROVISIONING` is off) reads unclaimed provisioned accounts that are not closing, oldest first, in pages of 200 (at most 5,000 a run, `incomplete` otherwise).
+2. Customer reminders on days 3, 10, 30 and 53: a fresh 14-day link mailed as a reminder (`customer-setup`, `reminder: true`) that keeps the current claim code and its wrong tries (B17; amends R6's "rotates the code" for reminders only: the customer can use the code the accountant already said). Each day is sent once (`accountant.customer_reminded` audit row with its day); only the latest day reached is sent, missed earlier ones are skipped.
+3. One `accountant-unclaimed-digest` per accountant per UTC day at most (the mailer's key), only on a day a customer of his was reminded or an unpaid one goes within a week; counts only, never a customer's name or address.
+4. Day 60, no covering profile-plan subscription (a free-plan account counts as unsubscribed): `provision.expireUnclaimed` closes the account with its grace already over (`requestedAt` = creation, `deleteAfter` = now) under the row lock, re-checking unclaimed and age, cancels its links and audits `accountant.customer_expired` on the accountant's own profile. The hourly purge (ADR-188) then deletes it, its profiles, grant, links and Stripe customers. Never a bare delete.
+5. Day 60 with a covering subscription: kept; the run counts it `flagged` and logs a warning; Operator › provisioned accounts shows `flagged`. That list is the operator's follow-up; push reminders wait for the phone (T11).
+
+**Consequences:** A customer who claims between the sweep and the purge (at most an hour) cannot: the sweep cancelled the links. Reminder days are constants in `UNCLAIMED_POLICY`.

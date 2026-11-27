@@ -208,11 +208,14 @@ describe('STORE_ACCESS', () => {
       // MUT-763: the operator's approval of an accountant, the origin of a provisioned account and its setup link (create and approvalOf are class `provision`).
       // MUT-764: the operator's list of unclaimed accounts.
       'provision.claimOf',
+      'provision.expireUnclaimed',
       'provision.failClaimCode',
       'provision.listUnclaimed',
       'provision.originOf',
+      'provision.remindedStages',
       'provision.setApproval',
       'provision.setupLinkOf',
+      'provision.sweepRows',
       // MUT-461: the operator's account view counts a person's live sessions.
       'sessions.countLiveForUser',
       // MUT-314: the period download's stream checks, on the base store, that the minting session still works.

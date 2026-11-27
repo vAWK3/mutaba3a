@@ -284,6 +284,45 @@ export function describeLedgerStoreAccountantProvisionContract(name: string, mak
         expect((await store.provision.setupLinkOf(c.user.id))?.mailStatus).toBe('SENT');
       });
 
+      it('MUT-767: a reminder keeps the current code and its wrong tries on the fresh link', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const input = provisionInput(a.userId);
+        const c = created(await store.provision.create(input));
+        await store.provision.failClaimCode(input.setupLink.tokenDigest);
+        const r = await store.provision.reissue({ ...reissueInput(a.userId, c.user.id), claimCodeDigestFor: null });
+        expect(r.kind).toBe('issued');
+        expect(await store.provision.setupLinkOf(c.user.id)).toMatchObject({ claimCodeDigest: input.claimCodeDigest, claimCodeAttempts: 1 });
+      });
+
+      it('MUT-767: pages unclaimed, not-closing accounts oldest first, reads reminder days, and expires only an old unclaimed one', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const old = created(await store.provision.create(provisionInput(a.userId, { at: at(10) })));
+        const mid = created(await store.provision.create(provisionInput(a.userId, { at: at(20) })));
+        const claimed = created(await store.provision.create(provisionInput(a.userId, { at: at(30) })));
+        await store.users.setPassword(claimed.user.id, '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', at(40));
+
+        const mine = (rows: Array<{ userId: string }>) => rows.map((r) => r.userId).filter((id) => [old.user.id, mid.user.id, claimed.user.id].includes(id));
+        expect(mine(await store.provision.sweepRows({ limit: 500 }))).toEqual([old.user.id, mid.user.id]);
+        const first = (await store.provision.sweepRows({ limit: 500 })).find((r) => r.userId === old.user.id)!;
+        expect(first).toMatchObject({ accountantUserId: a.userId, provisionedAt: at(10), locale: 'ar' });
+        expect(mine(await store.provision.sweepRows({ limit: 500, after: { provisionedAt: at(10), userId: old.user.id } }))).toEqual([mid.user.id]);
+
+        await store.audit.append({ organizationId: old.organization.id, actorType: 'SYSTEM', actorId: null, action: 'accountant.customer_reminded', entityType: 'user', entityId: old.user.id, metadata: { day: 3 }, requestId: null });
+        expect((await store.provision.remindedStages([old.user.id, mid.user.id])).get(old.user.id)).toEqual([3]);
+        expect((await store.provision.remindedStages([mid.user.id])).get(mid.user.id)).toBeUndefined();
+
+        // Too young, or claimed: nothing. Old enough and unclaimed: closed with its grace over, links cancelled.
+        expect(await store.provision.expireUnclaimed({ userId: mid.user.id, provisionedBefore: at(15), at: at(50), audit: [] })).toBe(false);
+        expect(await store.provision.expireUnclaimed({ userId: claimed.user.id, provisionedBefore: at(50), at: at(50), audit: [] })).toBe(false);
+        expect(await store.provision.expireUnclaimed({ userId: old.user.id, provisionedBefore: at(15), at: at(50), audit: [] })).toBe(true);
+        expect((await store.users.getById(old.user.id))?.closure).toMatchObject({ requestedAt: at(10), deleteAfter: at(50) });
+        expect((await store.provision.setupLinkOf(old.user.id)) && (await store.accountSetup.findByDigest((await store.provision.setupLinkOf(old.user.id))!.tokenDigest))?.cancelledAt).toEqual(at(50));
+        expect(await store.provision.expireUnclaimed({ userId: old.user.id, provisionedBefore: at(15), at: at(51), audit: [] })).toBe(false);
+        expect(mine(await store.provision.sweepRows({ limit: 500 }))).toEqual([mid.user.id]);
+      });
+
       it('lists an accountant’s customers newest first, claimed or not, with the profile and the newest link', async () => {
         const store = await makeStore();
         const a = await accountant(store);

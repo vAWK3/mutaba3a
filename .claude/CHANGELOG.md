@@ -37,6 +37,18 @@ Server only; the console's filter, chip and ticks are UI work for later. No migr
 - `pilot { cohort, startedAt, endsAt, referredBy }` (or null) on every account-list row; with `pilot=1`, `milestones { firstScanAt, firstInvoiceAt }` from one grouped usage read per page.
 - `store.usage.firstEventsOf` (operator only), `OperatorAccountListItem.pilotGrants`; `pilotChipOf` (operator/account-list.ts).
 
+## [Unreleased] - 2026-11-27 — Unclaimed accounts: reminders, digest, removal at 60 days (MUT-767 server half, epic MUT-762, ADR-300, API 1.170.0-mut767)
+
+Plan `docs/designs/accountant-channel.md` (eng T6, R1; build decisions B17–B21). Server only, dark behind `ACCOUNTANT_PROVISIONING`. No migration. Needs a Cloud Scheduler job before the switch goes on (before-release.md).
+
+### Added
+- `POST /jobs/v1/accountants/unclaimed-sweep` and `accountants/unclaimed-sweep.ts` (`UNCLAIMED_POLICY`: reminders days 3/10/30/53, removal day 60, pages of 200).
+- Mail template `accountant-unclaimed-digest` (ar, en; counts only); `customer-setup` sends as a reminder.
+- `store.provision.sweepRows`, `remindedStages`, `expireUnclaimed`; `reissue` with `claimCodeDigestFor: null` keeps the code.
+- Audit `accountant.customer_reminded` (with its day) and `accountant.customer_expired`. `flagged` on `GET /v1/operator/provisioned-accounts` items.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Pilot marker on grants, `pilot` on Billing, the Welcome flag (MUT-752 server, epic MUT-751, ADR-296, API 1.162.0-mut752)
 
 Plan `docs/designs/pilot-testers-business-plan.md` (APPROVED; eng review D1, D2, D4; build decisions P1–P6). Server only; the Pilot panel (MUT-753), usage lines (MUT-754), Welcome (MUT-755), phone (MUT-756) and the console's filter and chip (MUT-757 UI) come later. One additive migration, `20261127210000_mut752_pilot_grants`.

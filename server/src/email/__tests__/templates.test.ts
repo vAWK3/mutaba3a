@@ -36,6 +36,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
   'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: LINK, validDays: 14 },
   'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
+  'accountant-unclaimed-digest': { waiting: 7, removingSoon: 2, deskLink: 'https://portal.example.test/client-books' },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },
@@ -83,6 +84,7 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   // MUT-559 (ADR-245): the last day an accountant invite works, a calendar day, never a money date.
   'accountant-invite': [mailDay({ year: 2026, month: 11, day: 20 }, 'en'), mailDay({ year: 2026, month: 11, day: 20 }, 'ar')],
   'customer-setup': ['14'],
+  'accountant-unclaimed-digest': ['7', '2'],
   // MUT-618 (ADR-256 D8): the code itself and its ten minutes; a code, never an amount or a date.
   'sign-in-code': ['482913', '10'],
   // MUT-710 (ADR-274 D5): the same as the sign-in code.
@@ -316,6 +318,7 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'plan-change-scheduled': { en: 'Your MTB3A plan changes to Solo on December 15, 2026', ar: 'تتغيّر خطتك في متابعة إلى «مستقل» يوم 15 كانون الأول 2026' },
   'customer-setup': { en: 'Hadi Khatib set up “Café Nour” for you on MTB3A', ar: 'Hadi Khatib أعدّ لك «Café Nour» في متابعة' },
   'customer-setup-cancelled': { en: 'Your MTB3A setup link no longer works', ar: 'رابط إعداد حسابك في متابعة لم يعد يعمل' },
+  'accountant-unclaimed-digest': { en: '7 customers haven’t claimed their MTB3A accounts', ar: '7 من زبائنك لم يستلموا حساباتهم في متابعة بعد' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
