@@ -30796,6 +30796,8 @@ export interface components {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
             purpose?: components["schemas"]["SetupLinkPurpose"];
+            /** @enum {boolean} */
+            provisioned?: true;
         };
         /** @enum {string} */
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
