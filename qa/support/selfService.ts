@@ -365,6 +365,34 @@ export async function grantPlan(userId: string, tier: 'SOLO' | 'BUSINESS' | 'FIR
 }
 
 /**
+ * MUT-759 (pilot, ADR-296): a pilot grant through the admin route, as `billing:grant --cohort` makes it: Business, the
+ * cohort, optionally the referring accountant, an expiry (60 days without one) and the tester's yes (MUT-777).
+ */
+export async function grantPilot(userId: string, options: { cohort?: string; accountantId?: string; expiresAt?: string; watchConsent?: boolean } = {}): Promise<{ id: string; expiresAt: string }> {
+  const res = await fetch(`${liveState().origin}/admin/v1/billing/grants`, {
+    method: 'POST',
+    headers: admin(),
+    body: JSON.stringify({
+      userId,
+      tier: 'BUSINESS',
+      reason: 'release-QA pilot',
+      cohort: options.cohort ?? 'qa-pilot',
+      ...(options.accountantId ? { referredByUserId: options.accountantId } : {}),
+      ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
+      ...(options.watchConsent ? { watchConsent: true } : {}),
+    }),
+  });
+  expect(res.status, `grant pilot ${await res.clone().text()}`).toBe(201);
+  return (await res.json()) as { id: string; expiresAt: string };
+}
+
+/** MUT-759: revoke a grant through the admin route (a pilot's end, or the first half of an extension). */
+export async function revokeGrant(grantId: string): Promise<void> {
+  const res = await fetch(`${liveState().origin}/admin/v1/billing/grants/${grantId}`, { method: 'DELETE', headers: admin() });
+  expect(res.status, `revoke ${await res.clone().text()}`).toBe(200);
+}
+
+/**
  * MUT-735 (ADR-281): this Jerusalem month's usage for a person, written into the QA database as the meters would have
  * written it (one event per document or scan, then the counters). Real issuing needs a Tax Authority setup and scans a
  * bucket; the live metering of a finished scan is proven by `usage.billing-usage`.

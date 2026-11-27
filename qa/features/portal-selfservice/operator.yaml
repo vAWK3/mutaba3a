@@ -229,6 +229,23 @@ features:
       - The toast says "Coverage granted to <email>" and the drawer closes
       - The grant is listed as Business · Business pilot
       - The CLI's own list shows a BUSINESS grant with no end, granted by operator:<the operator's id>
+  - id: pilot-grant
+    title: Grant a pilot with its cohort, accountant and the tester's yes; the Pilot filter shows the tester with the chip and the ticks
+    tickets: [MUT-759, MUT-757, MUT-777]
+    paths:
+      - src/hosted/pages/operator/OperatorAccountsPage.tsx
+      - src/hosted/operator/pilot.ts
+      - server/src/operator/actions/billingGrants.ts
+      - server/src/operator/actions/accounts.ts
+      - server/src/operator/account-list.ts
+    steps:
+      - Open the tester's account and press Grant coverage
+      - Choose Business, give the reason, the cohort and the accountant's email, tick the tester's yes, and grant with the passkey
+      - The tester saves a first scan; open Accounts and turn on the Pilot filter
+    expect:
+      - The drawer takes a cohort and an accountant; a pilot with no day says "Ends in 60 days"
+      - The grant is listed; the CLI's list shows the cohort, the accountant and the end in 60 days
+      - The filter is in the address; the tester's row says "Pilot · ends <date>", the accountant, "✓ Agreed to watching", "✓ Scan" and "– Invoice"
   - id: feature-grant-revoke
     title: Turn Connect Claude on for a person, then off with a confirm
     tickets: [MUT-462]

@@ -115,7 +115,9 @@ export default {
         // MUT-710: the two-step drawer, its code fields and the sign-in's second step need the live API: portal-selfservice's.
         '!src/hosted/twoFactor/{TwoFactorDrawer,TwoFactorFields,TwoFactorStep}.tsx',
         // MUT-535: the monthly summary's switch and turn-it-off page are read through the live API's job and outbox: portal-live's.
-        '!src/hosted/components/MonthlySummarySwitchRow.tsx', '!src/hosted/pages/mail-off/**'],
+        '!src/hosted/components/MonthlySummarySwitchRow.tsx', '!src/hosted/pages/mail-off/**',
+        // MUT-759: the pilot needs a real pilot grant, its Welcome flag and the usage firsts on the live API: portal-selfservice's.
+        '!src/hosted/components/{PilotBilling,PilotWelcomeDrawer}.tsx', '!src/hosted/data/{pilot,pilotQueries,usageLines}.ts', '!src/hosted/session/pilotWelcomeOffer.ts', '!src/hosted/shell/{PilotMilestones,PilotWelcomeOpener}.tsx'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -261,6 +263,11 @@ export default {
         'src/hosted/pages/operator/**',
         'src/hosted/operator/**',
         'src/hosted/data/operatorQueries.ts',
+        // MUT-759: the pilot (Welcome, Pilot panel, milestones) on a real pilot grant.
+        'src/hosted/components/{PilotBilling,PilotWelcomeDrawer}.tsx',
+        'src/hosted/data/{pilot,pilotQueries,usageLines}.ts',
+        'src/hosted/session/pilotWelcomeOffer.ts',
+        'src/hosted/shell/{PilotMilestones,PilotWelcomeOpener}.tsx',
         'src/hosted/data/signupReviews.ts',
         // MUT-735 (ADR-281): Operator › Usage and the usage ledger behind it, on the live API.
         'src/hosted/data/operatorUsageQueries.ts',
