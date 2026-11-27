@@ -1168,7 +1168,8 @@
           "title": "This receipt isn't here",
           "body": "It may have been deleted, or it belongs to another profile."
         },
-        "vatRead": "The receipt shows VAT of {amount}"
+        "vatRead": "The receipt shows VAT of {amount}",
+        "fromVendor": "Last used for this vendor"
       },
       "preview": {
         "label": "Receipt {name}",

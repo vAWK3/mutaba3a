@@ -28,6 +28,14 @@
 
 ---
 
+## [Unreleased] - 2026-11-28 — MUT-775 (portal): a known vendor's last category fills the receipt review
+
+### Added
+- `ReceiptReview` fills `vendorDefaults.categoryId` into an empty, untouched category (at mount and late), with "Last used for this vendor" under it and the `motion-autofill` underline (`.hp-autofill-scope`). `vendorDefaultFills` takes the category. i18n `hosted.receipts.review.fromVendor` (ar + en). FakeApi's receipt detail sends the vendor's last category.
+
+### Technical
+- Tests: `lib/__tests__/vendorDefaults.test.ts`, two cases in `pages/__tests__/Receipts.test.tsx`. QA: `portal.receipts.vendor-category`.
+
 ## [Unreleased] - 2026-11-27 — MUT-737 (UI): open sign-up in the operator console, the first-run events, the privacy drafts
 
 ### Added

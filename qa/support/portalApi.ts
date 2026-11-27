@@ -2355,7 +2355,9 @@ export class FakeApi {
     const vendor = key ? this.vendors.find((v) => v.keys.has(key)) : undefined;
     if (found.expenseId || !vendor) return null;
     const firm = this.profiles.find((p) => p.stub.id === profileId)?.stub.firm ?? false;
-    return { vendorId: vendor.id, currency: vendor.lastCurrency, vat: firm ? vendor.lastVat : null };
+    // MUT-775: the vendor's last category (the server gives it only for a registration-no. match; the fake's match on
+    // the read name stands in for it, and a vendor seeded without a category gives none).
+    return { vendorId: vendor.id, currency: vendor.lastCurrency, vat: firm ? vendor.lastVat : null, categoryId: vendor.lastCategoryId };
   }
 
   /** GET /v1/vendors: names containing the query (no fuzzy matching here), else the most recently used. */
