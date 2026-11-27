@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<g id="book" transform="translate(0 -6)"><path d="M80 98Q58 86 26 92V134Q58 128 80 140Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M80 98Q102 86 134 92V134Q102 128 80 140Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M38 106h28M38 118h28M94 106h28M94 118h28" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7"/></g>
+<circle id="ring" cx="80" cy="52" r="16" fill="none" stroke="#795DBA" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+<circle id="nuqta" cx="80" cy="52" r="8" fill="#E89960"/>
+<g id="sparkles"><circle cx="34" cy="58" r="3" fill="#795DBA"/><path d="M126 40v10M121 45h10" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>

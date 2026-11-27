@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 96" width="120" height="96">
+<rect x="36" y="14" width="64" height="58" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M36 29h64" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="22" y="24" width="64" height="60" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22 39h64" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38 19v10M70 19v10" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="47.7" cy="51" r="2.5" fill="#795DBA"/>
+<circle cx="60.3" cy="51" r="2.5" fill="#795DBA"/>
+<circle cx="73.0" cy="51" r="2.5" fill="#795DBA"/>
+<circle cx="35.0" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="47.7" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="60.3" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="73.0" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="35.0" cy="75" r="2.5" fill="#795DBA"/>
+<circle cx="47.7" cy="75" r="2.5" fill="#795DBA"/>
+<circle cx="60.3" cy="75" r="2.5" fill="#795DBA"/>
+<circle cx="73.0" cy="75" r="2.5" fill="#795DBA"/>
+<circle id="nuqta" cx="35.0" cy="51" r="5" fill="#E89960"/>
+<g id="sparkles"><path d="M104 40v8M100 44h8" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="56" r="2.5" fill="#795DBA"/></g>
+</svg>

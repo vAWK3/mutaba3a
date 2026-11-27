@@ -550,6 +550,15 @@ describe('tokens', () => {
     }
   });
 
+  it('the overshoot curve is the celebrations\' (.34,1.56,.64,1) and reduced motion flattens it (2026-11-27 motion specs)', () => {
+    const tokens = new Tokens(theme, LIGHT);
+    expect(tokens.resolve('--ease-spring').replace(/\s/g, '')).toBe('cubic-bezier(.32,.72,0,1)');
+    expect(tokens.resolve('--ease-overshoot').replace(/\s/g, '')).toBe('cubic-bezier(.34,1.56,.64,1)');
+    for (const state of [LIGHT, DARK]) {
+      expect(new Tokens(theme, { ...state, reducedMotion: true }).resolve('--ease-overshoot')).toBe('linear');
+    }
+  });
+
   it('the fade token is 150ms, and reduced motion zeroes it (MUT-206 DR3)', () => {
     for (const state of [LIGHT, DARK]) {
       expect(new Tokens(theme, state).ms('--duration-fade')).toBe(150);

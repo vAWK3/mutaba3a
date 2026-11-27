@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
+
+Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.
+
+### Added
+- 17 scenes and 11 `-rtl` drawings in `assets/illustrations/source/` (160×160: gift-month, gift-used, plan-upgraded, handover-welcome, handover-claimed, pilot-ended, link-expired, code-locked, ledger-empty; 120×96: claimed-spot, pilot-welcome-1..3, milestone-first-scan, milestone-first-invoice, activating, change-scheduled), generated into `src/components/illustrations/generated/`; `MOMENTS` in `scripts/validate_illustrations.mjs` (`rtl: true` expects `<name>-rtl.svg`).
+- `Scene` picks `<name>-rtl` in an RTL document when that art exists, else the plain art; never a CSS mirror. `SCENE_NAMES`; `sceneArtFor(name, direction)`. `useOptionalDirection()` in `src/lib/i18n/core.tsx`.
+- `docs/design/motion/2026-11-27/`: the ten moments' specs, key frames and stills (no video), with an index README (ticket, direction, total duration).
+- Mail headers in `src/hosted/public/mail/v2/` (named `mail-header-<mood>-<header>[-rtl]-2x.png` like the rest) for plan-change-scheduled (MUT-734), customer-setup and its reminders, customer-setup-cancelled (MUT-765/767), accountant-unclaimed-digest (MUT-767); SVG sources in `assets/mail/source/`.
+
+### Changed
+- `scripts/illustration-set.ts`: `size` is the width and the height keeps the viewBox's aspect ratio (default: the drawn width); the scene dialect also takes `opacity` (0..1), `stroke-dashoffset`, and translate/scale/matrix transforms (Claude Design's motion pivots and in-drawing flips). The 11 existing generated scenes are byte-identical.
+- `Scene` without `size` shows the art at its drawn size (160 for every existing scene, so no page changes).
+- `src/styles/theme.css`: under reduced motion `--ease-overshoot` is `linear` (durations were already 0). `--m-ease-overshoot` itself already existed (Brand v2 kit) at `cubic-bezier(.34,1.56,.64,1)`, next to `--m-ease-spring` `cubic-bezier(.32,.72,0,1)`.
+- `server/src/email/templates/look.ts`: the four mails above use their new headers (Arabic takes `-rtl` for plan-change-scheduled and customer-setup); chips and moods unchanged.
+- DESIGN.md › Scenes (the RTL rule, sizes, motion specs), COMPONENT_REGISTRY (`Scene`), PATTERNS (art with direction ships -rtl).
+
+### Technical
+- Tests: `scripts/__tests__/illustration-set.test.ts`, `scripts/validate_illustrations.test.mjs`, `src/hosted/components/__tests__/Scene.test.tsx`, `src/styles/__tests__/brand.test.ts`, `server/src/email/__tests__/look.test.ts`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Portal: an accepted analytics choice is kept, no repeat prompt (ADR-301)
 
 ### Changed

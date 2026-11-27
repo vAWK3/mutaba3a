@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="tab" d="M30 38V28a5 5 0 0 1 5-5h16l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(40.00 38.00) scale(1.0000) translate(-40.00 -38.00)"/>
+<path id="tab-claimed" d="M30 38V28a5 5 0 0 1 5-5h16l9 15z" fill="#E89960" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(40.00 38.00) scale(1.0000) translate(-40.00 -38.00)"/>
+<rect id="back" x="28" y="36" width="82" height="40" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="front" x="28" y="50" width="82" height="26" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="label" d="M42 68h25" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="tab" d="M42 70V60a5 5 0 0 1 5-5h16l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(52.00 70.00) scale(1.0000) translate(-52.00 -70.00)"/>
+<rect id="back" x="40" y="68" width="82" height="40" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="front" x="40" y="82" width="82" height="26" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="label" d="M54 100h25" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="tab" d="M54 102V92a5 5 0 0 1 5-5h16l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(64.00 102.00) scale(1.0000) translate(-64.00 -102.00)"/>
+<path id="tab-claimed" d="M54 102V92a5 5 0 0 1 5-5h16l9 15z" fill="#E89960" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(64.00 102.00) scale(1.0000) translate(-64.00 -102.00)"/>
+<rect id="back" x="52" y="100" width="82" height="40" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="front" x="52" y="114" width="82" height="26" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="label" d="M66 132h25" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="ground" d="M20 146h120" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="nuqta" cx="136" cy="30" r="6" fill="#E89960"/>
+</svg>

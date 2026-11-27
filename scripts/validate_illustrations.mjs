@@ -33,6 +33,25 @@ export const MOMENTS = [
   { name: 'link-closed', pair: false, tier: 'minimal' },
   { name: 'client-books-empty', pair: false, tier: 'minimal' },
   { name: 'share-ended', pair: false, tier: 'minimal' },
+  // 2026-11-27 (plans, handover, pilot brief): `rtl: true` means the art has a
+  // reading direction and Claude Design ships `<name>-rtl.svg` for Arabic.
+  { name: 'gift-month', pair: false, tier: 'grand' },
+  { name: 'gift-used', pair: false, tier: 'minimal', rtl: true },
+  { name: 'plan-upgraded', pair: false, tier: 'grand' },
+  { name: 'handover-welcome', pair: false, tier: 'minimal', rtl: true },
+  { name: 'handover-claimed', pair: false, tier: 'grand', rtl: true },
+  { name: 'claimed-spot', pair: false, tier: 'minimal', rtl: true },
+  { name: 'pilot-welcome-1', pair: false, tier: 'minimal', rtl: true },
+  { name: 'pilot-welcome-2', pair: false, tier: 'minimal', rtl: true },
+  { name: 'pilot-welcome-3', pair: false, tier: 'minimal', rtl: true },
+  { name: 'milestone-first-scan', pair: false, tier: 'grand', rtl: true },
+  { name: 'milestone-first-invoice', pair: false, tier: 'grand', rtl: true },
+  { name: 'activating', pair: false, tier: 'minimal', rtl: true },
+  { name: 'change-scheduled', pair: false, tier: 'minimal', rtl: true },
+  { name: 'pilot-ended', pair: false, tier: 'minimal' },
+  { name: 'link-expired', pair: false, tier: 'minimal' },
+  { name: 'code-locked', pair: false, tier: 'minimal' },
+  { name: 'ledger-empty', pair: false, tier: 'minimal' },
 ];
 
 // Mirrors the `color` block in this repo's src/styles/brand/mutaba3a.tokens.json.
@@ -52,7 +71,8 @@ export const APPROVED_PALETTE = new Set(
 );
 
 export function expectedFilenames(moment) {
-  return moment.pair ? [`${moment.name}-personal.svg`, `${moment.name}-firm.svg`] : [`${moment.name}.svg`];
+  const bases = moment.pair ? [`${moment.name}-personal`, `${moment.name}-firm`] : [moment.name];
+  return bases.flatMap((base) => (moment.rtl ? [`${base}.svg`, `${base}-rtl.svg`] : [`${base}.svg`]));
 }
 
 function extractHexColors(svgContent) {

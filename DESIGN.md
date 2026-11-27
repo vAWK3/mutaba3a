@@ -130,8 +130,11 @@ Spacing is `--space-*` (N × 4px, from the token file's one scale, MUT-165); rad
 
 ### Scenes
 
-- **Scene:** `Scene` (`src/hosted/components/Scene.tsx`, MUT-561) draws a brand illustration from Claude Design on a page: an empty state, a done pane. The art comes from `assets/illustrations/source/*.svg` through `npm run illustrations:generate`; its three colours become `--m-field-bg`, `--m-primary` and `--m-peach-strong`, so dark mode needs no second drawing, and any other colour fails the generator. It is `aria-hidden`: the copy beside it carries the meaning. It never mirrors in RTL.
+- **Scene:** `Scene` (`src/hosted/components/Scene.tsx`, MUT-561) draws a brand illustration from Claude Design on a page: an empty state, a done pane. The art comes from `assets/illustrations/source/*.svg` through `npm run illustrations:generate`; its three colours become `--m-field-bg`, `--m-primary` and `--m-peach-strong`, so dark mode needs no second drawing, and any other colour fails the generator. It is `aria-hidden`: the copy beside it carries the meaning.
+- **Direction (2026-11-27):** a scene with a reading direction ships a second drawing from Claude Design, `<name>-rtl.svg`. In an RTL document `Scene` shows it, and the plain art otherwise; a scene drawn without direction shows the same art in both. Never mirror a scene with CSS (`scaleX(-1)`). Pages pass the plain name only; `-rtl` is never a scene name.
+- **Size:** `size` is the width in px and the height keeps the art's aspect ratio. Scenes are drawn at 160×160 (square) or 120×96 (5:4: the inline spots, pilot steps, milestones); without `size` a scene shows at its drawn size.
 - A scene a plan names before it is drawn renders the `empty-state` art until its SVG lands. `motion="drop-in"` is the empty states' one-shot (the nuqta drops in, under a second); reduced motion shows the final frame.
+- **Scene motion** (gift month, plan upgraded, hand-over, pilot sheet, milestones, activating, claim code, usage meter, undo toast, autofill) is specified in `docs/design/motion/2026-11-27/` (one folder per moment: spec, key frames, still). Celebrations may use `--ease-overshoot`; everything else `--ease-spring`. Under reduced motion show the moment's still.
 
 ### Sharing page
 

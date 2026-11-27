@@ -140,3 +140,13 @@ export function useOptionalT(): ((key: string, vars?: TranslationVars) => string
 export function useDirection(): Direction {
   return useLanguage().direction;
 }
+
+/**
+ * The direction when a language provider is mounted, else the document's `dir` (which the provider keeps in step). For
+ * shared art that must never be the thing that throws (`Scene`, 2026-11-27), like `useOptionalT`.
+ */
+export function useOptionalDirection(): Direction {
+  const direction = useContext(LanguageContext)?.direction;
+  if (direction) return direction;
+  return typeof document !== 'undefined' && document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr';
+}
