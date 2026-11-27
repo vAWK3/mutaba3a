@@ -18,7 +18,7 @@ import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
 import { CrashCard } from './components/QueryView';
 import { reportBoundaryError } from './observability/errorReporting';
-import { legacyOwedSearch, omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseHome, parseOverview, parsePaymentsPage, parseReceiptReview, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
+import { legacyOwedSearch, omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDeskSearch, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseHome, parseOverview, parsePaymentsPage, parseReceiptReview, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { HomePage } from './pages/views/HomePage';
 import { ReportsPage } from './pages/views/ReportsPage';
@@ -454,6 +454,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/client-books',
+    validateSearch: parseDeskSearch,
     component: () => (
       <Desk>
         <ClientBooksPage />
