@@ -2505,6 +2505,9 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `SharingEntryRow` — `src/hosted/components/SharingEntryRow.tsx`: `profile`, `place: 'you' | 'manage'`; renders only where the page would open.
 - `AccessScopeList` — `src/hosted/components/AccessScopeList.tsx`: the four "sees / can download / can't change / doesn't see" points (`hosted.accessScope.*`). Reuse it for any accountant-facing promise (MUT-562).
 - `Scene` — `src/hosted/components/Scene.tsx`: `name` (`SceneName`: drawn or on order; `SCENE_NAMES` lists the drawn ones, never an `-rtl` drawing), `size` (width in px, height keeps the aspect ratio; default the drawn size, 160×160 or 120×96), `motion: 'drop-in' | 'none'`. In an RTL document (`useOptionalDirection`, else `<html dir>`) it shows `<name>-rtl` when that art exists (2026-11-27), never a CSS mirror; `sceneArtFor(name, direction)` is the pure choice. A scene not drawn yet shows `empty-state` (`data-placeholder`). Art from `npm run illustrations:generate` (`scripts/illustration-set.ts`, `scripts/generate-illustrations.ts` → `src/components/illustrations/generated/`, `SCENE_ART`); never hand-edit the generated folder.
+- `CodeReveal` — `src/hosted/components/CodeReveal.tsx` (MUT-770): `code` (six digits; spaces ignored), `labelledBy?` (the id of the heading that names it, e.g. "Code"). Shown once, Plex Mono at `--text-figure-fluid`, `dir="ltr"`, 3 and 3, `role="img"` named by the spaced digits, Copy → Copied (polite) for `COPIED_HOLD_MS`. `motion-claim-code` in `hosted.css`. Rules in `claimCode.ts`. Use it for any code a person reads out to another (the accountant desk's Add customer and New code panes).
+- `ActivatingMotion` — `src/hosted/components/ActivatingMotion.tsx` (MUT-770): `done`, `size?` (default 120). `motion-activating`: the loop while waiting, then the resolve onto the `activating` scene; under reduced motion the scene itself. Timing in `activatingHop.ts` (`hopEnd`).
+- `ActivatingStatus` — `src/hosted/components/ActivatingStatus.tsx` (MUT-770): `name`, `phase` (`ActivatingPhase`), `onClose?`. The motion with one line and a polite live region. Pair with `useActivatingPoll({ startedAt, paid, poll })` (`src/hosted/data/activatingPoll.ts`, 4 s for at most 2 min).
 - `LinksColumn` — `src/hosted/pages/sharing/LinksColumn.tsx`: `profile`, `query` (`useShareLinks`), `onCreate`. `HostedTable` with a sticky action; Turn off confirms in the row's detail row.
 - `NewShareLinkDrawer` — `src/hosted/pages/sharing/NewShareLinkDrawer.tsx`: `profile`, `listLimit`, `onClose`. Form pane, then the done pane (URL once, Copy link, Copy message). The URL and PIN never leave its state.
 - `sharingRules.ts` (slice B): `isolate`, `periodRange`, `monthsLabel`, `rangeLine`, `foldDigits`, `pinOf`, `linkRow`, `liveLinks`, `linkErrorOf`, `periodEvent`. `sharingQueries.ts`: `useShareLinks` (404 → `{ off: true }`), `useCreateShareLink`, `useRevokeShareLink`, `refetchAfterRefusal`; revokes share `useOptimisticItem` (per-item undo, one read after the last).
@@ -2623,3 +2626,18 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `usePilot()` (`src/hosted/data/pilotQueries.ts`): the pilot for shell-level features (Welcome, milestones); reads billing only when `mayBeOnPilot(me)`.
 - `PilotMilestones` (`src/hosted/shell/PilotMilestones.tsx`, ADR-332): the first-scan / first-invoice celebration card; `usePilotMilestones` is its queue (zustand, ephemeral).
 
+## MUT-768 — the accountant's desk (ADR-325)
+
+| Where | Exports | Used by |
+|---|---|---|
+| `src/hosted/pages/client-books/deskRules.ts` | `buildDeskRows`, `nextActionOf`, `matchesDeskFilter`, `filterCounts`, `matchesDeskRow`, `DeskState` | `ClientBooksPage` |
+| `src/hosted/pages/client-books/DeskBadge.tsx` | `DeskBadge({ state })`: the word on a colour, never colour alone | the desk table, the Customer drawer |
+| `src/hosted/pages/client-books/AddCustomerDrawer.tsx` | `AddCustomerDrawer({ onClose })` on `?newCustomer=true` | `ClientBooksPage` |
+| `src/hosted/pages/client-books/CustomerDrawer.tsx` | `CustomerDrawer({ row, pane, onClose, onPane })` on `?customer=` | `ClientBooksPage` |
+| `src/hosted/pages/client-books/TakeCardPane.tsx` | `TakeCardPane({ userId, onBack })`: plan, payment, customer type, country, address, then Stripe | `CustomerDrawer` |
+| `src/hosted/components/accountantErrors.ts` | `mapDeskError(error)` → `{ banner, refetchDesk? }` | the three desk panes |
+| `src/hosted/data/accountantCustomersQueries.ts` | `useAccountantCustomers`, `useCreateCustomer`, `useReissueLink`, `useChangeCustomerEmail`, `useCustomerCheckout` | the desk |
+| `src/hosted/data/activating.ts` | `markActivating`, `activatingIds`, `lapsedActivationIds`, `clearActivating` (sessionStorage) | `TakeCardPane`, `ClientBooksPage` |
+| `src/hosted/pages/client-books/DeskActivating.tsx` | `DeskActivating({ rows, marks, poll, onClose })`: MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer sent to Stripe | `ClientBooksPage` |
+| `src/hosted/data/claimedSeen.ts` | `hasSeenClaimed`, `markClaimedSeen` (localStorage): the `claimed-spot` Scene once per client | `CustomerDrawer` |
+| `CodeReveal` (MUT-770) | `<CodeReveal code labelledBy />`, used by the two drawers | `AddCustomerDrawer`, `CustomerDrawer` |

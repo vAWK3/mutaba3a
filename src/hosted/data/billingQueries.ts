@@ -52,7 +52,8 @@ async function checked(redirect: Promise<BillingRedirect>): Promise<BillingRedir
   return answer;
 }
 
-function leaveFor(redirect: BillingRedirect): void {
+/** Checks the URL is Stripe's, then leaves for it. Exported for the desk's Take card (MUT-768). */
+export function leaveFor(redirect: BillingRedirect): void {
   assertStripeUrl(redirect.url);
   stripeNavigation.assign(redirect.url);
 }

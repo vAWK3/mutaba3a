@@ -1144,6 +1144,19 @@ export const api = {
   // MUT-562 (MUT-575, ADR-249): the accountant's client books, with this month's stats; DELETE removes an ended one.
   clientBooks: (signal?: AbortSignal) => request<Schemas['AccountantClientList']>('GET', '/v1/clients', { signal }),
   removeClientBook: (profileId: string) => request<void>('DELETE', `/v1/clients/${encodeURIComponent(profileId)}`),
+  // MUT-768 (accountant channel): the accounts an approved accountant created for customers. No profile header: the
+  // routes act on the person. 404 while the feature is off, 403 ACCOUNTANT_NOT_APPROVED until the operator approves.
+  accountantCustomers: (signal?: AbortSignal) => request<Schemas['ProvisionedCustomers']>('GET', '/v1/accountant/customers', { query: { limit: 400 }, signal }),
+  createAccountantCustomer: (body: Schemas['ProvisionCustomerRequest'], idempotencyKey: string) =>
+    request<Schemas['ProvisionedCustomer'] | Schemas['ProvisionExistingAddress']>('POST', '/v1/accountant/customers', { body, idempotencyKey }),
+  /** Resend the link and make a new code: one action on the server. A replay of the same key returns no code. */
+  reissueCustomerLink: (userId: string, idempotencyKey: string) =>
+    request<Schemas['ProvisionedLink']>('POST', `/v1/accountant/customers/${encodeURIComponent(userId)}/link`, { idempotencyKey }),
+  changeCustomerEmail: (userId: string, email: string, idempotencyKey: string) =>
+    request<Schemas['ProvisionedLink']>('PUT', `/v1/accountant/customers/${encodeURIComponent(userId)}/email`, { body: { email }, idempotencyKey }),
+  /** Stripe Checkout for the customer's plan, paid by the accountant in the room. Returns where to send the browser. */
+  customerCheckout: (userId: string, body: Schemas['ActivationCheckoutRequest']) =>
+    request<BillingRedirect>('POST', `/v1/accountant/customers/${encodeURIComponent(userId)}/checkout-session`, { body }),
   // MUT-562 (MUT-575): one profile's money-date feed, through the profile header (a client's, read-only).
   profileEntries: (profileId: string, query: Query<'/v1/profile-entries'> = {}, signal?: AbortSignal) =>
     request<EntryPage>('GET', '/v1/profile-entries', { profileId, query, signal }),
