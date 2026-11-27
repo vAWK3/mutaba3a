@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { attachScreenshot } from '../../support/brand';
+import { attachScreenshot, expectNoHorizontalOverflow } from '../../support/brand';
 import { OFFICE_A, OFFICE_B, customer, malafatFirm, office, openSignedInPortal } from '../../support/portal';
 import { FakeApi, currencyBlock, currentVerdict, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
 import { openYou } from '../../support/you';
@@ -769,3 +769,51 @@ test('the keyboard meets Reports, Home and the four tabs, then the island, each 
     await expect(page.locator('.hp-island')).toHaveAttribute('aria-current', 'page');
   });
 });
+
+test('the clients list shows each client’s balance per currency, stacked and never summed (MUT-774)', { tag: '@portal.shell.client-balances' }, async ({ page, step }) => {
+  const C3 = customer(2).id;
+  const seed = () =>
+    new FakeApi({
+      profiles: [office(OFFICE_A, 'Nour Studio')],
+      clients: 4,
+      receivables: [
+        receivable(1, { customerId: C1, gross: '1200.00' }),
+        receivable(2, { customerId: C2, gross: '300.00' }),
+        receivable(3, { customerId: C2, gross: '40.00', currency: 'USD' }),
+        receivable(4, { customerId: C3, gross: '500.00' }),
+      ],
+      payments: [payment(1, { customerId: C1, amount: '1800.00' }), payment(2, { customerId: C2, amount: '50.00' }), payment(3, { customerId: C3, amount: '500.00' })],
+    });
+  const row = (name: string) => page.getByRole('row', { name: new RegExp(name) });
+
+  await step('Open Clients with one client in credit, one owing in ILS and USD, one settled and one with no movement', async () => {
+    const api = seed();
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    await expect(page.getByRole('columnheader', { name: 'Balance' })).toBeVisible();
+    await expect(row('Client 1').getByTestId('client-balance-ILS')).toHaveText(/^Client in credit · .*600\.00$/);
+    await expect(row('Client 2').getByTestId('client-balance-ILS')).toContainText('250.00');
+    await expect(row('Client 2').getByTestId('client-balance-USD')).toContainText('40.00');
+    await expect(row('Client 3').getByText('Settled')).toBeVisible();
+    await expect(row('Client 4').getByRole('cell', { name: '—' }).first()).toBeVisible();
+    expect(api.calls('GET', /^\/v1\/customer-balances$/)).toHaveLength(1);
+  });
+
+  await step('Open Clients in Arabic', async () => {
+    const api = seed();
+    await api.open(page, `/p/${OFFICE_A}/clients`, 'ar');
+    await expect(page.getByRole('columnheader', { name: 'الرصيد' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expectNoHorizontalOverflow(page, 'Clients with balances in Arabic');
+  });
+});
+
+test('a client with no movements opens to the ledger-empty scene (MUT-774)', { tag: '@portal.shell.ledger-empty' }, async ({ page, step }) => {
+  await step('Open a client that has no movements yet', async () => {
+    const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1 });
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    const empty = page.getByTestId('ledger-empty');
+    await expect(empty).toContainText('No movements yet');
+    await expect(empty.locator('[data-scene="ledger-empty"]')).toBeVisible();
+  });
+});
+
