@@ -560,16 +560,18 @@ const passkeyAdded: Copy<'passkey-added'> = {
  * `account-closing`: the day in the headline, a details panel, one action, and how to cancel before it renews.
  */
 const offerRenewingSoon: Copy<'offer-renewing-soon'> = {
-  en: ({ renewsOn, listAmount, currency, manageLink }) => {
+  en: ({ renewsOn, listAmount, currency, manageLink, plan }) => {
     const day = mailDay(renewsOn, 'en');
     const list = formatMinor(listAmount, currency);
+    // MUT-703: the subscription's own plan; the legacy Freelancer plan when none is named.
+    const planName = plan && plan !== 'freelancer' ? PLAN_NAMES_EN[plan] : 'Freelancer';
     return {
       subject: `Your MTB3A first year ends on ${day}`,
       preheader: `Your plan renews at ${list} a year.`,
       headline: `Your first year ends on ${day}`,
       intro: [['Your launch-offer year ends soon. Your plan then renews at the regular yearly price.']],
       details: [
-        { label: 'Plan', value: 'Freelancer, yearly' },
+        { label: 'Plan', value: `${planName}, yearly` },
         { label: 'Renews on', value: day },
         { label: 'New price', value: `${list} a year, plus VAT where it applies` },
       ],
@@ -577,17 +579,18 @@ const offerRenewingSoon: Copy<'offer-renewing-soon'> = {
       outro: [[`Don't want to renew? Cancel any time before ${day} from Manage billing. You keep the year you paid for.`]],
     };
   },
-  ar: ({ renewsOn, listAmount, currency, manageLink }) => {
+  ar: ({ renewsOn, listAmount, currency, manageLink, plan }) => {
     const day = mailDay(renewsOn, 'ar');
     // Isolated so the amount reads left to right inside Arabic (ADR-101).
     const list = `\u2068${formatMinor(listAmount, currency)}\u2069`;
+    const planName = plan && plan !== 'freelancer' ? `«${PLAN_NAMES_AR[plan]}»` : 'المستقل';
     return {
       subject: `تنتهي سنتك الأولى في متابعة يوم ${day}`,
       preheader: `يتجدد اشتراكك بسعر ${list} سنويًا.`,
       headline: `تنتهي سنتك الأولى يوم ${day}`,
       intro: [['تنتهي قريبًا سنة عرض الإطلاق، ثم يتجدد اشتراكك بالسعر السنوي المعتاد.']],
       details: [
-        { label: 'الخطة', value: 'المستقل، سنويًا' },
+        { label: 'الخطة', value: `${planName}، سنويًا` },
         { label: 'يتجدد في', value: day },
         { label: 'السعر الجديد', value: `${list} سنويًا، وتُضاف ضريبة القيمة المضافة حيث تنطبق` },
       ],
@@ -686,18 +689,22 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
 /** Communications Law s.30A: an advertisement's subject opens with this word (Hebrew, whatever the mail's language). */
 export const ADVERTISEMENT_LABEL = 'פרסומת';
 const comebackOffer: Copy<'comeback-offer'> = {
-  en: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink }) => {
+  en: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink, plan }) => {
     const money = (amount: number) => formatMinor(amount, currency);
-    const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
+    const [first, month] = [money(firstMonth), money(listMonth)] as const;
+    // MUT-703: the plans' come-back names the plan; a first year only where the offer has one (§13 Q4: monthly only).
+    const named = plan && plan !== 'freelancer' ? PLAN_NAMES_EN[plan] : null;
+    const yearLine = firstYear !== null && listYear !== null ? ` Prefer a year? Your first year is ${money(firstYear)}, then ${money(listYear)}.` : '';
     return {
       subject: `${ADVERTISEMENT_LABEL}: ${stage === 'day-30' ? 'Your MTB3A records are still here' : `Come back to MTB3A for ${first} your first month`}`,
       preheader: `Your first month back is ${first}, then ${month} a month.`,
       headline: 'Your records are still here',
       intro: [
         ['Everything you kept in MTB3A is still in your account, and you can read and download it any time.'],
-        [`Come back for ${first} for your first month, then ${month} a month. Prefer a year? Your first year is ${year}, then ${yearly}.`],
+        [`Come back${named ? ` to ${named}` : ''} for ${first} for your first month, then ${month} a month.${yearLine}`],
       ],
       details: [
+        ...(named ? [{ label: 'Plan', value: named }] : []),
         { label: 'First month back', value: first },
         { label: 'Then', value: `${month} a month, plus VAT where it applies` },
       ],
@@ -708,19 +715,22 @@ const comebackOffer: Copy<'comeback-offer'> = {
       sender: 'Sent by Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel. Contact: info@mtb3a.com.',
     };
   },
-  ar: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink }) => {
+  ar: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink, plan }) => {
     // Isolated so each amount reads left to right inside Arabic (ADR-101).
     const money = (amount: number) => `\u2068${formatMinor(amount, currency)}\u2069`;
-    const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
+    const [first, month] = [money(firstMonth), money(listMonth)] as const;
+    const named = plan && plan !== 'freelancer' ? PLAN_NAMES_AR[plan] : null;
+    const yearLine = firstYear !== null && listYear !== null ? ` تفضّل الاشتراك السنوي؟ سنتك الأولى بـ ${money(firstYear)}، ثم ${money(listYear)}.` : '';
     return {
       subject: `${ADVERTISEMENT_LABEL}: ${stage === 'day-30' ? 'سجلاتك في متابعة ما زالت هنا' : `عُد إلى متابعة بـ ${first} لشهرك الأول`}`,
       preheader: `شهرك الأول عند العودة بـ ${first}، ثم ${month} شهريًا.`,
       headline: 'سجلاتك ما زالت هنا',
       intro: [
         ['كل ما حفظته في متابعة ما زال في حسابك، ويمكنك قراءته وتنزيله في أي وقت.'],
-        [`عُد بـ ${first} لشهرك الأول، ثم ${month} شهريًا. تفضّل الاشتراك السنوي؟ سنتك الأولى بـ ${year}، ثم ${yearly}.`],
+        [`عُد${named ? ` إلى «${named}»` : ''} بـ ${first} لشهرك الأول، ثم ${month} شهريًا.${yearLine}`],
       ],
       details: [
+        ...(named ? [{ label: 'الخطة', value: `«${named}»` }] : []),
         { label: 'الشهر الأول عند العودة', value: first },
         { label: 'بعد ذلك', value: `${month} شهريًا، وتُضاف ضريبة القيمة المضافة حيث تنطبق` },
       ],

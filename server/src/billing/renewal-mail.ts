@@ -3,7 +3,7 @@ import { normalizeEmail } from '../auth/users.js';
 import type { Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import type { LedgerStore, UserLocale } from '../repositories/ports.js';
-import { ALL_GA_LOOKUP_KEYS } from './checkout.js';
+import { listPriceOf } from './retention.js';
 import { OFFERS, type OfferEntry } from './offer.js';
 import { jerusalemDayOf } from './offer-read.js';
 
@@ -123,7 +123,8 @@ function skipReason(facts: RenewalFacts): RenewalMailSkip | null {
   if (facts.status !== 'active') return 'not-active';
   if (facts.cancelAtPeriodEnd) return 'cancelling';
   if (!facts.firstPaidPeriod) return 'not-first-year';
-  if (facts.lookupKey === null || !ALL_GA_LOOKUP_KEYS.includes(facts.lookupKey)) return 'not-list-price';
+  // MUT-703: any plan's list price (Solo, Business, Firm or the legacy Freelancer); never a founder price.
+  if (listPriceOf(facts.lookupKey) === null) return 'not-list-price';
   return null;
 }
 
@@ -135,7 +136,7 @@ function send(options: RenewalMailRunOptions, row: RenewalMailRow, facts: Renewa
     locale: row.locale,
     template: 'offer-renewing-soon',
     idempotencyKey: `renewal:${row.stripeSubscriptionId}:${day}`,
-    vars: { renewsOn, listAmount: facts.unitAmount, currency: facts.currency, manageLink: options.manageLink },
+    vars: { renewsOn, listAmount: facts.unitAmount, currency: facts.currency, manageLink: options.manageLink, plan: listPriceOf(facts.lookupKey)?.plan ?? 'freelancer' },
   });
 }
 

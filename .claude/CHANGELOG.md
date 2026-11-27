@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-703 server half: offers on Solo, Business and Firm (API 1.210.0-mut703, ADR-340)
+
+Plan `.claude/designs/mut-703-offers-plan.md` (Basel approved all 12 §13 defaults). No migration, no new env. The portal's lines are the billing lane's (§11 hooks).
+
+### Added
+- `offers.json`: three entries on `["solo","business","firm"]`: `launch-plans-2026` (yearly), `stay-plans-2026` (monthly), `comeback-plans-2026` (percent, monthly only). Entries name their `plans`; lookup by kind, plan and interval (`entryFor`, `stayEntryFor`, `comebackEntryFor`).
+- `billing:plans` makes the three coupons (`COUPON_SPEC`: launch 50% once until 2027-02-22 00:59 Jerusalem, stay 50% × 2 months, come-back 67% once), all restricted to the plans' products; a live coupon of another shape stops the run with "give the spec a new id"; name/metadata drift updated; `RETIRED_COUPON_IDS` deleted. A test ties offers.json to the spec.
+- GET `/v1/billing`: `plans[].launch` (`{ id, firstYear }`) and `plans[].comeback`; `comeback.plan` and `.percentOff`; `yearlySwitch.plan`. POST `/v1/billing/plan-change/preview` upgrade: `offerEnds`. `SCHEDULED` refusal on stay, pause and the yearly switch.
+- A yearly plan Checkout carries the launch coupon (never on the Solo trial or an accountant's activation); a monthly one the come-back; `expectedOffer`/OFFER_ENDED as on the legacy path; audit `offer`.
+
+### Changed
+- Launch eligibility: never had a subscription that took money (an incomplete one, or a trial cancelled at or before its end, doesn't count). Stripe's subscription list now carries `trialEnd`/`endedAt`.
+- Stay, pause and the yearly switch work on any plan's monthly list price, from its own plan's catalog; the legacy stay coupon stays for ₪29 payers.
+- Come-back: Firm lapses count; "already had" reads every come-back id; with PLAN_CHECKOUT on the mail offers the lapsed plan (Solo for a ₪29 lapser) at 67%, monthly only, and names it.
+- Renewal notice: any plan's list price is due; the mail names the plan. `renewsAtListPrice` on any plan's list price.
+- Plan change: an upgrade drops running discounts in the same update (and its preview prices without them); a downgrade's schedule carries the discounts into both phases (spike S2: before, scheduling dropped a running stay offer).
+- Trial mails' offer line reads the plans' launch while PLAN_CHECKOUT is on.
+
+### Technical
+- Spikes S1 (no over-credit after a spent launch coupon), S1b (a plans-wide coupon follows an upgrade unless dropped) and S2 (phases drop discounts unless carried by `di_…`) run in the Stripe sandbox; results in the plan's "Build decisions". `docs/operations/before-release.md` stage 1: Write on Coupons on the live key, then the script. TD-372.
+- Files: `server/src/billing/{offer,offer-read,offers.json,retention,comeback,comeback-read,comeback-mail,renewal-mail,yearly-switch-line,monthly-summary-mail,checkout}.ts`, `billing/stripe/{plan-gateway,checkout-gateway}.ts`, `routes/{billing,billing-plan,billing-plan-change,comeback-mail,trial-mail,monthly-summary-mail}.ts`, `scripts/stripe-plans.ts`, `email/{ports,templates/copy}.ts`, `schemas.ts`, `openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`.
+
 ## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
 
 Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.

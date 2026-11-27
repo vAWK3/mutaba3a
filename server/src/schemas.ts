@@ -483,7 +483,7 @@ export const BillingOfferSchema = z
     /** The last moment a new Checkout gets it: an hour before the coupon's redeem_by (eng review R1). */
     endsAt: z.string().datetime(),
     interval: z.enum(['month', 'year']),
-    /** This person gets it: they never had a subscription, in any status (D2). */
+    /** This person gets it: they never had a subscription that took money (D2; MUT-703: an unpaid trial or Checkout doesn't count). */
     eligible: z.boolean(),
     /** The first period's price after the discount; null where that currency isn't sold. */
     firstYear: z.object({ ILS: z.number().int().nonnegative().nullable(), USD: z.number().int().nonnegative().nullable() }),
@@ -493,6 +493,8 @@ export const BillingOfferSchema = z
 /** MUT-531 (D3): the "switch to yearly and save" line; the saving is the catalog's twelve months less its year. */
 export const BillingYearlySwitchSchema = z
   .object({
+    /** MUT-703: the subscription's own plan, whose saving this is. Additive since 1.210.0-mut703. */
+    plan: z.enum(['freelancer', 'solo', 'business', 'firm']).optional(),
     /** The subscription's own currency. */
     currency: z.enum(['ILS', 'USD']),
     /** Minor units; null when the year saves nothing (the switch is still open, with no line to show). */
@@ -601,10 +603,23 @@ export const BillingComebackSchema = z
     id: z.string(),
     firstMonth: PerCurrencyAmountSchema,
     listMonth: PerCurrencyAmountSchema,
+    /** MUT-703: both null when the offer is monthly only (the plans' come-back, §13 Q4). */
     firstYear: PerCurrencyAmountSchema,
     listYear: PerCurrencyAmountSchema,
+    /** MUT-703: the plans' coupon's percent off; null for the legacy amount off. Additive since 1.210.0-mut703. */
+    percentOff: z.number().positive().max(100).nullable().optional(),
+    /** MUT-703: the plan these amounts are for: the one the mail named (the lapsed plan; Solo for a legacy Freelancer lapse), or `freelancer` for the legacy offer. Additive since 1.210.0-mut703. */
+    plan: z.enum(['freelancer', 'solo', 'business', 'firm']).optional(),
   })
   .openapi('BillingComeback');
+
+/** MUT-703: a plan's launch offer: its first year after the coupon per currency (Stripe's half-up rounding, ADR-004). */
+export const BillingPlanLaunchSchema = z.object({ id: z.string(), firstYear: PerCurrencyAmountSchema }).openapi('BillingPlanLaunch');
+
+/** MUT-703: a plan's come-back while it is open to this person; the yearly pair null while it is monthly only. */
+export const BillingPlanComebackSchema = z
+  .object({ id: z.string(), firstMonth: PerCurrencyAmountSchema, listMonth: PerCurrencyAmountSchema, firstYear: PerCurrencyAmountSchema.nullable(), listYear: PerCurrencyAmountSchema.nullable() })
+  .openapi('BillingPlanComeback');
 
 /** MUT-565 (ADR-251): GET /v1/billing `accountantPlan`. */
 const BillingAccountantPlanSchema = z
@@ -671,6 +686,13 @@ export const BillingPlanSchema = z
       documentsPerMonth: z.number().int(),
       scansPerMonth: z.number().int(),
     }),
+    /**
+     * MUT-703: the launch offer on this plan's yearly price while its coupon runs (whether this person gets it is
+     * `offer.eligible`); null otherwise. Additive since 1.210.0-mut703.
+     */
+    launch: BillingPlanLaunchSchema.nullable().optional(),
+    /** MUT-703: the come-back on this plan while it is open to this person; null otherwise. Additive since 1.210.0-mut703. */
+    comeback: BillingPlanComebackSchema.nullable().optional(),
   })
   .openapi('BillingPlan');
 

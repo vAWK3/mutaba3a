@@ -24,6 +24,8 @@ const PORTAL = 'https://portal.example.test';
 const PEPPER = 'session-pepper-with-at-least-32-chars!!';
 const OFFER: ComebackOffer = {
   id: 'comeback-2026',
+  plan: 'freelancer',
+  percentOff: null,
   couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' },
   firstMonth: { ILS: 900, USD: 300 },
   listMonth: { ILS: 2900, USD: 900 },
@@ -38,7 +40,7 @@ function harness() {
   const mailer = createMailer({ transport: outbox, store, logger, now: () => NOW, fromAddress: 'no-reply@mail.example.test', replyTo: null, limits: { daily: 500, securityReserve: 50, perRecipient: 3 } });
   const paid = new Map<string, number>();
 
-  async function lapsed(opts: { locale?: UserLocale; endedDaysAgo?: number; tier?: 'FREELANCER' | 'FIRM' | 'ACCOUNTANT'; currency?: 'ILS' | 'USD'; paidInvoices?: number } = {}) {
+  async function lapsed(opts: { locale?: UserLocale; endedDaysAgo?: number; tier?: 'FREELANCER' | 'SOLO' | 'BUSINESS' | 'FIRM' | 'ACCOUNTANT'; currency?: 'ILS' | 'USD'; paidInvoices?: number } = {}) {
     const { user } = await store.users.create({
       email: `back${++seq}@studio.example`,
       displayName: 'Rana Saleh',
@@ -123,10 +125,10 @@ describe('runComebackMail (MUT-534)', () => {
     expect(mail!.text).toContain('Unsubscribe.');
   });
 
-  it('skips with a reason: never paid, Firm, a stay offer this year, covered by a grant, between the windows, suppressed', async () => {
+  it('skips with a reason: never paid, a stay offer this year, covered by a grant, between the windows, suppressed', async () => {
     const h = harness();
     await h.lapsed({ paidInvoices: 0 });
-    await h.lapsed({ tier: 'FIRM' });
+
     const stay = await h.lapsed();
     await h.store.billing.claimRetentionEvent({ userId: stay.user.id, stripeSubscriptionId: stay.subscriptionId, kind: 'STAY_OFFER', reason: 'too_expensive', months: 2, startsAt: ago(100), endsAt: null, at: ago(100) });
     const granted = await h.lapsed();
@@ -135,9 +137,52 @@ describe('runComebackMail (MUT-534)', () => {
     const quiet = await h.lapsed();
     await h.store.email.suppress({ email: quiet.user.email, reason: 'HARD_BOUNCE', eventId: 'msg_b1', at: NOW });
     const { summary } = await h.run();
-    expect(summary).toMatchObject({ sent: 0, skipped: { neverPaid: 1, firm: 1, stayOfferRecent: 1, covered: 1, noStage: 1, suppressed: 1 } });
+    expect(summary).toMatchObject({ sent: 0, skipped: { neverPaid: 1, firm: 0, stayOfferRecent: 1, covered: 1, noStage: 1, suppressed: 1 } });
     expect(h.outbox.list({})).toHaveLength(0);
     expect(await h.store.billing.retentionEventsOf(quiet.user.id)).toEqual([]);
+  });
+
+  describe('MUT-703 (§13 Q5): with the plans on sale, the plan the person lapsed from at the plans’ percent', () => {
+    const planOffer = (plan: 'solo' | 'business' | 'firm', first: number, list: number): ComebackOffer => ({
+      id: 'comeback-plans-2026',
+      plan,
+      percentOff: 67,
+      couponIds: { ILS: 'mtb3a_comeback_first_month_plans_67', USD: 'mtb3a_comeback_first_month_plans_67' },
+      firstMonth: { ILS: first, USD: null },
+      listMonth: { ILS: list, USD: null },
+      firstYear: { ILS: null, USD: null },
+      listYear: { ILS: null, USD: null },
+    });
+    const PLAN_OFFERS = { solo: planOffer('solo', 1287, 3900), business: planOffer('business', 2937, 8900), firm: planOffer('firm', 8217, 24900) };
+
+    it('a lapsed Firm payer is mailed Firm’s first month (no yearly line); a legacy Freelancer lapser is offered Solo', async () => {
+      const h = harness();
+      const asked: Array<string | null> = [];
+      const firm = await h.lapsed({ tier: 'FIRM' });
+      const legacy = await h.lapsed({ tier: 'FREELANCER', locale: 'ar' });
+      const stripe = { offer: async (plan: 'solo' | 'business' | 'firm' | null) => (asked.push(plan), plan ? PLAN_OFFERS[plan] : OFFER), paidInvoices: async () => 1 };
+      const { summary } = await h.run({ planSales: true, stripe });
+      expect(summary).toMatchObject({ sent: 2, skipped: { firm: 0 } });
+      // One read per plan a run needs.
+      expect(asked.sort()).toEqual(['firm', 'solo']);
+      const [firmMail] = h.outbox.list({ to: firm.user.email });
+      expect(firmMail!.text).toContain('Plan: Firm');
+      expect(firmMail!.text).toContain('Come back to Firm for ₪82.17 for your first month, then ₪249 a month.');
+      expect(firmMail!.text).not.toContain('Prefer a year?');
+      const [legacyMail] = h.outbox.list({ to: legacy.user.email });
+      expect(legacyMail!.text).toContain('«مستقل»');
+      expect(legacyMail!.text).toContain('⁨₪12.87⁩');
+      expect(legacyMail!.text).not.toContain('تفضّل الاشتراك السنوي');
+    });
+
+    it('with the plans off, the legacy offer as before (Firm included now)', async () => {
+      const h = harness();
+      const asked: Array<string | null> = [];
+      const firm = await h.lapsed({ tier: 'FIRM' });
+      await h.run({ stripe: { offer: async (plan) => (asked.push(plan), OFFER), paidInvoices: async () => 1 } });
+      expect(asked).toEqual([null]);
+      expect(h.outbox.list({ to: firm.user.email })[0]!.text).toContain('Prefer a year? Your first year is ₪270, then ₪290.');
+    });
   });
 
   it('MUT-565: an Accountant plan that ended is no come-back for the Freelancer plan: nobody is looked at or mailed', async () => {

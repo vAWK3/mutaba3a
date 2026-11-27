@@ -90,6 +90,12 @@ export interface ScheduleDowngradeInput {
   periodEnd: Date;
   plan: string;
   taxRates: string[];
+  /**
+   * MUT-703 (§3.7, spike S2): the subscription's running discounts (`di_…`). Stripe's phases replace the subscription's
+   * discounts, so without these a running stay offer is dropped the moment the downgrade is scheduled; carried into both
+   * phases, it keeps running to its own end.
+   */
+  discountIds?: string[];
 }
 
 export interface RetaxInput {
@@ -134,6 +140,8 @@ export interface LivePlan {
   price: LivePrice | null;
   /** MUT-532 (R3): the coupons on it, so a stay offer that timed out can be checked. */
   couponIds: string[];
+  /** MUT-703: its discounts' own ids (`di_…`), so a scheduled downgrade carries them (spike S2). */
+  discountIds: string[];
   /** MUT-532: the pause Stripe holds, as the mirror reads it. Null with none set. */
   pause: { from: Date | null; resumesAt: Date | null } | null;
   automaticTax: boolean;
@@ -153,6 +161,11 @@ export interface SwitchInput {
   prorationDate: Date;
   /** MUT-750 (ADR-290): the item's tax rates, sent explicitly with the new price so an Israeli plan keeps its VAT. */
   taxRates?: string[];
+  /**
+   * MUT-703 (§3.7, §13 Q7): an upgrade removes the running discounts in the same call (and its preview prices without
+   * them): a coupon on all three plans' products would otherwise follow the person onto the higher plan (spike S1b).
+   */
+  dropDiscounts?: boolean;
 }
 
 export type SwitchResult =
@@ -229,6 +242,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
         billingCycleAnchor: typeof sub.billing_cycle_anchor === 'number' ? new Date(sub.billing_cycle_anchor * 1000) : null,
         price: priceOf(item.price),
         couponIds: (sub.discounts ?? []).flatMap((discount) => couponIdOf(discount)),
+        discountIds: (sub.discounts ?? []).map((discount) => (typeof discount === 'string' ? discount : discount.id)),
         pause: pauseFactOf(sub),
         automaticTax: sub.automatic_tax?.enabled === true,
         taxRateIds: (item.tax_rates ?? []).map((rate) => (typeof rate === 'string' ? rate : rate.id)),
@@ -253,6 +267,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
             proration_behavior: 'always_invoice',
             proration_date: seconds(input.prorationDate),
           },
+          ...(input.dropDiscounts ? { discounts: '' as const } : {}),
         }),
       );
       const ends = preview.lines.data.map((line) => line.period?.end).filter((end): end is number => typeof end === 'number');
@@ -287,6 +302,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
             proration_date: seconds(input.prorationDate),
             payment_behavior: 'pending_if_incomplete',
             metadata: { mutaba3a_plan: input.plan },
+            ...(input.dropDiscounts ? { discounts: '' as const } : {}),
           },
           { idempotencyKey: `mut734-up-${input.subscriptionId}-${input.yearlyPriceId}-${seconds(input.prorationDate)}` },
         ),
@@ -300,14 +316,15 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
       const created = await wrapped(() => stripe.subscriptionSchedules.create({ from_subscription: input.subscriptionId }, { idempotencyKey: `${key}-create` }));
       const first = created.phases[0];
       const taxes = input.taxRates.length > 0 ? { tax_rates: input.taxRates } : {};
+      const discounts = input.discountIds && input.discountIds.length > 0 ? { discounts: input.discountIds.map((discount) => ({ discount })) } : {};
       await wrapped(() =>
         stripe.subscriptionSchedules.update(
           created.id,
           {
             end_behavior: 'release',
             phases: [
-              { items: [{ price: input.currentPriceId, quantity: 1, ...taxes }], ...(first ? { start_date: first.start_date } : {}), end_date: seconds(input.periodEnd), proration_behavior: 'none' },
-              { items: [{ price: input.targetPriceId, quantity: 1, ...taxes }], duration: { interval: input.interval, interval_count: 1 }, proration_behavior: 'none', metadata: { mutaba3a_plan: input.plan } },
+              { items: [{ price: input.currentPriceId, quantity: 1, ...taxes }], ...(first ? { start_date: first.start_date } : {}), end_date: seconds(input.periodEnd), proration_behavior: 'none', ...discounts },
+              { items: [{ price: input.targetPriceId, quantity: 1, ...taxes }], duration: { interval: input.interval, interval_count: 1 }, proration_behavior: 'none', metadata: { mutaba3a_plan: input.plan }, ...discounts },
             ],
           },
           { idempotencyKey: `${key}-phases` },
