@@ -28,6 +28,13 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Portal: an accepted analytics choice is kept, no repeat prompt (ADR-301)
+
+### Changed
+- `src/hosted/analytics/portalAnalytics.ts`: a stored "on" survives sign-out and other accounts; "Not now" at the first-run prompt isn't stored; a deliberate "off" still clears on sign-out. Tests in `portalAnalytics.test.ts`, `UsageConsent.test.tsx`; `docs/analytics/README.md` rule 6.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Docs: the free 2-month pilot in the offer and the runbook (MUT-760, epic MUT-751)
 
 ### Added

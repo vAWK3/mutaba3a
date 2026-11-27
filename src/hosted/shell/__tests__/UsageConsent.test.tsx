@@ -74,14 +74,13 @@ describe('Usage prompt (MUT-155)', () => {
     expect(JSON.parse(localStorage.getItem(USAGE_RECORD_KEY)!)).toEqual({ owner: USER_ID, choice: 'on' });
   });
 
-  it('"Not now" keeps everything off and is not asked again', async () => {
+  it('"Not now" keeps everything off for now and asks again next time', async () => {
     const { user, unmount } = renderPortal(`/p/${ORG_A}`);
     await user.click(within((await screen.findByRole('region', { name: 'Share anonymous usage?' }))).getByRole('button', { name: 'Not now' }));
     expect(region()).toBeNull();
     unmount();
     renderPortal(`/p/${ORG_A}`);
-    await screen.findByRole('link', { name: /^You/ });
-    expect(region()).toBeNull();
+    expect(await screen.findByRole('region', { name: 'Share anonymous usage?' })).toBeInTheDocument();
     expect(sdk.init).not.toHaveBeenCalled();
   });
 
@@ -129,16 +128,17 @@ describe('You › App toggle (MUT-155, MUT-425)', () => {
 });
 
 describe('Sign-out (MUT-155, README rule 6)', () => {
-  it('forgets the choice and the ID, sending nothing', async () => {
+  it('keeps an accepted choice and its ID, sending nothing', async () => {
     localStorage.setItem(USAGE_RECORD_KEY, JSON.stringify({ owner: USER_ID, choice: 'on' }));
     localStorage.setItem('ph_phc_test_posthog', '{"distinct_id":"x"}');
     const { user } = renderPortal(`/p/${ORG_A}`);
     await waitFor(() => expect(captured()).toEqual(['portal_opened']));
     await openYou(user, 'account');
     await user.click(await screen.findByRole('button', { name: /^Sign out/ }));
-    await waitFor(() => expect(localStorage.getItem(USAGE_RECORD_KEY)).toBeNull());
-    expect(localStorage.getItem('ph_phc_test_posthog')).toBeNull();
+    await screen.findByRole('button', { name: /^Sign in/ });
+    expect(JSON.parse(localStorage.getItem(USAGE_RECORD_KEY)!)).toEqual({ owner: USER_ID, choice: 'on' });
+    expect(localStorage.getItem('ph_phc_test_posthog')).not.toBeNull();
     expect(captured()).toEqual(['portal_opened']);
-    expect(sdk.reset).toHaveBeenCalledWith(true);
+    expect(sdk.reset).not.toHaveBeenCalled();
   });
 });

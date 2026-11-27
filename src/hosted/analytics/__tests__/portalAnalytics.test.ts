@@ -143,7 +143,9 @@ describe('turning it off', () => {
     await syncPortalUsage(ME);
     await choosePortalUsage('off', 'first_run');
     expect(calls).toEqual([]);
-    expect(record()).toEqual({ owner: ME, choice: 'off' });
+    // Declining the first-run question is not kept: it is asked again next time
+    expect(record()).toBeNull();
+    expect(usePortalUsage.getState().choice).toBe('off');
   });
 
   it('turning it on again in the same page starts a fresh ID with no $opt_in event', async () => {
@@ -212,21 +214,40 @@ describe('another tab (review F1)', () => {
 });
 
 describe('sign-out and another account (rule 6)', () => {
-  it('sign-out resets without sending anything and forgets the choice', async () => {
+  it('sign-out sends nothing and keeps an accepted choice and its ID for the next sign-in', async () => {
     await syncPortalUsage(ME);
     await choosePortalUsage('on', 'first_run');
     localStorage.setItem('ph_phc_x_posthog', '{}');
     calls.length = 0;
     endPortalUsage();
-    expect(calls).toEqual(['opt_out', 'reset']);
-    expect(sdk.capture).not.toHaveBeenCalledWith('analytics_opted_out', expect.anything());
-    expect(localStorage.getItem(USAGE_RECORD_KEY)).toBeNull();
-    expect(Object.keys(localStorage).filter((k) => /ph_/.test(k))).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(record()).toEqual({ owner: ME, choice: 'on' });
+    expect(Object.keys(localStorage).filter((k) => /ph_/.test(k))).toEqual(['ph_phc_x_posthog']);
     expect(usePortalUsage.getState().choice).toBeNull();
   });
 
-  it('another account signing in on this browser is asked afresh, and the old ID is gone', async () => {
+  it('sign-out forgets a deliberate "off" and the ID', async () => {
+    await syncPortalUsage(ME);
+    await choosePortalUsage('on', 'first_run');
+    await choosePortalUsage('off', 'settings');
+    localStorage.setItem('ph_phc_x_posthog', '{}');
+    calls.length = 0;
+    endPortalUsage();
+    expect(calls).toEqual(['opt_out', 'reset']);
+    expect(record()).toBeNull();
+    expect(Object.keys(localStorage).filter((k) => /ph_/.test(k))).toEqual([]);
+  });
+
+  it('another account signing in on this browser is not asked again: the accepted choice is the browser\'s', async () => {
     localStorage.setItem(USAGE_RECORD_KEY, JSON.stringify({ owner: ME, choice: 'on' }));
+    await syncPortalUsage(OTHER);
+    expect(usePortalUsage.getState()).toMatchObject({ choice: 'on', owner: OTHER });
+    expect(record()).toEqual({ owner: ME, choice: 'on' });
+    expect(sdk.capture).toHaveBeenCalledWith('portal_opened');
+  });
+
+  it('another account is asked afresh after a previous "off", and the old ID is gone', async () => {
+    localStorage.setItem(USAGE_RECORD_KEY, JSON.stringify({ owner: ME, choice: 'off' }));
     localStorage.setItem('ph_phc_x_posthog', '{"distinct_id":"old"}');
     await syncPortalUsage(OTHER);
     expect(usePortalUsage.getState()).toMatchObject({ choice: null, owner: OTHER });
