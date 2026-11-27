@@ -1954,3 +1954,37 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-trial-compare td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .hp-trial-actions { display: grid; gap: var(--space-2); }
 .hp-trial-once { font-weight: var(--weight-medium); }
+
+/* MUT-705 / MUT-733 / MUT-754 (wireframe mut-733 A): a paid plan's meter rows, one bordered group like settings rows.
+   Motion (docs/design/motion/2026-11-27/usage-meter): the fill grows from inline-start in 600 ms (spring); the butter
+   tone follows 250 ms later in 350 ms, and only changes when a meter crosses 90% (the tone is keyed on that). */
+.hp-meter-rows { display: grid; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.hp-meter-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1-5) var(--space-2); padding: var(--space-3); font-size: var(--text-label); }
+.hp-meter-row + .hp-meter-row { border-block-start: 1px solid var(--divider, var(--border)); }
+.hp-meter-name { flex: 1 1 auto; }
+.hp-meter-status { color: var(--muted); }
+.hp-meter-row[data-level="at_cap"][data-tone="butter"] .hp-meter-status { color: var(--warning); }
+.hp-meter-row[data-grace] .hp-meter-status { color: var(--success, var(--text-secondary)); }
+.hp-meter-count { font-variant-numeric: tabular-nums; transition: color 350ms var(--ease-spring) 250ms; }
+.hp-meter-row[data-tone="butter"] .hp-meter-count { color: var(--warning); font-weight: var(--weight-semibold); }
+.hp-meter-bar { flex-basis: 100%; block-size: 4px; border-radius: var(--radius-pill); background: var(--border); overflow: hidden; transition: background-color 350ms var(--ease-spring) 250ms; }
+.hp-meter-bar > span { display: block; block-size: 100%; border-radius: inherit; background: var(--accent); transition: inline-size 600ms var(--ease-spring), background-color 350ms var(--ease-spring) 250ms; }
+.hp-meter-row[data-tone="butter"] .hp-meter-bar { background: var(--warning-subtle); }
+.hp-meter-row[data-tone="butter"] .hp-meter-bar > span { background: var(--warning); }
+.hp-meter-upgrade { flex-basis: 100%; margin-block: calc(var(--space-2) * -1); }
+@media (prefers-reduced-motion: reduce) {
+  .hp-meter-count, .hp-meter-bar, .hp-meter-bar > span { transition: none; }
+}
+
+/* MUT-705 / MUT-734 (wireframe mut-734 "keep" A): which businesses stay active, checkboxes and an "N of N" counter. */
+.hp-keep { display: grid; gap: var(--space-2); }
+.hp-keep-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); }
+.hp-keep-title { font-weight: var(--weight-semibold); }
+.hp-keep-count { font-variant-numeric: tabular-nums; color: var(--muted); }
+.hp-keep-count[data-full] { color: var(--success); }
+.hp-keep-list { display: grid; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.hp-keep-row { display: flex; align-items: center; gap: var(--space-3); min-block-size: 44px; padding: var(--space-2) var(--space-3); cursor: pointer; }
+.hp-keep-row + .hp-keep-row { border-block-start: 1px solid var(--divider); }
+.hp-keep-row:has(input:disabled) { cursor: default; }
+.hp-keep-name { display: grid; min-inline-size: 0; }
+.hp-keep-off { font-size: var(--text-label); color: var(--muted); }

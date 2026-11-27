@@ -345,6 +345,8 @@ export interface ProfileDrawerSearch {
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
    */
   step?: 'subscribe' | 'welcome' | 'switch' | 'cancel';
+  /** MUT-705: the plan an Upgrade to <plan> asked for: the Subscribe step opens on it. */
+  billingPlan?: 'solo' | 'business' | 'firm';
   /** MUT-362: how the person came back from Stripe Checkout (its success_url / cancel_url). */
   checkout?: 'success' | 'cancelled';
   /**
@@ -353,7 +355,7 @@ export interface ProfileDrawerSearch {
    */
   portal?: 'returned' | 'card';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'step', 'checkout', 'portal'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'step', 'billingPlan', 'checkout', 'portal'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -372,6 +374,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     connectedApps: flag(raw.connectedApps),
     twoFactor: flag(raw.twoFactor),
     step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' ? raw.step : undefined,
+    billingPlan: raw.billingPlan === 'solo' || raw.billingPlan === 'business' || raw.billingPlan === 'firm' ? raw.billingPlan : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
     portal: raw.portal === 'returned' || raw.portal === 'card' ? raw.portal : undefined,
   });

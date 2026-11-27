@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ApiError, type BillingOverview } from '../../api/client';
-import { documentRefusedNow, hideNudge, homeNoticeOf, limitFromUsage, nudgeHidden, nudgeHideKey, planLimitOf, starterUsageOf, upgradeOffered, type StarterUsage } from '../planUsage';
+import { documentRefusedNow, hideNudge, homeNoticeOf, limitFromUsage, nextPlanOf, nudgeHidden, nudgeHideKey, planLimitOf, planUsageOf, recommendedPlanOf, sellablePlanOf, starterUsageOf, upgradeOffered, type StarterUsage } from '../planUsage';
 
 /** MUT-731 (ADR-284): what the portal shows for Starter's limits, from GET /v1/billing `usage` and 409 PLAN_LIMIT. */
 
@@ -94,5 +94,63 @@ describe('homeNoticeOf (wireframe 7, 13554 #5)', () => {
     hideNudge(nudgeHideKey('2026-12-01', 'scans'));
     expect(nudgeHidden(nudgeHideKey('2027-01-01', 'scans'))).toBe(false);
     expect(nudgeHidden(nudgeHideKey('2026-12-01', 'documents'))).toBe(false);
+  });
+});
+
+describe('the plan ladder (MUT-705)', () => {
+  it('names the next plan up, and none at the top or off the ladder', () => {
+    expect(nextPlanOf('starter')).toBe('solo');
+    expect(nextPlanOf('solo')).toBe('business');
+    expect(nextPlanOf('business')).toBe('firm');
+    expect(nextPlanOf('firm')).toBeNull();
+    expect(nextPlanOf('freelancer')).toBeNull();
+    expect(nextPlanOf(null)).toBeNull();
+  });
+
+  it('reads only the three sellable plans from a URL or a refusal', () => {
+    expect(sellablePlanOf('business')).toBe('business');
+    expect(sellablePlanOf('starter')).toBeNull();
+    expect(sellablePlanOf(7)).toBeNull();
+  });
+
+  it('opens on the smallest plan that covers the businesses owned, the largest when none does', () => {
+    const plans = [{ plan: 'firm', limits: { businesses: 6 } }, { plan: 'solo', limits: { businesses: 1 } }, { plan: 'business', limits: { businesses: 3 } }];
+    expect(recommendedPlanOf(plans, 0)?.plan).toBe('solo');
+    expect(recommendedPlanOf(plans, 1)?.plan).toBe('solo');
+    expect(recommendedPlanOf(plans, 2)?.plan).toBe('business');
+    expect(recommendedPlanOf(plans, 4)?.plan).toBe('firm');
+    expect(recommendedPlanOf(plans, 9)?.plan).toBe('firm');
+    expect(recommendedPlanOf([], 1)).toBeNull();
+  });
+});
+
+describe('planUsageOf (MUT-705)', () => {
+  const paid = (graceUntil: string | null = null, gift = true) =>
+    ({
+      usage: {
+        month: '2026-11',
+        resetsOn: '2026-12-01',
+        plan: 'solo',
+        meters: [
+          { meter: 'documents', used: 46, limit: 50, level: 'nudge', graceUntil },
+          { meter: 'scans', used: 12, limit: 100, level: 'ok' },
+        ],
+        businesses: { used: 1, limit: 1 },
+        partners: { limit: 0 },
+        gift: { available: gift },
+      },
+    }) as unknown as Pick<BillingOverview, 'usage'>;
+
+  it('reads a paid plan’s meters, the gift and its end', () => {
+    const usage = planUsageOf(paid('2026-11-30T22:00:00.000Z'));
+    expect(usage?.plan).toBe('solo');
+    expect(usage?.giftAvailable).toBe(true);
+    expect(usage?.documents).toEqual({ meter: 'documents', used: 46, limit: 50, level: 'nudge', left: 4, graceUntil: '2026-11-30T22:00:00.000Z' });
+    expect(usage?.scans.graceUntil).toBeNull();
+  });
+
+  it('is null on a plan with no limits', () => {
+    expect(planUsageOf(usageOf([2, 'ok'], [7, 'ok'], 'freelancer'))).toBeNull();
+    expect(planUsageOf(usageOf([2, 'ok'], [7, 'ok'], 'malafat'))).toBeNull();
   });
 });

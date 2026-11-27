@@ -35,6 +35,8 @@ export function useAccountDrawers() {
     openYourData: () => go({ yourData: true }, false),
     /** MUT-362: Settings › Billing; the Subscribe step is its own history entry, so Back returns to the status view (DR2). */
     openBilling: (step?: 'subscribe' | 'welcome' | 'switch' | 'cancel', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
+    /** MUT-705: Upgrade to <plan>: the Subscribe step, opened on that plan. */
+    openUpgrade: (plan: 'solo' | 'business' | 'firm') => go({ billing: true, step: 'subscribe', billingPlan: plan }, false),
     /** The step's own Back replaces its entry: browser Back afterwards never reopens the step (review). */
     leaveBillingStep: () => go({ billing: true }, true),
     /** MUT-333: Close my account. */
@@ -70,7 +72,7 @@ export function AccountDrawers() {
   // MUT-710: an account's.
   if (drawers.state.twoFactor && !local) return <TwoFactorDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
-    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
+    return <BillingDrawer step={drawers.state.step} wantedPlan={drawers.state.billingPlan} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }
   return null;
 }

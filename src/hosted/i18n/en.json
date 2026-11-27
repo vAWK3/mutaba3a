@@ -1296,7 +1296,7 @@
         },
         "trialEnded": "Your free trial has ended",
         "locked": "Your free trial has ended",
-        "active": "Freelancer, renews {date}",
+        "active": "{plan}, renews {date}",
         "ending": "Your plan ends on {date}",
         "grace": "We couldn't take your last payment",
         "unpaid": "Your last payment didn't go through",
@@ -1525,7 +1525,14 @@
         },
         "documentsUsedUp": "No documents left this month",
         "scansUsedUp": "No scans left this month",
-        "hide": "Hide"
+        "hide": "Hide",
+        "meter": {
+          "documents": "Documents this month",
+          "scans": "Scans this month"
+        },
+        "ofCap": "{used} of {cap}",
+        "limitReached": "Limit reached",
+        "graceUntil": "No limit until {date}"
       },
       "starter": {
         "activeBusiness": "Active business",
@@ -1563,7 +1570,8 @@
           "other": "{count} scans"
         },
         "aMonth": "a month",
-        "aYear": "a year"
+        "aYear": "a year",
+        "staffSoon": "Staff: coming soon"
       },
       "address": {
         "title": "Billing address",
@@ -1572,6 +1580,11 @@
         "city": "City",
         "postalCode": "Postal code",
         "noMatch": "No match"
+      },
+      "keep": {
+        "title": "Active businesses",
+        "count": "{chosen} of {cap}",
+        "choose": "Choose which businesses stay active"
       }
     },
     "selfService": {
@@ -3563,7 +3576,8 @@
         "solo": "Solo",
         "business": "Business",
         "firm": "Firm",
-        "starter": "Starter"
+        "starter": "Starter",
+        "freelancer": "Freelancer"
       },
       "starter": {
         "includes": "1 business and your personal profile",
@@ -3587,7 +3601,10 @@
       },
       "businesses": {
         "title": "Starter includes one business"
-      }
+      },
+      "upgradeTo": "Upgrade to {plan}",
+      "includes": "{plan} includes {items}",
+      "reached": "Limit reached: {usage}"
     },
     "onboarding": {
       "trial": {

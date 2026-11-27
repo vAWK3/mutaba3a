@@ -169,7 +169,7 @@
         "interval": { "type": "enum", "values": ["month", "year"], "description": "The plan chosen: monthly or yearly." },
         "currency": { "type": "currency", "description": "The Checkout's currency code, from the billing country. Never the amount." },
         "offer": { "type": "enum", "values": ["launch_2026"], "description": "The offer the drawer showed and sent with this Checkout. Absent when none applied." },
-        "plan": { "type": "enum", "values": ["freelancer", "accountant"], "description": "MUT-565: which plan the Checkout is for. Absent means freelancer (builds before 2.8.0)." }
+        "plan": { "type": "enum", "values": ["freelancer", "accountant", "solo", "business", "firm"], "description": "MUT-565 / MUT-705: which plan the Checkout is for. Absent means freelancer (builds before 2.8.0)." }
       }
     },
     "accountant_plan_offer_shown": {
@@ -258,9 +258,10 @@
     },
     "plan_cap_reached": {
       "emitters": ["portal"],
-      "description": "MUT-731: a Starter limit was reached: the portal showed its notice (from a 409 PLAN_LIMIT, or from the month's usage before the person typed). Once per page view per limit.",
+      "description": "MUT-731 / MUT-733: a plan's limit was reached: the portal showed its notice (from a 409 PLAN_LIMIT, or from the month's usage before the person typed). Once per page view per limit.",
       "properties": {
-        "limit": { "type": "enum", "values": ["documents", "scans", "businesses", "partners", "tax_authority"], "description": "Which limit: the monthly documents or scans, the businesses count, partners, or the Tax Authority connection." }
+        "limit": { "type": "enum", "values": ["documents", "scans", "businesses", "partners", "tax_authority"], "description": "Which limit: the monthly documents or scans, the businesses count, partners, or the Tax Authority connection." },
+        "plan": { "type": "enum", "values": ["starter", "solo", "business", "firm"], "description": "MUT-733: the plan whose limit was reached." }
       }
     },
     "plan_upgrade_offered": {
@@ -272,10 +273,10 @@
     },
     "plan_upgrade_chosen": {
       "emitters": ["portal"],
-      "description": "MUT-731: Upgrade to Solo was pressed (it opens Billing's Subscribe step until MUT-705's plan picker). Never an amount.",
+      "description": "MUT-731 / MUT-705: Upgrade to <plan> was pressed (Billing's Subscribe step on that plan; Billing's Change plan for a subscriber). Never an amount.",
       "properties": {
-        "from": { "type": "enum", "values": ["starter"], "description": "The plan the person was on." },
-        "to": { "type": "enum", "values": ["solo"], "description": "The plan offered." }
+        "from": { "type": "enum", "values": ["starter", "solo", "business", "firm", "freelancer"], "description": "The plan the person was on." },
+        "to": { "type": "enum", "values": ["solo", "business", "firm"], "description": "The plan offered." }
       }
     },
     "starter_continue_chosen": {

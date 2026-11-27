@@ -1352,7 +1352,7 @@
         },
         "trialEnded": "انتهت تجربتك المجانية",
         "locked": "انتهت تجربتك المجانية",
-        "active": "المستقل، يتجدد في {date}",
+        "active": "{plan}، يتجدد في {date}",
         "ending": "ينتهي اشتراكك في {date}",
         "grace": "لم نتمكن من تحصيل دفعتك الأخيرة",
         "unpaid": "لم تنجح دفعتك الأخيرة",
@@ -1601,7 +1601,14 @@
         },
         "documentsUsedUp": "لم يبقَ مستندات هذا الشهر",
         "scansUsedUp": "لم يبقَ مسوح هذا الشهر",
-        "hide": "إخفاء"
+        "hide": "إخفاء",
+        "meter": {
+          "documents": "المستندات هذا الشهر",
+          "scans": "المسوح هذا الشهر"
+        },
+        "ofCap": "{used} من {cap}",
+        "limitReached": "بلغت الحد",
+        "graceUntil": "بلا حد حتى {date}"
       },
       "starter": {
         "activeBusiness": "الملف التجاري الفعّال",
@@ -1651,7 +1658,8 @@
           "other": "{count} مسح"
         },
         "aMonth": "شهريًا",
-        "aYear": "سنويًا"
+        "aYear": "سنويًا",
+        "staffSoon": "الموظفون: قريبًا"
       },
       "address": {
         "title": "عنوان الفوترة",
@@ -1660,6 +1668,11 @@
         "city": "المدينة",
         "postalCode": "الرمز البريدي",
         "noMatch": "لا يوجد تطابق"
+      },
+      "keep": {
+        "title": "الأنشطة الفعّالة",
+        "count": "{chosen} من {cap}",
+        "choose": "اختر الأنشطة التي تبقى فعّالة"
       }
     },
     "selfService": {
@@ -3818,7 +3831,8 @@
         "solo": "مستقل",
         "business": "تجاري",
         "firm": "مؤسسة",
-        "starter": "البداية"
+        "starter": "البداية",
+        "freelancer": "الخطة السابقة"
       },
       "starter": {
         "includes": "ملف تجاري واحد وملفك الشخصي",
@@ -3842,7 +3856,10 @@
       },
       "businesses": {
         "title": "تشمل خطة البداية ملفًا تجاريًا واحدًا"
-      }
+      },
+      "upgradeTo": "الترقية إلى {plan}",
+      "includes": "تشمل خطة {plan} {items}",
+      "reached": "بلغت الحد: {usage}"
     },
     "onboarding": {
       "trial": {
