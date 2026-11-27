@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-770: CodeReveal, the Activating poll and motion, live regions, ar/en strings (accountant channel, portal)
+
+Plan `docs/designs/accountant-channel.md` (DR-5, DR-8, DR-11; DT5, DT6). Shared parts the desk (MUT-768) and `/setup` (MUT-769) use.
+
+### Added
+- `CodeReveal` (`src/hosted/components/CodeReveal.tsx`, props `{ code, labelledBy? }`): the claim code shown once, Plex Mono at `--text-figure-fluid` on the field ground, `dir="ltr"`, grouped 3 and 3, `role="img"` named by the spaced digits; Copy → Copied for 2 s in a polite status. Rules in `claimCode.ts` (`codeGroups`, `spokenCode`, `bareCode`, `COPIED_HOLD_MS`).
+- `motion-claim-code` in CSS from its spec (digits settle 10 px / 320 ms spring / 60 ms stagger, leftmost first; label cross-fade 150 ms linear; check 0.6 → 1 in 240 ms spring); reduced motion: the still with a 150 ms fade.
+- `useActivatingPoll` / `activatingPhase` (`src/hosted/data/activatingPoll.ts`): poll every 4 s for at most 2 min; `activating` → `active` (paid) or `late` ("Check back shortly").
+- `ActivatingMotion` (`src/hosted/components/ActivatingMotion.tsx`, timing in `activatingHop.ts`): `motion-activating` from its spec and key frames (1.5 s loop of three 500 ms hops; on done it finishes the current hop, then a 600 ms resolve onto the `activating` scene's pose); the `-rtl` key frames in Arabic (an in-SVG flip, as delivered); reduced motion shows the `activating` scene (the still).
+- `ActivatingStatus`: the motion, the customer's name and one line, announced in a polite live region; Close once it settles.
+- `hosted.accountantChannel.*` strings (ar + en): code, activating, the desk states and chips.
+
+### Technical
+- Tests: `src/hosted/components/__tests__/CodeReveal.test.tsx`, `Activating.test.tsx` (spec values pinned against `hosted.css`); `src/styles/__tests__/direction.test.ts` lists the two new `dir` sites.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
 
 Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.
