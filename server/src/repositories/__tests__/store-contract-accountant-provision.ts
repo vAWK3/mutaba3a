@@ -134,6 +134,18 @@ export function describeLedgerStoreAccountantProvisionContract(name: string, mak
       expect(await store.provision.approvalOf('00000000-0000-4000-8000-000000000000')).toBeNull();
     });
 
+    it('writes the approval’s audit rows with the change, and none for an unknown person', async () => {
+      const store = await makeStore();
+      const { user, personalOrganization } = await store.users.create(userInput('audited'));
+      const row = (action: string): AuditEventInput => ({ organizationId: personalOrganization.id, actorType: 'USER', actorId: null, action, entityType: 'user', entityId: user.id, metadata: { createLimitPerDay: 5 }, requestId: null });
+      await store.provision.setApproval({ userId: user.id, enabled: true, createLimitPerDay: 5, lookupLimitPerDay: null, at: at(3), audit: [row('accountant.provisioning_approved')] });
+      expect((await store.audit.listByOrganization(personalOrganization.id, 20)).map((e) => e.action)).toContain('accountant.provisioning_approved');
+
+      const unknown = '00000000-0000-4000-8000-000000000000';
+      expect(await store.provision.setApproval({ userId: unknown, enabled: true, createLimitPerDay: null, lookupLimitPerDay: null, at: at(4), audit: [row('accountant.provisioning_approved')] })).toBeNull();
+      expect((await store.audit.listByOrganization(personalOrganization.id, 20)).filter((e) => e.action === 'accountant.provisioning_approved')).toHaveLength(1);
+    });
+
     // MUT-764: the per-day counts behind the accountant's two limits, and the operator's list of unclaimed accounts.
     describe('counts and the unclaimed list (MUT-764)', () => {
       const lookupAudit = (organizationId: string, actorId: string): AuditEventInput => ({

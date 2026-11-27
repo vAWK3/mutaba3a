@@ -1027,11 +1027,12 @@ export class MemoryLedgerStore implements LedgerStore {
       this.pushEvents(input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id, organizationId: owned.organization.id, grant: { ...grant } }), input.at);
       return { kind: 'created', user, personalOrganization, organization: owned.organization, grant: { ...grant } };
     },
-    setApproval: async ({ userId, enabled, createLimitPerDay, lookupLimitPerDay, at }) => {
+    setApproval: async ({ userId, enabled, createLimitPerDay, lookupLimitPerDay, at, audit }) => {
       const person = this.people.get(userId);
       if (!person) return null;
       this.provisionApprovals.set(userId, { enabled, createLimitPerDay, lookupLimitPerDay });
       person.updatedAt = at;
+      for (const event of audit ?? []) await this.audit.append(event);
       return { enabled, createLimitPerDay, lookupLimitPerDay };
     },
     approvalOf: async (userId) => {

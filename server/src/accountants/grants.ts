@@ -57,7 +57,10 @@ export type GrantAuditAction =
   | 'accountant.customer_activated'
   | 'accountant.customer_claimed'
   | 'accountant.customer_email_changed'
-  | 'accountant.customer_lookup_existing';
+  | 'accountant.customer_lookup_existing'
+  // The operator's approval of an accountant to create customers, and its withdrawal (MUT-764).
+  | 'accountant.provisioning_approved'
+  | 'accountant.provisioning_withdrawn';
 
 /** An audit row about a grant, on the shared profile. Never the address or a name in its metadata. */
 export function grantAudit(grant: Pick<AccountantGrantRecord, 'id' | 'organizationId'>, action: GrantAuditAction, actorId: string | null, requestId: string | null): AuditEventInput {

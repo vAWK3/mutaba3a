@@ -3390,7 +3390,7 @@ export interface ProvisionRepository {
    */
   create(input: ProvisionCustomerInput): Promise<ProvisionCustomerResult>;
   /** The operator's approval and limits, stamped together. Null for an unknown person. */
-  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date }): Promise<ProvisionApproval | null>;
+  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date; audit?: AuditEventInput[] }): Promise<ProvisionApproval | null>;
   approvalOf(userId: string): Promise<ProvisionApproval | null>;
   /** Who created this account, and when; null when the account was not provisioned. `accountantUserId` is null once theirs is deleted. */
   originOf(userId: string): Promise<{ accountantUserId: string | null; provisionedAt: Date } | null>;

@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { randomUUID } from 'node:crypto';
 import { grantAudit } from '../accountants/grants.js';
+import { personalOrganizationIdOf } from '../accountants/provision.js';
 import { generateSetupToken, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
 import { claimCodeDigest, generateClaimCode } from '../auth/claim-code.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
@@ -182,13 +183,4 @@ export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions
   );
 
   return app;
-}
-
-/** The person's own (built-in) profile: where an audit row about the person themselves belongs. */
-async function personalOrganizationIdOf(store: LedgerStore, userId: string): Promise<string> {
-  for (const membership of await store.memberships.listByUser(userId)) {
-    const organization = await store.organizations.getById(membership.organizationId);
-    if (organization?.personalOwnerUserId === userId) return organization.id;
-  }
-  throw new ApiError('INTERNAL', 'The account has no personal profile');
 }

@@ -901,13 +901,17 @@ export class PrismaLedgerStore implements LedgerStore {
         throw err;
       }
     },
-    setApproval: async ({ userId, enabled, createLimitPerDay, lookupLimitPerDay, at }) => {
-      const { count } = await this.prisma.user.updateMany({
-        where: { id: userId },
-        data: { accountantProvisioningEnabledAt: enabled ? at : null, provisionCreateLimitPerDay: createLimitPerDay, provisionLookupLimitPerDay: lookupLimitPerDay, updatedAt: at },
-      });
-      return count === 0 ? null : { enabled, createLimitPerDay, lookupLimitPerDay };
-    },
+    setApproval: ({ userId, enabled, createLimitPerDay, lookupLimitPerDay, at, audit }) =>
+      // One write: the approval and its audit rows commit together, or neither does.
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({
+          where: { id: userId },
+          data: { accountantProvisioningEnabledAt: enabled ? at : null, provisionCreateLimitPerDay: createLimitPerDay, provisionLookupLimitPerDay: lookupLimitPerDay, updatedAt: at },
+        });
+        if (count === 0) return null;
+        if (audit && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { enabled, createLimitPerDay, lookupLimitPerDay };
+      }),
     approvalOf: async (userId) => {
       const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { accountantProvisioningEnabledAt: true, provisionCreateLimitPerDay: true, provisionLookupLimitPerDay: true } });
       return row ? { enabled: row.accountantProvisioningEnabledAt !== null, createLimitPerDay: row.provisionCreateLimitPerDay, lookupLimitPerDay: row.provisionLookupLimitPerDay } : null;

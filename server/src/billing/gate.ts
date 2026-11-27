@@ -107,6 +107,11 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   // MUT-593: the per-firm Malafat switch.
   'POST /v1/operator/organizations/:organizationId/malafat-delegation': 'open',
   // MUT-735 (ADR-281): Operator › Usage, the same rule.
+  // MUT-764: approving an accountant to create customers, the same rule.
+  'GET /v1/operator/accounts/:userId/accountant-provisioning': 'open',
+  'PUT /v1/operator/accounts/:userId/accountant-provisioning': 'open',
+  'DELETE /v1/operator/accounts/:userId/accountant-provisioning': 'open',
+  'GET /v1/operator/provisioned-accounts': 'open',
   'GET /v1/operator/usage/overview': 'open',
   'GET /v1/operator/usage/people': 'open',
   'GET /v1/operator/accounts/:userId/usage': 'open',

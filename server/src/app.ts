@@ -1,5 +1,6 @@
 import { usagePruneRoutes } from './routes/usage-prune.js';
 import { OPERATOR_USAGE_ROUTES, operatorUsageRoutes } from './routes/operator-usage.js';
+import { OPERATOR_PROVISIONING_ROUTES, operatorProvisioningRoutes } from './routes/operator-provisioning.js';
 import { routeKeyOf } from './usage/route-key.js';
 import type { RouteMeter } from './usage/route-meter.js';
 import { randomBytes } from 'node:crypto';
@@ -351,7 +352,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...OPERATOR_PROVISIONING_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -787,6 +788,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
   // MUT-735 (ADR-281): Operator › Usage, on the same unguarded store behind the same gate.
   app.route('/', operatorUsageRoutes(deps.store));
+  app.route('/', operatorProvisioningRoutes(deps.store));
   // MUT-735 (ADR-281 §12): the daily usage retention job (/jobs/*, the job token), on the unguarded store.
   app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));

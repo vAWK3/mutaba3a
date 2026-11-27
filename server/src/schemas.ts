@@ -1773,6 +1773,47 @@ export const ProvisionedCustomerSchema = z
 
 export const ProvisionExistingAddressSchema = z.object({ status: z.literal('exists') }).openapi('ProvisionExistingAddress');
 
+const ProvisionLimit = z.number().int().min(1).max(1000);
+
+/** MUT-764: the operator approves an accountant to create customers. A full replace: a limit that is null or left out is the default. */
+export const OperatorProvisioningRequestSchema = z
+  .object({ createLimitPerDay: ProvisionLimit.nullable().optional(), lookupLimitPerDay: ProvisionLimit.nullable().optional() })
+  .strict()
+  .openapi('OperatorProvisioningRequest');
+
+export const OperatorProvisioningApprovalSchema = z
+  .object({
+    userId: z.string().uuid(),
+    enabled: z.boolean(),
+    /** Null = the default below. */
+    createLimitPerDay: ProvisionLimit.nullable(),
+    lookupLimitPerDay: ProvisionLimit.nullable(),
+    defaults: z.object({ createLimitPerDay: z.number().int(), lookupLimitPerDay: z.number().int() }),
+    /** This UTC day. */
+    createdToday: z.number().int(),
+    lookupsToday: z.number().int(),
+  })
+  .openapi('OperatorProvisioningApproval');
+
+export const OperatorProvisionedAccountsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }).openapi('OperatorProvisionedAccountsQuery');
+
+export const OperatorProvisionedAccountsSchema = z
+  .object({
+    items: z.array(
+      z.object({
+        userId: z.string().uuid(),
+        email: z.string(),
+        displayName: z.string(),
+        provisionedAt: z.string().datetime(),
+        /** Null once the accountant's own account is deleted. */
+        accountant: z.object({ userId: z.string().uuid(), email: z.string() }).nullable(),
+        /** An active subscription already: paid but not yet claimed. */
+        paid: z.boolean(),
+      }),
+    ),
+  })
+  .openapi('OperatorProvisionedAccounts');
+
 export const AccountantGrantParamSchema = ProfileIdParamSchema.extend({ grantId: z.string().uuid().openapi({ param: { name: 'grantId', in: 'path' } }) });
 
 /** D3: the invite token travels in the body, never a path; the portal reads it from the link's fragment. */

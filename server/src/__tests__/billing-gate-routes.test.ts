@@ -22,6 +22,7 @@ import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/entries.js';
 import { SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/summaries.js';
 import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/operator.js';
 import { OPERATOR_USAGE_ROUTES } from '../routes/operator-usage.js';
+import { OPERATOR_PROVISIONING_ROUTES } from '../routes/operator-provisioning.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing-plan.js';
 import { BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing-starter.js';
@@ -354,6 +355,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES,
       ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES,
       ...OPERATOR_USAGE_ROUTES,
+      ...OPERATOR_PROVISIONING_ROUTES,
       ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES,
       ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES,
       ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES,
