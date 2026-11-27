@@ -223,7 +223,9 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       return page.data.flatMap((sub) => {
         const currentPeriodEnd = periodEndOf(sub);
         const tier = sub.items.data.some((item) => item.price) ? tierOfItems(sub.items.data, products) : null;
-        return currentPeriodEnd ? [{ tier, status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
+        const at = (seconds: number | null | undefined) => (typeof seconds === 'number' ? new Date(seconds * 1000) : null);
+        // MUT-703 (§13 Q6): the trial's end and the subscription's, so a trial cancelled unpaid doesn't use the launch up.
+        return currentPeriodEnd ? [{ tier, status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null, trialEnd: at(sub.trial_end), endedAt: at(sub.ended_at) }] : [];
       });
     },
     async expireOpenCheckouts(customer, plan = 'freelancer') {
