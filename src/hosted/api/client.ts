@@ -753,6 +753,9 @@ export const api = {
   /** MUT-333: Keep my account, within the grace. Idempotent. */
   keepAccount: () => request<Schemas['KeepAccountResponse']>('DELETE', '/v1/me/closure'),
   /** MUT-235/236: the setup-link token travels in the body only, never in a URL. */
+  /** MUT-769 (MUT-765 B9): the claim code of an accountant's link, before the password; 403 CLAIM_CODE_WRONG (`details.triesLeft`) or CLAIM_CODE_LOCKED. */
+  checkClaimCode: (body: Schemas['SetupLinkClaimCodeRequest'], signal?: AbortSignal) =>
+    request<Schemas['SetupLinkClaimCodeResponse']>('POST', '/v1/account-setup/claim-code', { body, signal }),
   checkSetupLink: (token: string, signal?: AbortSignal) =>
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
   redeemSetupLink: (body: Schemas['SetupLinkRedeemRequest'], signal?: AbortSignal) =>

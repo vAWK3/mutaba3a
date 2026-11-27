@@ -144,7 +144,9 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       }
       // MUT-368 (D2): a dead link names what it was for, to its holder only; an unknown token names nothing.
       const purpose = state === 'valid' || state === 'invalid' ? null : found.link?.purpose ?? null;
-      return c.json({ state: refusalOf(state), ...(purpose ? { purpose } : {}) }, 200);
+      // MUT-769 (ADR-320): a dead accountant's link says so, so the page sends the customer back to him, not to recovery.
+      const provisioned = purpose !== null && found.kind === 'person' && found.link ? (await claimOfLink(store, found.link)) !== null : false;
+      return c.json({ state: refusalOf(state), ...(purpose ? { purpose } : {}), ...(provisioned ? { provisioned: true as const } : {}) }, 200);
     },
   );
 
