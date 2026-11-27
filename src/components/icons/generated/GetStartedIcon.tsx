@@ -6,8 +6,6 @@ export function GetStartedIcon({ size = 16, className }: IconProps) {
     width={size}
     height={size}
     viewBox={"0 0 24 24"}
-    width={"24"}
-    height={"24"}
     fill={"none"}
     className={className}
     >
