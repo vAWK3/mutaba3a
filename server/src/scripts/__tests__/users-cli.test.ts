@@ -328,6 +328,25 @@ describe('billing verbs (MUT-358)', () => {
     expect(h.out[0]).toMatch(/^already revoked: /);
   });
 
+  it('billing-grant --cohort --accountant issues a pilot: Business, 60 days, the accountant by email (MUT-752)', async () => {
+    const h = harness();
+    const user = await person(h, 'tester@studio.ps');
+    const accountant = await person(h, 'nasser@firm.ps');
+    expect(await h.run(['billing-grant', '--email', 'tester@studio.ps', '--tier', 'BUSINESS', '--reason', 'pilot Nasser', '--cohort', 'dec-2026', '--accountant', 'nasser@firm.ps'])).toBe(0);
+    const [grant] = await h.store.billing.listGrants({ userId: user.id });
+    expect(grant).toMatchObject({ tier: 'BUSINESS', cohort: 'dec-2026', referredByUserId: accountant.id });
+    expect(grant!.expiresAt).not.toBeNull();
+    expect(h.out[0]).toMatch(new RegExp(`^granted: ${grant!.id} BUSINESS pilot dec-2026 for person ${user.id} \\(until `));
+  });
+
+  it('billing-grant --accountant without --cohort is refused before anything is sent (MUT-752)', async () => {
+    const h = harness();
+    const user = await person(h, 'tester@studio.ps');
+    await person(h, 'nasser@firm.ps');
+    expect(await h.run(['billing-grant', '--email', 'tester@studio.ps', '--tier', 'BUSINESS', '--reason', 'x', '--accountant', 'nasser@firm.ps'])).toBe(1);
+    expect(await h.store.billing.listGrants({ userId: user.id })).toEqual([]);
+  });
+
   it('feature-grant turns a flag on by email; feature-list shows it; feature-revoke turns it off once (MUT-433)', async () => {
     const h = harness();
     const user = await person(h, 'rana@studio.ps');

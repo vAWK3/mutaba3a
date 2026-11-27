@@ -19057,7 +19057,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them. `pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, and the plans with their Expected prices and limits; null otherwise.
          */
         get: {
             parameters: {
@@ -19404,6 +19404,63 @@ export interface paths {
                 };
                 /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/pilot-welcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The pilot Welcome was closed
+         * @description MUT-752 (ADR-296, eng review D2): web or phone calls this when the pilot tester closes the Welcome (Later or its main action). From then `GET /v1/billing` `pilot.welcomeSeenAt` is set and the Welcome does not open again, on any device, also after the pilot is extended. Idempotent: the first instant is kept. Stored on the person, so it is accepted whether or not a pilot is running. Additive since 1.162.0-mut752.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PilotWelcomeSeen"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -25110,7 +25167,10 @@ export interface paths {
             };
         };
         put?: never;
-        /** Grant billing coverage to the person’s own profiles, with a reason and an optional expiry (MUT-462) */
+        /**
+         * Grant billing coverage to the person’s own profiles, with a reason and an optional expiry (MUT-462)
+         * @description MUT-752 (ADR-296): `cohort` makes it a pilot (not ACCOUNTANT, 60 days unless `expiresAt`), `referredByUserId` the referring accountant (only with `cohort`).
+         */
         post: {
             parameters: {
                 query?: never;
@@ -26552,7 +26612,10 @@ export interface paths {
             };
         };
         put?: never;
-        /** Grant billing coverage to a person (their own profiles) or to one profile */
+        /**
+         * Grant billing coverage to a person (their own profiles) or to one profile
+         * @description MUT-752 (ADR-296): with `cohort` it is a pilot grant: a person only, never ACCOUNTANT, ending on `expiresAt` or 60 days from now; `referredByUserId` names the referring accountant (only with `cohort`; 404 if unknown). Extending a pilot is a revoke and a new grant.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -34665,6 +34728,7 @@ export interface components {
                 canUpgradeTo: string[];
                 canDowngradeTo: string[];
             };
+            pilot?: components["schemas"]["BillingPilot"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -34799,6 +34863,28 @@ export interface components {
             city: string;
             postalCode: string;
         };
+        BillingPilot: {
+            cohort: string;
+            /** Format: date-time */
+            endsAt: string;
+            /** Format: date-time */
+            welcomeSeenAt: string | null;
+            pricesExpected: boolean;
+            plans: {
+                /** @enum {string} */
+                plan: "solo" | "business" | "firm";
+                expectedMonthly: {
+                    ILS: number | null;
+                    USD: number | null;
+                };
+                limits: {
+                    businesses: number;
+                    partners: number;
+                    documentsPerMonth: number;
+                    scansPerMonth: number;
+                };
+            }[];
+        };
         BillingRedirect: {
             /** Format: uri */
             url: string;
@@ -34834,6 +34920,10 @@ export interface components {
              * @description Stripe's invoice page when the bank wants the person to confirm; null otherwise
              */
             hostedInvoiceUrl: string | null;
+        };
+        PilotWelcomeSeen: {
+            /** Format: date-time */
+            welcomeSeenAt: string;
         };
         YearlySwitchPreview: {
             amountDue: number;
@@ -35597,6 +35687,9 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             revokedAt: string | null;
+            cohort: string | null;
+            /** Format: uuid */
+            referredByUserId: string | null;
         };
         /** @enum {string} */
         BillingTier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | "ACCOUNTANT";
@@ -35605,6 +35698,9 @@ export interface components {
             reason: string;
             /** Format: date-time */
             expiresAt?: string;
+            cohort?: string;
+            /** Format: uuid */
+            referredByUserId?: string;
         };
         RevokeEntitlementGrantResponse: {
             grant: components["schemas"]["EntitlementGrant"];
@@ -35776,6 +35872,9 @@ export interface components {
             reason: string;
             /** Format: date-time */
             expiresAt?: string;
+            cohort?: string;
+            /** Format: uuid */
+            referredByUserId?: string;
         };
         EntitlementGrantList: {
             grants: components["schemas"]["EntitlementGrant"][];

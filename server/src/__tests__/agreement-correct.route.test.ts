@@ -279,9 +279,9 @@ describe('POST /v1/agreements/{id}/correct', () => {
 
   it('AC6: the contract version is 1.97.0-mut532 and both routes are published', async () => {
     const h = harness();
-    expect(API_VERSION).toBe('1.160.0-mut765');
+    expect(API_VERSION).toBe('1.162.0-mut752');
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.160.0-mut765');
+    expect(doc.info.version).toBe('1.162.0-mut752');
     expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/v1/agreements/{agreementId}/correct', '/v1/agreements/{agreementId}/correct/preview']));
   });
 

@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-370: Pilot: no reminder before the end, no "last step reached" (MUT-752, MUT-757)
+**Status**: Open (2026-11-27)
+- **What:** nothing mails a pilot tester before the grant ends (eng review D3 deferred the day-45 and day-55 mails), and plan slice S5's "last step reached" is not recorded (only first scan and first invoice, from usage events).
+- **Why it's acceptable:** a cohort of 5 to 8 testers, watched by the founder; the Pilot panel shows the end date and the operator list shows each tester's end.
+- **Fix:** a daily job like `trial-mail.ts` over live pilot grants (minimal copy), and a closed list of onboarding steps if the watched sessions show it is needed.
+
 ### TD-360: Accountant channel: no alerts yet (MUT-765)
 **Status**: Open (2026-11-27)
 - **What:** a claim-code lock and creation spikes are only log lines (`claim_code_locked`); no alert fires (plan T9). (`src/hosted/api/schema.d.ts` was regenerated with the merge of MUT-733, 2026-11-27.)

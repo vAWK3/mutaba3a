@@ -239,6 +239,17 @@ Order: MUT-752 first; MUT-753, 755, 756 and 757 need it; MUT-754, 758, 759 and 7
 
 Expected prices for the prices file, from MUT-701 (excluding VAT per MUT-750): Solo ₪39, Business ₪89, Firm ₪249. Basel to confirm.
 
+## Build decisions (server halves and docs, 2026-11-27)
+
+Built without Basel (approved plan, away); each takes the conservative reading where the plan was open.
+
+- **P1 (MUT-752):** `cohort` is a lowercase slug (a-z, 0-9, `.`, `-`, `_`, at most 64). It goes to PostHog with the pilot's events (MUT-758), which carry no personal data, so a name is refused (422).
+- **P2 (MUT-752):** the referring accountant is a user id (`referredByUserId`, SET NULL when that account is deleted); the CLI takes `--accountant <email>`. Any existing account may be named; being an approved accountant (ADR-292) is not checked. It is allowed only with a cohort, and never the tester themselves.
+- **P3 (MUT-752):** a pilot grant is a person's (never a profile's), never ACCOUNTANT, and always ends: no expiry given = 60 days from the grant (open question 4 read as 60 days exactly). Extending stays revoke + new grant.
+- **P4 (MUT-752, amendment 2026-11-26):** an account the accountant creates (MUT-764) gets **no** automatic pilot grant. The operator issues it after the account exists, as the amendment says; nothing in the accountant's create-customer route grants anything.
+- **P5 (MUT-752):** `pilot` carries `welcomeSeenAt` (so clients need no second read) and `pricesExpected` (true until MUT-761); `plans` carry each plan's limits beside the Expected monthly price (minor units, ILS and USD, before VAT). `POST /v1/billing/pilot-welcome` is accepted whether or not a pilot runs (the flag is the person's). The pilot is hidden while the person pays for a profile plan, even though the grant outranks Stripe.
+- **P6 (MUT-752):** with `PAID_HARD_CAPS` on (MUT-733, dark), a payer on a live pilot grant is counted and never refused, so "no tester is blocked by a limit" holds whatever that flag says. One extra read, only where a paid cap could refuse.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

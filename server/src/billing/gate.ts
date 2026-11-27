@@ -62,6 +62,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'DELETE /v1/billing/plan-change': 'open',
   // MUT-733: taking the over-cap gift is how a capped payer writes again this month.
   'POST /v1/billing/over-cap-gift': 'open',
+  // MUT-752: closing the pilot Welcome is the person's own onboarding.
+  'POST /v1/billing/pilot-welcome': 'open',
   // MUT-731 (ADR-284): choosing Starter or the active business is how a read-only person writes again; the trial step
   // shown is the person's own onboarding.
   'POST /v1/billing/starter': 'open',

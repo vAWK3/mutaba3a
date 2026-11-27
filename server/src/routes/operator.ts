@@ -403,6 +403,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       path: '/v1/operator/accounts/{userId}/billing-grants',
       tags: ['Operator'],
       summary: 'Grant billing coverage to the person’s own profiles, with a reason and an optional expiry (MUT-462)',
+      description: 'MUT-752 (ADR-296): `cohort` makes it a pilot (not ACCOUNTANT, 60 days unless `expiresAt`), `referredByUserId` the referring accountant (only with `cohort`).',
       security: SESSION,
       request: { params: UserIdParam, body: { required: true, content: { 'application/json': { schema: OperatorCreateBillingGrantRequestSchema } } } },
       responses: {
@@ -418,7 +419,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       const body = c.req.valid('json');
       assertFutureExpiry(body.expiresAt, c.get('now')());
       const user = await accounts.mustGet(userId);
-      const grant = await grants.create({ target: { userId: user.id, organizationId: null }, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt }, contextOf(c));
+      const grant = await grants.create({ target: { userId: user.id, organizationId: null }, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt, cohort: body.cohort, referredByUserId: body.referredByUserId }, contextOf(c));
       return c.json(serializeGrant(grant), 201);
     },
   );

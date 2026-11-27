@@ -801,6 +801,8 @@ export function serializeGrant(g: EntitlementGrantRecord) {
     grantedBy: g.grantedBy,
     createdAt: g.createdAt.toISOString(),
     revokedAt: g.revokedAt?.toISOString() ?? null,
+    cohort: g.cohort,
+    referredByUserId: g.referredByUserId,
   };
 }
 
