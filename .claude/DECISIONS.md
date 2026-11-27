@@ -7411,6 +7411,8 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** "Unclaimed" is derived (`passwordHash IS NULL AND provisionedAt IS NOT NULL`). Claim code, reissue and change of address are MUT-765; the activation Checkout MUT-766; the 60-day sweep and reminders MUT-767.
 
+**Amendment (MUT-772, 2026-11-28): the channel ships as one switch.** The screens are in: the desk (MUT-768, ADR-325), the claim on `/setup` (MUT-769, ADR-320) and CodeReveal / Activating (MUT-770). ADR-258 (an accountant sees only receipted expenses) is unchanged too: a provisioned customer's accountant reads through the same ADR-245/258 grant as an invited one. Rollout order: migrate (MUT-763, done) → API with the switch off → portal → approve the partner in the Operator console (works while off) → `accountant_provisioning = true` (Switch rollout stage 5, which also creates the sweep job) → widen to other approved accountants. Rollback is the switch alone: off answers 404 on every accountant route and stops the sweep job; created accounts, their grants and any subscription are left untouched, and a customer can still claim through a link they hold (the claim routes are `/v1/account-setup/*`, not behind the switch).
+
 ## ADR-293: Paid Plans' Monthly Caps Are Hard After One Gift per Account (MUT-733; supersedes MUT-704's soft caps and move-up-at-renewal; amends ADR-275 d4, writes ADR-281 d9, widens ADR-284 d1)
 
 **Status:** Accepted (2026-11-27; Basel's decisions on MUT-733 comment 13548, the plan approved with every default answer).

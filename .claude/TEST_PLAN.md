@@ -5093,3 +5093,16 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Component | `src/hosted/pages/auth/__tests__/SetupClaim.test.tsx` | context line, step count, six LTR boxes named "Digit n of 6", focus, paste, wrong/required/locked, Arabic RTL; the code sent with the password; the moment then Billing › Subscribe or the business; the moment on the passkey nudge; lock and replaced code at the redeem; dead accountant's link vs operator link |
 | Route | `server/src/__tests__/routes-accountant-claim.test.ts` | `provisioned: true` on superseded and expired accountant links, nothing on unknown or operator links |
 | Release QA | `qa/specs/portal/setup.spec.ts` | `portal.setup.claim-code` (en + ar, 375 px, axe), `portal.setup.claim-refused` |
+
+## MUT-771 — the accountant channel end to end (2026-11-28)
+
+| Path (plan T9 / test plan) | Where |
+|---|---|
+| Route pins for every new route | `server/src/__tests__/route-security.test.ts` (accountant, operator, claim-code) |
+| Provision store contract, memory and Postgres | `server/src/repositories/__tests__/store-contract-accountant-provision.ts` |
+| Mail copy (ADR-159 §5) for customer-setup, its reminder, cancelled, the digest | `server/src/email/__tests__/templates.test.ts` |
+| Add → mail → code → claim → password, read access after claim | `routes-accountant-customers.test.ts`, `routes-accountant-claim.test.ts` |
+| No link in any response; A can't activate B's customer | `routes-accountant-customers.test.ts`, `routes-accountant-activation.test.ts` |
+| Unclaimed unpaid removed at day 60, reminders, clock injected | `routes-accountant-sweep.test.ts` |
+| Portal: add, spoken code, change email, take card, claimed meanwhile, a11y | `qa/specs/portal/accountant-desk.spec.ts` (`portal.accountant-desk.*`) |
+| Portal: claim with the code, wrong and locked code, dead accountant's link | `qa/specs/portal/setup.spec.ts` (`portal.setup.claim-*`) |

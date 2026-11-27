@@ -1,5 +1,6 @@
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
+import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { CAFE_CUSTOMER, CAFE_USER, CARD_CUSTOMER, CARD_USER, ClientBooksApi, NEW_CODE } from '../../support/clientBooksApi';
 
 /**
@@ -144,5 +145,70 @@ test("A customer who claims while the drawer is open loses the setup actions", {
     await expect(dialog.getByRole('button', { name: 'New code' })).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Change email' })).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Take card' })).toBeVisible();
+  });
+});
+
+// ---- MUT-771 (DR-11, DT7): the desk's accessibility, across the four flows above --------------------------------------
+
+test('The desk reads and works by keyboard and screen reader: axe, pane focus, Escape, live regions, 44 px targets', { tag: '@portal.accountant-desk.a11y' }, async ({ page, step }) => {
+  const api = new ClientBooksApi({ customers: [CAFE_CUSTOMER, CARD_CUSTOMER] });
+  await page.route('https://checkout.stripe.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Stripe Checkout (QA)</title>' }));
+  await api.open(page, '/client-books');
+  const deskUrl = page.url();
+  const table = page.getByRole('table', { name: 'Client books' });
+
+  await step('The desk with its customers passes axe', async () => {
+    await expect(table.getByRole('row').filter({ hasText: 'Café Nour' })).toContainText('Awaiting claim');
+    await expectOnlyKnownAxeViolations(page, 'portalSignedIn');
+  });
+
+  await step('Each row’s one action is at least 44 px tall, and a state is a word, not a colour', async () => {
+    for (const name of [/New code/, /Take card/]) {
+      const box = await table.getByRole('button', { name }).first().boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+    await expect(table.getByRole('row').filter({ hasText: 'Dar Al-Salam' })).toContainText('Needs card');
+  });
+
+  await step('Add customer: the code pane takes focus at its heading and the code is read digit by digit', async () => {
+    await page.getByRole('button', { name: 'Add customer' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Add customer' });
+    await dialog.getByLabel('Customer name').fill('Layla Mansour');
+    await dialog.getByLabel('Business name').fill('Layla Studio');
+    await dialog.getByLabel('Email').fill('layla@studio.ps');
+    await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(dialog.getByRole('heading', { name: 'Added', exact: true })).toBeFocused();
+    const code = dialog.getByTestId('claim-code');
+    await expect(code).toHaveAttribute('role', 'img');
+    await expect(code).toHaveAttribute('dir', 'ltr');
+    await expect(code).toHaveAttribute('aria-label', /^\d( \d){5}$/);
+    await expectOnlyKnownAxeViolations(page, 'portalSignedIn');
+  });
+
+  await step('Escape closes the drawer', async () => {
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Add customer' })).toHaveCount(0);
+  });
+
+  await step('Back from Stripe, Activating and then Active are said in a polite live region', async () => {
+    const row = table.getByRole('row').filter({ hasText: 'Dar Al-Salam' });
+    await row.getByRole('button', { name: /Take card/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Customer' });
+    await dialog.getByLabel('Plan').selectOption('business');
+    await dialog.getByLabel('Country').selectOption('PS');
+    await dialog.getByLabel('Address').fill('12 Main St');
+    await dialog.getByLabel('City').fill('Ramallah');
+    await dialog.getByLabel('Postal code').fill('00970');
+    await dialog.getByRole('button', { name: 'Continue to Stripe' }).click();
+    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    await page.goto(deskUrl);
+    const live = page.locator('.hp-activating-status [role="status"][aria-live="polite"]');
+    await expect(live).toContainText('Dar Al-Salam: Activating…');
+    await expect(live).toContainText('Dar Al-Salam: Active', { timeout: 45_000 });
+  });
+
+  await step('At 375 px the desk has no sideways scroll', async () => {
+    await page.setViewportSize(PHONE);
+    await expectNoHorizontalOverflow(page, 'Client books desk, 375');
   });
 });
