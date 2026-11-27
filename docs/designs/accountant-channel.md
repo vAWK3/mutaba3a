@@ -616,3 +616,8 @@ Taken during the build where the plan was silent; each is the plan's default or 
 - **B9 (MUT-765):** the code is checked on its own route before the password (`POST /v1/account-setup/claim-code`) and again on the redeem; a redeem without it is 422 `fields: [claimCode]`.
 - **B10 (MUT-765):** a change of address clears `emailVerifiedAt` (the claim through the mailed link verifies it again).
 - **B11 (MUT-765):** the mail names the accountant by his display name; the desk state is one of awaiting_claim, link_expired, code_locked, claimed (MUT-766 adds the billing states).
+- **B12 (MUT-766):** the activation sells only the plans on sale (Solo, Business, Firm, behind `PLAN_CHECKOUT`), never the legacy Freelancer plan, a trial or an offer; Starter needs no card, so it has no activation call.
+- **B13 (MUT-766):** the plan, country, buyer type and address of the seven-field form are taken at activation, not at creation (the create route is unchanged).
+- **B14 (MUT-766):** the activation route lives with billing (routes/billing.ts) but sits in the accountant endpoint set, so `ACCOUNTANT_PROVISIONING` off answers 404.
+- **B15 (MUT-766):** no separate `accountant.customer_activated` audit row: the start is `billing.checkout_started` (actor the accountant, `payerUserId`), the activation is the mirror's `billing.subscription_changed`. The desk shows `paid` from the customer's covering subscription; "Activating" is the portal's own 2-minute poll after Stripe returns (DR-5), not a server state.
+- **B16 (MUT-766):** an unclaimed customer's Stripe customer is found by metadata Search after the first 24 hours (idempotency key before); the claim's email update is best effort with a log line (TD-361).

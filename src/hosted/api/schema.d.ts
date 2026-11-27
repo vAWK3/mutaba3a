@@ -19211,6 +19211,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/accountant/customers/{userId}/checkout-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the card of a customer you created, in Stripe’s page, before they claim the account (MUT-766)
+         * @description ADR-295. An approved accountant (ACCOUNTANT_PROVISIONING) opens Stripe Checkout for a paid plan (solo, business or firm) on behalf of a customer he created who has not set a password yet; the customer is the payer (their subscription, their profiles, their Stripe customer) and enters the card and the bank’s check on Stripe’s page. The same Checkout as the customer’s own (PLAN_CHECKOUT): the address is required and saved first, the customer’s other open Checkouts are expired. The Stripe customer carries no email until the customer claims the account (then the verified address). The rate limit counts against the accountant; audited `billing.checkout_started` with the accountant as actor and `payerUserId`. The subscription arrives by the webhook (the desk shows it as `paid`). 404 for another accountant’s customer, a claimed one, or with the feature off. Additive since 1.161.0-mut766.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ActivationCheckoutRequest"];
+                };
+            };
+            responses: {
+                /** @description The Checkout page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BillingRedirect"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNTANT_NOT_APPROVED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No unclaimed customer of yours by this id, or the feature is off */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/portal-session": {
         parameters: {
             query?: never;
@@ -30804,6 +30921,7 @@ export interface components {
                 /** @enum {string|null} */
                 mailStatus: "PENDING" | "SENT" | "FAILED" | null;
             } | null;
+            paid: boolean;
         };
         ProvisionedLink: {
             claimCode?: string;
@@ -34902,6 +35020,18 @@ export interface components {
             plan?: "freelancer" | "accountant" | "solo" | "business" | "firm";
             address?: components["schemas"]["BillingAddress"];
             trial?: boolean;
+        };
+        ActivationCheckoutRequest: {
+            /** @enum {string} */
+            plan: "solo" | "business" | "firm";
+            /** @enum {string} */
+            interval: "month" | "year";
+            country: string;
+            /** @enum {string} */
+            buyer: "person" | "business";
+            address: components["schemas"]["BillingAddress"];
+            /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */
+            returnPath: string;
         };
         PortalSessionRequest: {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */

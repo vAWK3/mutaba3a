@@ -3496,6 +3496,8 @@ export interface ProvisionRepository {
   setMailStatus(tokenDigest: string, status: 'SENT' | 'FAILED'): Promise<void>;
   /** MUT-765 (R6): links made for the customer at or after `since` other than the one their account was created with (each reissue and change of address makes one), for the reissue cap. */
   countReissuesSince(userId: string, since: Date): Promise<number>;
+  /** MUT-766: the customer, when this accountant created the account and nobody has claimed it yet; else null. */
+  unclaimedCustomerOf(accountantUserId: string, customerUserId: string): Promise<UserRecord | null>;
   /** MUT-765: the customers this accountant created, newest first, claimed or not (the desk's list). `before` pages by provisionedAt. */
   customersOf(accountantUserId: string, input: { limit: number; before?: Date | undefined }): Promise<ProvisionedCustomerRow[]>;
 }

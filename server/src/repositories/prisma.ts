@@ -1005,6 +1005,10 @@ export class PrismaLedgerStore implements LedgerStore {
       const person = await this.prisma.user.findUnique({ where: { id: userId }, select: { provisionedAt: true } });
       return this.prisma.accountSetupToken.count({ where: { userId, createdAt: { gte: since, ...(person?.provisionedAt ? { gt: person.provisionedAt } : {}) } } });
     },
+    unclaimedCustomerOf: async (accountantUserId, customerUserId) => {
+      const row = await this.prisma.user.findFirst({ where: { id: customerUserId, provisionedByUserId: accountantUserId, passwordHash: null } });
+      return row ? toUser(row) : null;
+    },
     customersOf: async (accountantUserId, { limit, before }) => {
       const rows = await this.prisma.user.findMany({
         where: { provisionedByUserId: accountantUserId, ...(before ? { provisionedAt: { lt: before } } : {}) },

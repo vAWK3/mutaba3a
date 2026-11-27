@@ -43,6 +43,18 @@ Plan `docs/designs/pilot-testers-business-plan.md` (APPROVED; eng review D1, D2,
 
 ### Changed
 - With `PAID_HARD_CAPS` on, a payer on a live pilot grant is counted, never refused (P6).
+## [Unreleased] - 2026-11-27 — The accountant takes the card in the room (MUT-766 server half, epic MUT-762, ADR-295, API 1.161.0-mut766)
+
+Plan `docs/designs/accountant-channel.md` (eng SC-1, T5, R4, R5; build decisions B12–B16). Server only, dark behind `ACCOUNTANT_PROVISIONING` and `PLAN_CHECKOUT`. No migration. MONEY CODE: the existing billing tests (billing-routes, billing-core, billing-gate-routes, routes-accountant-plan) are unchanged and green.
+
+### Added
+- `POST /v1/accountant/customers/{userId}/checkout-session`: Stripe Checkout for a paid plan with the unclaimed customer as payer.
+- `startPlanCheckout(payer, actor)` extracted from the plan Checkout; both doors use it (golden test).
+- `CheckoutGateway.customerIdOf`, `setCustomerEmail`; `findOrCreateCustomer` with `email: null` (metadata search, no email on the customer).
+- The claim sets the verified address on that Stripe customer. `paid` on `GET /v1/accountant/customers` rows.
+- `store.provision.unclaimedCustomerOf`.
+
+---
 
 ## [Unreleased] - 2026-11-27 — Claim code, fresh links and change of address (MUT-765 server half, epic MUT-762, ADR-294, API 1.160.0-mut765)
 

@@ -7438,6 +7438,21 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** A customer locked out by five wrong codes or an expired link waits for the accountant. A code lock is logged (`claim_code_locked`) for the T9 alert (TD-360).
 
+---
+
+## ADR-295: The Accountant Takes the Card in the Room Through the Customer's Own Checkout; Stripe Holds No Email Until the Claim (MUT-766, epic MUT-762; eng SC-1, R4, R5)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`; build decisions B12–B16).
+
+**Decision:**
+1. The plan Checkout's core is one function, `startPlanCheckout(payer, actor)` (routes/billing.ts). The person's own `POST /v1/billing/checkout-session` passes themselves as both; `POST /v1/accountant/customers/{id}/checkout-session` passes the unclaimed customer as payer and the accountant as actor. A golden test pins that both doors give Stripe identical Checkout parameters and expire open Checkouts the same way for the same payer.
+2. The activation sells Solo, Business or Firm only (`PLAN_CHECKOUT`), with the billing address; no trial and no offer (Starter needs no card). The customer is the payer: their subscription, their profiles, their Stripe customer (`client_reference_id` and metadata name them). The accountant never pays.
+3. R5: for an unclaimed account the Stripe customer is made with no email (found again by its metadata through Search, with a per-person idempotency key for the first 24 hours). The claim sets the verified address on it (best effort, logged on failure).
+4. The billing session limit counts the accountant's presses; `billing.checkout_started` is written on the customer's profiles with the accountant as actor and `payerUserId`. The activation itself is the existing webhook mirror (`billing.subscription_changed`); the desk list shows `paid`.
+5. 404 for another accountant's customer, a claimed one, or with `ACCOUNTANT_PROVISIONING` off; 403 ACCOUNTANT_NOT_APPROVED.
+
+**Consequences:** Whether Stripe's Checkout page asks for and stores an email on a customer that has none must be checked in test mode before the flag goes on (TD-361).
+
 ## ADR-296: A Pilot Is an Operator Grant With a Cohort: Business, 60 Days by Default, Shown on Billing; the Welcome Flag Is the Person's (MUT-752, epic MUT-751; extends ADR-160's grants, keeps ADR-275's entitlement order)
 
 **Status:** Accepted (2026-11-27; plan `docs/designs/pilot-testers-business-plan.md`, APPROVED, eng review D1, D2, D4; build decisions P1–P6).
