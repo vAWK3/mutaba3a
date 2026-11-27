@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.161.0-mut766
+  version: 1.170.0-mut767
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -15411,6 +15411,8 @@ components:
                   - email
               paid:
                 type: boolean
+              flagged:
+                type: boolean
             required:
               - userId
               - email
@@ -15418,6 +15420,7 @@ components:
               - provisionedAt
               - accountant
               - paid
+              - flagged
       required:
         - items
     UsagePruneSummary:
@@ -15466,6 +15469,31 @@ components:
         - deleted
         - before
         - retention
+    UnclaimedSweepSummary:
+      type: object
+      properties:
+        looked:
+          type: integer
+        reminded:
+          type: integer
+        removed:
+          type: integer
+        flagged:
+          type: integer
+        digests:
+          type: integer
+        failed:
+          type: integer
+        incomplete:
+          type: boolean
+      required:
+        - looked
+        - reminded
+        - removed
+        - flagged
+        - digests
+        - failed
+        - incomplete
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -35747,6 +35775,39 @@ paths:
                 $ref: "#/components/schemas/UsagePruneSummary"
         "401":
           description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/accountants/unclaimed-sweep:
+    post:
+      tags:
+        - Accountants
+      summary: "Daily: reminders for accounts an accountant created that nobody claimed, and removal of the unpaid ones after 60 days (Cloud Scheduler)"
+      description: Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant, and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnclaimedSweepSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The feature is off on this server
           content:
             application/json:
               schema:

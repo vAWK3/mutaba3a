@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Unclaimed accounts: reminders, digest, removal at 60 days (MUT-767 server half, epic MUT-762, ADR-300, API 1.170.0-mut767)
+
+Plan `docs/designs/accountant-channel.md` (eng T6, R1; build decisions B17–B21). Server only, dark behind `ACCOUNTANT_PROVISIONING`. No migration. Needs a Cloud Scheduler job before the switch goes on (before-release.md).
+
+### Added
+- `POST /jobs/v1/accountants/unclaimed-sweep` and `accountants/unclaimed-sweep.ts` (`UNCLAIMED_POLICY`: reminders days 3/10/30/53, removal day 60, pages of 200).
+- Mail template `accountant-unclaimed-digest` (ar, en; counts only); `customer-setup` sends as a reminder.
+- `store.provision.sweepRows`, `remindedStages`, `expireUnclaimed`; `reissue` with `claimCodeDigestFor: null` keeps the code.
+- Audit `accountant.customer_reminded` (with its day) and `accountant.customer_expired`. `flagged` on `GET /v1/operator/provisioned-accounts` items.
+
+---
+
 ## [Unreleased] - 2026-11-27 — The accountant takes the card in the room (MUT-766 server half, epic MUT-762, ADR-295, API 1.161.0-mut766)
 
 Plan `docs/designs/accountant-channel.md` (eng SC-1, T5, R4, R5; build decisions B12–B16). Server only, dark behind `ACCOUNTANT_PROVISIONING` and `PLAN_CHECKOUT`. No migration. MONEY CODE: the existing billing tests (billing-routes, billing-core, billing-gate-routes, routes-accountant-plan) are unchanged and green.

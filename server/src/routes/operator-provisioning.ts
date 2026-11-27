@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { personalOrganizationIdOf } from '../accountants/provision.js';
+import { UNCLAIMED_POLICY } from '../accountants/unclaimed-sweep.js';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { AuditEventInput, LedgerStore, ProvisionApproval } from '../repositories/ports.js';
@@ -157,17 +158,20 @@ export function operatorProvisioningRoutes(store: LedgerStore): OpenAPIHono<AppE
     async (c) => {
       const { limit } = c.req.valid('query');
       const rows = await store.provision.listUnclaimed({ limit: limit ?? DEFAULT_LIST_LIMIT });
+      const overdueBefore = c.get('now')().getTime() - UNCLAIMED_POLICY.removeAfterDays * 86_400_000;
       const items = await Promise.all(
         rows.map(async (row) => {
           const accountant = row.accountantUserId ? await store.users.getById(row.accountantUserId) : null;
           const { subscriptions } = await store.billing.summaryOf(row.userId);
+          const paid = subscriptions.some((s) => s.status === 'active');
           return {
             userId: row.userId,
             email: row.email,
             displayName: row.displayName,
             provisionedAt: row.provisionedAt.toISOString(),
             accountant: accountant ? { userId: accountant.id, email: accountant.email } : null,
-            paid: subscriptions.some((s) => s.status === 'active'),
+            paid,
+            flagged: paid && row.provisionedAt.getTime() <= overdueBefore,
           };
         }),
       );

@@ -43,6 +43,7 @@ export const TEMPLATE_IDS = [
   'plan-change-scheduled',
   'customer-setup',
   'customer-setup-cancelled',
+  'accountant-unclaimed-digest',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -171,6 +172,11 @@ export interface TemplateVars {
   'customer-setup': { accountantName: string; businessName: string; link: string; validDays: number; reminder?: boolean };
   /** MUT-765: to the old address after the accountant changed it: the link sent here no longer works. */
   'customer-setup-cancelled': { accountantName: string; businessName: string };
+  /**
+   * MUT-767 (ADR-300): one mail a day at most to an accountant whose customers wait to claim: how many wait, and how
+   * many of the unpaid ones are removed within a week. Counts only, never a customer's name or address.
+   */
+  'accountant-unclaimed-digest': { waiting: number; removingSoon: number; deskLink: string };
   /**
    * MUT-535 (ADR-259): the monthly summary. `month` is the month reported; `asOf` the day owed and overdue are read on;
    * one panel per profile (never empty); `yearly` (MUT-531's line) the saving in minor units of the subscription's

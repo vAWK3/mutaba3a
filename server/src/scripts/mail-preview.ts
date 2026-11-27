@@ -48,6 +48,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/accountant-invite#sample-token`, expiresOn: { year: 2026, month: 11, day: 20 } },
   'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/setup#sample-token`, validDays: 14 },
   'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
+  'accountant-unclaimed-digest': { waiting: 7, removingSoon: 2, deskLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/client-books` },
   // MUT-618
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },

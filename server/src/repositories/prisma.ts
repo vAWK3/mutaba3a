@@ -969,9 +969,11 @@ export class PrismaLedgerStore implements LedgerStore {
               if (await tx.user.findUnique({ where: { email }, select: { id: true } })) return { kind: 'email_taken' };
               await tx.user.update({ where: { id: input.customerUserId }, data: { email, emailVerifiedAt: null, updatedAt: input.at } });
             }
+            const kept = input.claimCodeDigestFor ? null : await tx.accountSetupToken.findFirst({ where: { userId: input.customerUserId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { claimCodeDigest: true, claimCodeAttempts: true } });
+            const code = input.claimCodeDigestFor ? { claimCodeDigest: input.claimCodeDigestFor(email), claimCodeAttempts: 0 } : { claimCodeDigest: kept?.claimCodeDigest ?? null, claimCodeAttempts: kept?.claimCodeAttempts ?? 0 };
             await tx.accountSetupToken.updateMany({ where: { userId: input.customerUserId, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
             await tx.accountSetupToken.create({
-              data: { userId: input.customerUserId, tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt, createdAt: input.at, mailed: true, claimCodeDigest: input.claimCodeDigestFor(email), claimCodeAttempts: 0, mailStatus: 'PENDING' },
+              data: { userId: input.customerUserId, tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt, createdAt: input.at, mailed: true, ...code, mailStatus: 'PENDING' },
             });
             const audit = input.auditFor({ organizationId: organization.id, grant: toAccountantGrant(grantRow), previousEmail: person.email });
             if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
@@ -1005,6 +1007,41 @@ export class PrismaLedgerStore implements LedgerStore {
       const person = await this.prisma.user.findUnique({ where: { id: userId }, select: { provisionedAt: true } });
       return this.prisma.accountSetupToken.count({ where: { userId, createdAt: { gte: since, ...(person?.provisionedAt ? { gt: person.provisionedAt } : {}) } } });
     },
+    sweepRows: async ({ limit, after }) => {
+      const rows = await this.prisma.user.findMany({
+        where: {
+          passwordHash: null,
+          provisionedAt: { not: null },
+          deleteAfter: null,
+          ...(after ? { OR: [{ provisionedAt: { gt: after.provisionedAt } }, { provisionedAt: after.provisionedAt, id: { gt: after.userId } }] } : {}),
+        },
+        orderBy: [{ provisionedAt: 'asc' }, { id: 'asc' }],
+        take: limit,
+        select: { id: true, email: true, displayName: true, locale: true, provisionedByUserId: true, provisionedAt: true },
+      });
+      return rows.flatMap((r) =>
+        r.provisionedAt ? [{ userId: r.id, email: r.email, displayName: r.displayName, locale: r.locale as UserLocale, accountantUserId: r.provisionedByUserId, provisionedAt: r.provisionedAt }] : [],
+      );
+    },
+    remindedStages: async (userIds) => {
+      const out = new Map<string, number[]>();
+      if (userIds.length === 0) return out;
+      const rows = await this.prisma.auditEvent.findMany({ where: { action: 'accountant.customer_reminded', entityId: { in: [...userIds] } }, select: { entityId: true, metadata: true } });
+      for (const row of rows) {
+        const day = (row.metadata as { day?: unknown } | null)?.day;
+        if (row.entityId && typeof day === 'number') out.set(row.entityId, [...(out.get(row.entityId) ?? []), day]);
+      }
+      return out;
+    },
+    expireUnclaimed: ({ userId, provisionedBefore, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const [person] = await tx.$queryRaw<Array<{ passwordHash: string | null; provisionedAt: Date | null; deleteAfter: Date | null }>>`SELECT "passwordHash", "provisionedAt", "deleteAfter" FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!person || person.passwordHash !== null || person.deleteAfter !== null || !person.provisionedAt || person.provisionedAt.getTime() > provisionedBefore.getTime()) return false;
+        await tx.user.update({ where: { id: userId }, data: { closeRequestedAt: person.provisionedAt, deleteAfter: at, closeEndedSubscriptionIds: [], purgeStartedAt: null, purgeLastTriedAt: null, updatedAt: at } });
+        await tx.accountSetupToken.updateMany({ where: { userId, usedAt: null, cancelledAt: null }, data: { cancelledAt: at } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
     unclaimedCustomerOf: async (accountantUserId, customerUserId) => {
       const row = await this.prisma.user.findFirst({ where: { id: customerUserId, provisionedByUserId: accountantUserId, passwordHash: null } });
       return row ? toUser(row) : null;

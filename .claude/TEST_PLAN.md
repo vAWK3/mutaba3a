@@ -88,6 +88,12 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## Unclaimed-account sweep (MUT-767, 2026-11-27)
+
+`routes-accountant-sweep.test.ts` (clock-injected): `reminderDayDue` rules; day-3 reminder once, the fresh link claims with the same code, one digest with counts only, a claimed customer drops out; one digest for several customers and none on a quiet day; day 59 digest says one goes within a week; day 60 removes the unpaid one (closure, audit, then the hourly purge deletes the user and the grant) and keeps and flags the paid one, idempotent on a rerun; a claimed account is never removed; job token and 404 with the flag off. Store contract: keep-code reissue, `sweepRows` paging and filters, `remindedStages`, `expireUnclaimed` refusals and effect. `routes-operator-provisioning.test.ts`: `flagged` for a paid account past 60 days.
+
+---
+
 ## Activation Checkout (MUT-766, 2026-11-27)
 
 `routes-accountant-activation.test.ts`: payer is the customer, Stripe customer with no email, address saved, audit actor accountant with `payerUserId`; golden test (same params and Stripe call order and one expiry from both doors for the same payer, the claim sets the verified email); IDOR (another accountant, unknown id, claimed) 404 and unapproved 403; paid plans only and the address country; the limiter counts the accountant; a duplicated and a late webhook make one subscription and the desk shows `paid`; 404 with the flag off. `checkout-gateway.test.ts`: metadata search, create with no email and a per-person key, set email. Unchanged and green: billing-routes, billing-core, billing-gate-routes, routes-accountant-plan.

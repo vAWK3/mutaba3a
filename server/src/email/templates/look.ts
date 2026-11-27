@@ -97,6 +97,8 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   // MUT-765: the existing art only: an account an accountant set up, and its cancelled link.
   'customer-setup': { mood: 'hello', header: 'empty-state', chip: 'edit' },
   'customer-setup-cancelled': { mood: 'safety', header: 'spot-person', chip: 'person' },
+  // MUT-767: the existing art only.
+  'accountant-unclaimed-digest': { mood: 'hello', header: 'spot-pending', chip: 'pending' },
   // MUT-535: a month's summary, so the calendar.
   'monthly-summary': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   // MUT-571 AC3: the existing art only: a consent that ends on a day.

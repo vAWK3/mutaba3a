@@ -1854,6 +1854,19 @@ export const ProvisionedCustomerRowSchema = z
   })
   .openapi('ProvisionedCustomerRow');
 
+/** MUT-767: what the daily sweep of unclaimed provisioned accounts did. */
+export const UnclaimedSweepSummarySchema = z
+  .object({
+    looked: z.number().int(),
+    reminded: z.number().int(),
+    removed: z.number().int(),
+    flagged: z.number().int(),
+    digests: z.number().int(),
+    failed: z.number().int(),
+    incomplete: z.boolean(),
+  })
+  .openapi('UnclaimedSweepSummary');
+
 export const ProvisionedCustomersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
   /** The `nextBefore` of the previous page. */
@@ -1900,6 +1913,8 @@ export const OperatorProvisionedAccountsSchema = z
         accountant: z.object({ userId: z.string().uuid(), email: z.string() }).nullable(),
         /** An active subscription already: paid but not yet claimed. */
         paid: z.boolean(),
+        /** MUT-767: paid and still unclaimed past the 60 days: kept, for the operator to follow up. Additive since 1.170.0-mut767. */
+        flagged: z.boolean(),
       }),
     ),
   })
