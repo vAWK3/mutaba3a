@@ -18,11 +18,11 @@
 
 ## Open Debt
 
-### TD-360: Accountant channel: no alerts yet, and the portal's API types are not regenerated (MUT-765)
+### TD-360: Accountant channel: no alerts yet (MUT-765)
 **Status**: Open (2026-11-27)
-- **What:** a claim-code lock and creation spikes are only log lines (`claim_code_locked`); no alert fires (plan T9). `src/hosted/api/schema.d.ts` does not yet carry the MUT-764/765 routes.
-- **Why it's acceptable:** everything is dark behind `ACCOUNTANT_PROVISIONING`; no portal screen calls these routes yet.
-- **Fix:** the desk and /setup tickets (MUT-768/769) run `npm run hosted:types`; the observability task (T9) adds the alert on the log line before the flag is turned on.
+- **What:** a claim-code lock and creation spikes are only log lines (`claim_code_locked`); no alert fires (plan T9). (`src/hosted/api/schema.d.ts` was regenerated with the merge of MUT-733, 2026-11-27.)
+- **Why it's acceptable:** everything is dark behind `ACCOUNTANT_PROVISIONING`.
+- **Fix:** the observability task (T9) adds the alert on the log line before the flag is turned on.
 
 ### TD-307: Vendor-made invoice PDFs read 70% of their printed fields, against a 95% bar
 **Status**: Open (MUT-590, 2026-11-12; ADR-252; the work is MUT-591)

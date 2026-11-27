@@ -32,6 +32,7 @@ import {
 } from '../billing/checkout.js';
 import type { BillingProvider } from '../billing/provider.js';
 import { planChangeView } from '../billing/plan-change.js';
+import { giftAvailable, giftCovers, giftUntil, NO_GIFT } from '../usage/gift.js';
 import { stripeProvider } from '../billing/stripe/provider.js';
 import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
 import { offerOrNothing } from '../billing/offer-read.js';
@@ -417,18 +418,27 @@ function returnUrlOf(c: Context<AppEnv>, returnPath: string, portalOrigin: strin
 
 /** The person's owned profiles and each one's entitlement: one billing read (coverage.ts), at most six profiles (MUT-182). */
 /** MUT-735 (ADR-281): the person's usage this month against their plan's limits (the payer's plan, as the meters read it). */
-async function billingUsage(store: LedgerStore, userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>, now: Date): Promise<UsageView> {
+async function billingUsage(store: LedgerStore, userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>, now: Date): Promise<UsageView & { gift?: { available: boolean } }> {
   const month = usageMonthOf(now);
   const counters = await store.usage.countersFor(userSubjectKey(userId), [month]);
   const count = (meter: 'DOCUMENTS' | 'SCANS') => counters.find((c) => c.meter === meter)?.count ?? 0;
   const plan = currentPlanOf(owned.entitlements) ?? (owned.entitlements.some((e) => e.source === 'MALAFAT') ? 'malafat' : 'none');
-  return usageView({
+  const view = usageView({
     month,
     resetsOn: resetsOn(month),
     plan,
     counts: { DOCUMENTS: count('DOCUMENTS'), SCANS: count('SCANS') },
     businessesOwned: owned.profiles.filter((p) => profileTypeOf(p) === 'BUSINESS').length,
   });
+  // MUT-733 (ADR-293): the gifted meter's `graceUntil`, and whether the gift can still be taken (PAID_HARD_CAPS only).
+  if (!store.billing.paidHardCaps) return view;
+  const gift = (await store.billing.overCapGiftOf(userId)) ?? NO_GIFT;
+  const until = giftUntil(month).toISOString();
+  return {
+    ...view,
+    meters: view.meters.map((m) => (giftCovers(gift, m.meter.toUpperCase() as 'DOCUMENTS' | 'SCANS', month) ? { ...m, graceUntil: until } : m)),
+    gift: { available: giftAvailable(gift, plan, true) },
+  };
 }
 
 async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Date) {

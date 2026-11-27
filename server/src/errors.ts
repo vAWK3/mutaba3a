@@ -135,6 +135,10 @@ export const ERROR_CODES = {
   OPERATION_IN_PROGRESS: 409,
   /** MUT-737 (ADR-289): with OPEN_SIGNUP on there is no review: approve and decline are retired (the list stays as history). */
   SIGNUP_REVIEW_RETIRED: 409,
+  /** MUT-733 (ADR-293): the account's once-ever over-cap gift was already taken (a later refusal is a hard cap). */
+  GIFT_USED: 409,
+  /** MUT-733: the gift can't be taken now: PAID_HARD_CAPS off, not a Solo or Business payer, or the meter isn't at its cap. */
+  GIFT_NOT_AVAILABLE: 409,
   /** MUT-360: a Stripe reconcile is already running on this instance; the next one runs when it ends. */
   RECONCILE_RUNNING: 409,
   /** MUT-419 (R11): a real trial-mail run in production whose links would point at a loopback origin; `details.origin`. */

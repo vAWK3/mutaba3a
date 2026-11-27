@@ -155,3 +155,14 @@ New ADR "Paid plans' monthly caps are hard after one gift per account" (supersed
 5. **Copy:** the short version in §5 vs the warm, longer message in the ticket (the 2026-11-26 minimal-copy rule came after it). [Default: the short version.]
 6. **Mails:** any mail at 80% / 90% / at the cap, or in-app only? [Default: in-app only; MUT-704's 80% mail dropped.]
 7. **Legacy no-card trials still running** (Business limits): hard-capped like Business, or never capped? [Default: never capped; they end within 14 days of Starter's release.]
+
+## Build decisions (server half, 2026-11-27, built alone with the approved defaults)
+
+1. **ADR-293**, API **1.159.0-mut733**, no migration (renumbered from ADR-292 / 1.158.0 after MUT-764 took them on main).
+2. **Firm is soft (Q2 default)**: `PAID_HARD_CAP_PLANS = {solo, business}`. This overrides the error-table row "Firm at its cap after the gift: hard cap"; the gift is never offered on Firm.
+3. **The cap rule rides the usage stamp** (`UsageStamp.caps`, decided in `usageStampFor` with the plan, one read of the payer's gift, only with the flag on a Solo/Business payer) instead of a `hardCapPlans({ paidHardCaps })` function: every door already passes the stamp, so issue, Issue all, scan start and scan complete (memory and Postgres) agree without new parameters. `usageEvent` strips it so it is never stored.
+4. **`graceUntil` is an instant** (the schema's existing `datetime`): the first instant of the next Jerusalem month; the endpoint's `until` is the same instant (the plan's example showed a date).
+5. **The endpoint checks the meter is at its cap** from the payer's counter this month (not "the last refusal"), so it can't be taken early; a repeat for the same meter and month answers 200 (a lost answer), any other repeat 409 GIFT_USED.
+6. **Partner (Q3)**: `organizationId` in the body names the business; the caller must be a member; its owner's gift is taken.
+7. **Not built here:** the portal and phone gift message and usage lines (UI half, MUT-706), analytics events, `serverErrorCodes.ts` / `errors.dart` entries for GIFT_USED and GIFT_NOT_AVAILABLE, COMPONENT_REGISTRY, the privacy-draft line about the gift marker (MUT-732), and the QA flows. Tests for the scans path and a partner taking the gift were added after review (no bug found).
+

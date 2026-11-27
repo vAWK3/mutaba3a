@@ -178,6 +178,12 @@ const envSchema = z.object({
    */
   PAID_BUSINESS_CAPS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-733 (ADR-293): Solo and Business monthly meters (documents, scans) refuse at the cap with 409 PLAN_LIMIT, after a
+   * one-time gift per account (POST /v1/billing/over-cap-gift). Firm stays soft. Only exactly "true" turns it on. On only
+   * after PLAN_CHECKOUT, MUT-734's plan change and the phone build that shows the gift (plan §7).
+   */
+  PAID_HARD_CAPS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).

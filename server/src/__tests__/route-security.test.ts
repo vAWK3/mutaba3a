@@ -202,6 +202,7 @@ const BILLING_OPERATIONS = [
   'POST /v1/billing/plan-change/preview',
   'POST /v1/billing/plan-change',
   'DELETE /v1/billing/plan-change',
+  'POST /v1/billing/over-cap-gift',
   'POST /v1/billing/starter',
   'PUT /v1/billing/active-businesses',
   'POST /v1/billing/solo-trial/offered',
