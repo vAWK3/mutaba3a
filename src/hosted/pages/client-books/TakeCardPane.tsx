@@ -73,12 +73,12 @@ export function TakeCardPane({ userId, onBack }: { userId: string; onBack: () =>
     ) : null;
   };
   const describedBy = (field: keyof Values) => (formState.errors[field] ? `${FORM_ID}-${field}-error` : undefined);
-  const textField = (field: 'line1' | 'city' | 'postalCode', label: string, dir: 'auto' | 'ltr', autoComplete: string) => (
+  const textField = (field: 'line1' | 'city', label: string, autoComplete: string) => (
     <div className="form-group">
       <label className="form-label" htmlFor={`${FORM_ID}-${field}`}>
         {label}
       </label>
-      <input id={`${FORM_ID}-${field}`} className="input" dir={dir} autoComplete={autoComplete} aria-invalid={Boolean(formState.errors[field])} aria-describedby={describedBy(field)} {...register(field)} />
+      <input id={`${FORM_ID}-${field}`} className="input" dir="auto" autoComplete={autoComplete} aria-invalid={Boolean(formState.errors[field])} aria-describedby={describedBy(field)} {...register(field)} />
       {fieldError(field)}
     </div>
   );
@@ -131,9 +131,15 @@ export function TakeCardPane({ userId, onBack }: { userId: string; onBack: () =>
         </Select>
         {fieldError('country')}
       </div>
-      {textField('line1', t('hosted.desk.takeCard.address'), 'auto', 'street-address')}
-      {textField('city', t('hosted.desk.takeCard.city'), 'auto', 'address-level2')}
-      {textField('postalCode', t('hosted.desk.takeCard.postalCode'), 'ltr', 'postal-code')}
+      {textField('line1', t('hosted.desk.takeCard.address'), 'street-address')}
+      {textField('city', t('hosted.desk.takeCard.city'), 'address-level2')}
+      <div className="form-group">
+        <label className="form-label" htmlFor={`${FORM_ID}-postalCode`}>
+          {t('hosted.desk.takeCard.postalCode')}
+        </label>
+        <input id={`${FORM_ID}-postalCode`} className="input" dir="ltr" autoComplete="postal-code" aria-invalid={Boolean(formState.errors.postalCode)} aria-describedby={describedBy('postalCode')} {...register('postalCode')} />
+        {fieldError('postalCode')}
+      </div>
       <div className="hp-desk-next">
         <Button type="submit" isLoading={checkout.isPending}>
           {t('hosted.desk.takeCard.stripe')}

@@ -1523,7 +1523,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
   cursor: pointer;
 }
 .hp-chip[aria-pressed='true'] { background: var(--accent-2-subtle); border-color: var(--accent-2); }
-.hp-chip-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hp-chip-count { color: var(--muted); }
 .hp-code-reveal {
   direction: ltr;
   display: flex;
