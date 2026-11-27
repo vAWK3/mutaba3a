@@ -60,10 +60,17 @@ export function importsOf(sources: ReadonlyMap<string, string>): Map<string, str
   return graph;
 }
 
-/** Files outside `jurisdictions/` that import something under `jurisdictions/il/`. */
-export function directIlImporters(graph: ReadonlyMap<string, string[]>): string[] {
+/** A pack's own directory, `jurisdictions/<cc>` (MUT-745: every pack, not only Israel's). */
+const PACK_DIR = /^jurisdictions\/[a-z]{2}(\/|$)/;
+
+/**
+ * Files outside `jurisdictions/` that import something under a pack's directory (`jurisdictions/il/`, `jurisdictions/jo/`,
+ * …), or under one pack's when `cc` is given.
+ */
+export function directPackImporters(graph: ReadonlyMap<string, string[]>, cc?: string): string[] {
+  const inPack = (t: string) => (cc ? t === `jurisdictions/${cc}` || t.startsWith(`jurisdictions/${cc}/`) : PACK_DIR.test(t));
   return [...graph]
-    .filter(([file, targets]) => !file.startsWith('jurisdictions/') && targets.some((t) => t === 'jurisdictions/il' || t.startsWith('jurisdictions/il/')))
+    .filter(([file, targets]) => !file.startsWith('jurisdictions/') && targets.some(inPack))
     .map(([file]) => file)
     .sort();
 }
@@ -103,13 +110,13 @@ export function defaultPackCallers(sources: ReadonlyMap<string, string>): string
 }
 
 describe('jurisdiction boundary (MUT-741)', () => {
-  it('AC3: nothing outside jurisdictions/ imports jurisdictions/il/** except the named allowlist', () => {
-    const outside = directIlImporters(graph).filter((f) => !(f in IL_IMPORT_ALLOWLIST));
-    expect(outside, 'core code must import Israel through jurisdictions/index.ts (or add a reasoned allowlist entry)').toEqual([]);
+  it('AC3: nothing outside jurisdictions/ imports a pack (jurisdictions/<cc>/**) except Israel\'s named allowlist', () => {
+    const outside = directPackImporters(graph).filter((f) => !(f in IL_IMPORT_ALLOWLIST && directPackImporters(graph, 'il').includes(f)));
+    expect(outside, 'core code must import a pack through jurisdictions/index.ts (or add a reasoned allowlist entry)').toEqual([]);
   });
 
   it('the allowlist only shrinks: every entry still imports Israel', () => {
-    const importers = new Set(directIlImporters(graph));
+    const importers = new Set(directPackImporters(graph, 'il'));
     expect(Object.keys(IL_IMPORT_ALLOWLIST).filter((f) => !importers.has(f)), 'delete these allowlist entries').toEqual([]);
   });
 
@@ -133,11 +140,17 @@ describe('jurisdiction boundary (MUT-741)', () => {
     const fake = (files: Record<string, string>) => importsOf(new Map(Object.entries(files)));
     it('flags a core file that imports il directly', () => {
       const g = fake({ 'issuing/compose.ts': "import { x } from '../jurisdictions/il/tax-id.js';", 'jurisdictions/il/tax-id.ts': '' });
-      expect(directIlImporters(g)).toEqual(['issuing/compose.ts']);
+      expect(directPackImporters(g)).toEqual(['issuing/compose.ts']);
+    });
+    it('MUT-745: flags a core file that imports any other pack directly, and tells packs apart', () => {
+      const g = fake({ 'routes/x.ts': "import { y } from '../jurisdictions/jo/vat.js';", 'jurisdictions/jo/vat.ts': '', 'jurisdictions/__tests__/z.ts': '' });
+      expect(directPackImporters(g)).toEqual(['routes/x.ts']);
+      expect(directPackImporters(g, 'il')).toEqual([]);
+      expect(directPackImporters(g, 'jo')).toEqual(['routes/x.ts']);
     });
     it('lets the registry door and il itself import il', () => {
       const g = fake({ 'jurisdictions/index.ts': "export * from './il/tax-id.js';", 'jurisdictions/il/tax-id.ts': '', 'issuing/compose.ts': "import { x } from '../jurisdictions/index.js';" });
-      expect(directIlImporters(g)).toEqual([]);
+      expect(directPackImporters(g)).toEqual([]);
     });
     it('flags a defaultPack() call that is not on the list', () => {
       expect(defaultPackCallers(new Map([['issuing/compose.ts', 'const p = defaultPack();'], ['jurisdictions/registry.ts', 'defaultPack()'], ['routes/x.ts', "import type { defaultPack } from '../jurisdictions/index.js';"]]))).toEqual(['issuing/compose.ts']);
