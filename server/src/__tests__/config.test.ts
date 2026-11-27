@@ -227,6 +227,12 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...base, STARTER_PLAN: 'yes' })).toThrow(/STARTER_PLAN/);
   });
 
+  it('PAID_HARD_CAPS (MUT-733): off unless exactly "true"', () => {
+    expect(loadConfig(base).PAID_HARD_CAPS).toBe(false);
+    expect(loadConfig({ ...base, PAID_HARD_CAPS: 'true' }).PAID_HARD_CAPS).toBe(true);
+    expect(() => loadConfig({ ...base, PAID_HARD_CAPS: 'yes' })).toThrow(/PAID_HARD_CAPS/);
+  });
+
   it('PAID_BUSINESS_CAPS (MUT-734): off unless exactly "true"', () => {
     expect(loadConfig(base).PAID_BUSINESS_CAPS).toBe(false);
     expect(loadConfig({ ...base, PAID_BUSINESS_CAPS: 'true' }).PAID_BUSINESS_CAPS).toBe(true);

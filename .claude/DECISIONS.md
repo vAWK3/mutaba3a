@@ -7410,3 +7410,16 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Override log:** ADR-037 ("only the operator provisions") and ADR-088 ("accounts are made by the operator or a self-service signup") are narrowed, not replaced: an approved accountant is a third provisioner, for a passwordless account that the customer claims through the same setup page. ADR-245 and ADR-251 are unchanged (read-only grant; ACCOUNTANT_PLAN stays off, MUT-747).
 
 **Consequences:** "Unclaimed" is derived (`passwordHash IS NULL AND provisionedAt IS NOT NULL`). Claim code, reissue and change of address are MUT-765; the activation Checkout MUT-766; the 60-day sweep and reminders MUT-767.
+
+## ADR-293: Paid Plans' Monthly Caps Are Hard After One Gift per Account (MUT-733; supersedes MUT-704's soft caps and move-up-at-renewal; amends ADR-275 d4, writes ADR-281 d9, widens ADR-284 d1)
+
+**Status:** Accepted (2026-11-27; Basel's decisions on MUT-733 comment 13548, the plan approved with every default answer).
+
+**Decision:**
+1. With `PAID_HARD_CAPS` on, Solo and Business documents and scans refuse at the cap (409 PLAN_LIMIT). Firm stays soft (Q2). Legacy Freelancer, Malafat and owner-less firms are never capped (Q4); legacy no-card trials neither (Q7).
+2. One gift per account, ever, for whichever meter is hit first; it lifts only that meter until the 1st of the next Jerusalem month (Q1). The first refusal says `gift: 'available'`; the client shows the message before anything goes through; `POST /v1/billing/over-cap-gift` takes it (a conditional update) and the held request is retried.
+3. A partner may take the owner's gift (Q3): the meter and the gift are the payer's.
+4. The rule rides the usage stamp (decided with the payer's plan), so every door (issue, Issue all, scans) agrees.
+5. In-app only, no mails (Q6). Short copy (Q5).
+
+**Consequences:** Turn on only after plan Checkout, MUT-734's plan change and the phone build that shows the gift are live.

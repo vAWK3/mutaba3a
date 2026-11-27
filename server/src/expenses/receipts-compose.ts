@@ -9,7 +9,7 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
 import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptCaptureHint, ReceiptSuggestion, UsageStamp } from '../repositories/ports.js';
 import { MAX_RECEIPTS_PER_EXPENSE, tooManyReceipts } from './compose.js';
-import { nextPlanFor, planLimitError } from '../billing/plan-limit.js';
+import { giftDetail, nextPlanFor, planLimitError } from '../billing/plan-limit.js';
 import { hardCapOf } from '../usage/caps.js';
 import { UsageCapReached } from '../usage/cap-reached.js';
 import { resetsOn, usageMonthOf } from '../usage/month.js';
@@ -61,7 +61,7 @@ export interface ReceiptActor {
 async function assertScanRoom(deps: ReceiptDeps, actor: ReceiptActor): Promise<void> {
   if (!actor.usage) return;
   const stamp = await actor.usage();
-  const cap = hardCapOf(stamp.plan, 'SCANS');
+  const cap = hardCapOf(stamp.plan, 'SCANS', stamp.caps);
   if (cap === null) return;
   const month = usageMonthOf(actor.now);
   const used = (await deps.store.usage.countersFor(stamp.subjectKey, [month])).find((c) => c.meter === 'SCANS')?.count ?? 0;
@@ -69,7 +69,7 @@ async function assertScanRoom(deps: ReceiptDeps, actor: ReceiptActor): Promise<v
 }
 
 function scanLimit(stamp: UsageStamp, actor: ReceiptActor, used: number, cap: number): ApiError {
-  return planLimitError({ limit: 'scans', plan: stamp.plan, nextPlan: nextPlanFor(stamp.plan), canUpgrade: actor.canUpgrade ?? false, used, cap, resetsOn: resetsOn(usageMonthOf(actor.now)) });
+  return planLimitError({ limit: 'scans', plan: stamp.plan, nextPlan: nextPlanFor(stamp.plan), canUpgrade: actor.canUpgrade ?? false, used, cap, resetsOn: resetsOn(usageMonthOf(actor.now)), ...giftDetail(stamp) });
 }
 
 /** The complete's door: the store throws UsageCapReached at the cap (nothing flipped); the person gets PLAN_LIMIT. */

@@ -464,6 +464,10 @@ export const STORE_ACCESS: StoreAccess = {
     starterPlan: 'read',
     // MUT-734: the server's PAID_BUSINESS_CAPS, a value like starterPlan.
     paidBusinessCaps: 'read',
+    // MUT-733: the server's PAID_HARD_CAPS, a value; the gift is the payer's own, read for a stamp and taken by the route.
+    paidHardCaps: 'read',
+    overCapGiftOf: 'sessionOnly',
+    claimOverCapGift: 'sessionOnly',
     factsFor: 'sessionOnly',
     // MUT-731: the owner's businesses for the Starter business cap, read beside factsFor (coverage.ts).
     ownedBusinessesOf: 'sessionOnly',

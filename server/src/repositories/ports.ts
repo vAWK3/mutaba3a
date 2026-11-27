@@ -2783,6 +2783,15 @@ export interface BillingRepository {
    * business count active (the rest read-only until picked) and new businesses past it are refused, as Starter's are.
    */
   readonly paidBusinessCaps: boolean;
+  /** MUT-733 (ADR-293): the server's PAID_HARD_CAPS: Solo and Business monthly meters refuse at the cap after the gift. */
+  readonly paidHardCaps: boolean;
+  /** MUT-733: the person's over-cap gift (never used: every field null). Null for an unknown user. */
+  overCapGiftOf(userId: string): Promise<{ usedAt: Date | null; meter: 'DOCUMENTS' | 'SCANS' | null; month: string | null } | null>;
+  /**
+   * MUT-733: takes the once-ever gift, only if it is still unused (a conditional update: two tabs, one gift). False when
+   * it was already taken (or the user is unknown). Writes `audit` in the same transaction.
+   */
+  claimOverCapGift(input: { userId: string; meter: 'DOCUMENTS' | 'SCANS'; month: string; at: Date; audit: AuditEventInput[] }): Promise<boolean>;
   /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
   factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
   /** MUT-731: every business profile the owners created (their built-in personal profile left out), with Malafat's state. */
@@ -5339,6 +5348,8 @@ export interface UsageStamp {
   plan: UsagePlan;
   door: UsageDoor;
   actorUserId: string | null;
+  /** MUT-733 (ADR-293): the paid caps and the over-cap gift, decided with the plan (usage/plan-of.ts). Absent = Starter only. */
+  caps?: { paidHardCaps: boolean; giftMeter: 'DOCUMENTS' | 'SCANS' | null; giftAvailable: boolean };
 }
 
 export interface UsageEventInput extends UsageStamp {

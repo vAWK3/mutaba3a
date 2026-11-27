@@ -3734,6 +3734,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/accountant/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a customer’s account and business profile (an approved accountant)
+         * @description MUT-764 (accountant channel). One call makes the customer's passwordless account, their business profile and your read-only grant (ADR-245: you view issued invoices and scanned receipts and act on nothing). The customer is mailed a setup link, valid 14 days; no response ever carries the link or its token. The 201 carries the 6-digit claim code once: tell it to the customer, who types it on the setup page; a repeat of the same Idempotency-Key returns the same account without the code. An address that already has an account makes none: you get `{ status: "exists" }` (ask the customer to share their books with you). Per UTC day an approved accountant makes at most 50 accounts and at most 100 attempts on addresses that already have one (the operator can change both): beyond that 429 RATE_LIMITED, details.limit CREATE_PER_DAY or LOOKUP_PER_DAY. 403 ACCOUNTANT_NOT_APPROVED until the operator approves you. 404 while the feature is off.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProvisionCustomerRequest"];
+                };
+            };
+            responses: {
+                /** @description The address already has an account; nothing was created */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProvisionExistingAddress"];
+                    };
+                };
+                /** @description Created; the claim code is in this answer only */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProvisionedCustomer"];
+                    };
+                };
+                /** @description ACCOUNTANT_NOT_APPROVED: the operator has not approved this person to create customers, or withdrew it */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The feature is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_REQUIRED (send an Idempotency-Key header), IDEMPOTENCY_KEY_REUSED (the key was used with a different body), or VALIDATION_FAILED: a malformed request, or details.reason ADDRESS_REFUSED (a disposable or relay address) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: the daily limit, details.limit CREATE_PER_DAY or LOOKUP_PER_DAY, with details.max and Retry-After */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/integration": {
         parameters: {
             query?: never;
@@ -20116,6 +20204,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/over-cap-gift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the once-ever over-cap gift for a monthly meter (MUT-733)
+         * @description Only after a 409 PLAN_LIMIT that said `gift: "available"`: the meter must be at its cap this month on a Solo or Business plan with PAID_HARD_CAPS on (409 GIFT_NOT_AVAILABLE otherwise). Once per account, ever, for one meter (409 GIFT_USED after; a repeat for the same meter in the same month answers 200). Audited `billing.over_cap_gift`. Additive since 1.159.0-mut733.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OverCapGiftRequest"];
+                };
+            };
+            responses: {
+                /** @description The meter has no cap until `until` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OverCapGift"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such business among the caller’s */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description GIFT_USED, or GIFT_NOT_AVAILABLE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/starter": {
         parameters: {
             query?: never;
@@ -25704,6 +25871,274 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operator/accounts/{userId}/accountant-provisioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the person may create customers, their two daily limits and what they did today (MUT-764) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The approval */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorProvisioningApproval"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator, or no such person */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a limit that is not a whole number from 1 to 1000) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /** Approve the person to create customers, with their two daily limits (idempotent; a null or omitted limit is the default) (MUT-764) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OperatorProvisioningRequest"];
+                };
+            };
+            responses: {
+                /** @description Approved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorProvisioningApproval"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator, or no such person */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a limit that is not a whole number from 1 to 1000) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Withdraw the approval to create customers; the limits are kept for a later approval (idempotent) (MUT-764) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Withdrawn */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorProvisioningApproval"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator, or no such person */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a limit that is not a whole number from 1 to 1000) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/provisioned-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Accounts an accountant created that have no password yet, newest first, with whether they already paid (MUT-764) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The unclaimed accounts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorProvisionedAccounts"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator, or no such person */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a limit that is not a whole number from 1 to 1000) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/usage/prune": {
         parameters: {
             query?: never;
@@ -29927,6 +30362,38 @@ export interface components {
              */
             lastActivityAt: string | null;
         };
+        ProvisionExistingAddress: {
+            /** @enum {string} */
+            status: "exists";
+        };
+        ProvisionedCustomer: {
+            /** @enum {string} */
+            status: "created";
+            customer: {
+                /** Format: uuid */
+                userId: string;
+                email: string;
+                displayName: string;
+            };
+            profile: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            };
+            claimCode?: string;
+            /** Format: date-time */
+            linkExpiresAt: string;
+            mailSent: boolean;
+        };
+        ProvisionCustomerRequest: {
+            /** Format: email */
+            email: string;
+            displayName: string;
+            profileName: string;
+            defaultCurrency: components["schemas"]["Currency"];
+            timezone: string;
+            locale?: components["schemas"]["UserLocale"];
+        };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
             apiKey: components["schemas"]["ApiKeySummary"];
@@ -33926,7 +34393,7 @@ export interface components {
                 level: "ok" | "near" | "nudge" | "at_cap";
                 /**
                  * Format: date-time
-                 * @description Reserved for MUT-733 (the over-cap gift); never sent yet.
+                 * @description MUT-733: the over-cap gift lifts this meter’s cap until this instant (the 1st of the next Jerusalem month); absent otherwise. `limit` stays the plan’s.
                  */
                 graceUntil?: string | null;
             }[];
@@ -33940,6 +34407,9 @@ export interface components {
             partners: {
                 /** @description Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731). */
                 limit: number | null;
+            };
+            gift?: {
+                available: boolean;
             };
         };
         BillingPlan: {
@@ -34156,6 +34626,18 @@ export interface components {
             prorationAt?: string;
             expectedAmountDue?: number;
             activeBusinessIds?: string[];
+        };
+        OverCapGift: {
+            /** @enum {string} */
+            meter: "documents" | "scans";
+            /** Format: date-time */
+            until: string;
+        };
+        OverCapGiftRequest: {
+            /** @enum {string} */
+            meter: "documents" | "scans";
+            /** Format: uuid */
+            organizationId?: string;
         };
         StarterChoice: {
             /** Format: date-time */
@@ -34874,6 +35356,39 @@ export interface components {
             }[];
             /** Format: date-time */
             stepUpUntil: string | null;
+        };
+        OperatorProvisioningApproval: {
+            /** Format: uuid */
+            userId: string;
+            enabled: boolean;
+            createLimitPerDay: number | null;
+            lookupLimitPerDay: number | null;
+            defaults: {
+                createLimitPerDay: number;
+                lookupLimitPerDay: number;
+            };
+            createdToday: number;
+            lookupsToday: number;
+        };
+        OperatorProvisioningRequest: {
+            createLimitPerDay?: number | null;
+            lookupLimitPerDay?: number | null;
+        };
+        OperatorProvisionedAccounts: {
+            items: {
+                /** Format: uuid */
+                userId: string;
+                email: string;
+                displayName: string;
+                /** Format: date-time */
+                provisionedAt: string;
+                accountant: {
+                    /** Format: uuid */
+                    userId: string;
+                    email: string;
+                } | null;
+                paid: boolean;
+            }[];
         };
         UsagePruneSummary: {
             deleted: {

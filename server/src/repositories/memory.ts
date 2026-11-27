@@ -345,9 +345,15 @@ export interface LocalSnapshot {
  */
 export class MemoryLedgerStore implements LedgerStore {
   /** MUT-731 (ADR-284): `starterPlan` is the server's STARTER_PLAN (BillingRepository.starterPlan). Absent = off. */
-  constructor(options: { starterPlan?: boolean; paidBusinessCaps?: boolean } = {}) {
+  constructor(options: { starterPlan?: boolean; paidBusinessCaps?: boolean; paidHardCaps?: boolean } = {}) {
     if (options.starterPlan) this.setStarterPlan(true);
     if (options.paidBusinessCaps) this.setPaidBusinessCaps(true);
+    if (options.paidHardCaps) this.setPaidHardCaps(true);
+  }
+
+  /** MUT-733: turns PAID_HARD_CAPS on or off for this store. */
+  setPaidHardCaps(on: boolean): void {
+    (this.billing as { paidHardCaps: boolean }).paidHardCaps = on;
   }
 
   /** MUT-734: turns PAID_BUSINESS_CAPS on or off for this store. */
@@ -476,6 +482,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly trialStarts = new Map<string, Date>();
   /** MUT-731 (ADR-284): `users.starterChosenAt`, `activeBusinessIds` and the Solo trial's two dates, by person. */
   private readonly starterChoices = new Map<string, Date>();
+  /** MUT-733: users.overCapGift* (once per account, ever). */
+  private readonly overCapGifts = new Map<string, { usedAt: Date; meter: 'DOCUMENTS' | 'SCANS'; month: string }>();
   private readonly activeBusinessChoices = new Map<string, string[]>();
   private readonly paidTrials = new Map<string, { offeredAt: Date | null; usedAt: Date | null }>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
@@ -1467,7 +1475,7 @@ export class MemoryLedgerStore implements LedgerStore {
 
   /** MUT-731: the memory store's scan cap, checked before the flip (Postgres rolls the flip back instead). */
   private refuseAtScanCap(usage: UsageStamp, at: Date): void {
-    const cap = hardCapOf(usage.plan, 'SCANS');
+    const cap = hardCapOf(usage.plan, 'SCANS', usage.caps);
     if (cap === null) return;
     const used = this.usage.countNow(usage.subjectKey, usageMonthOf(at), 'SCANS');
     if (used >= cap) throw new UsageCapReached(used, cap);
@@ -4274,7 +4282,7 @@ export class MemoryLedgerStore implements LedgerStore {
         r.status = 'READY';
         r.completedAt = at;
         // MUT-735 (ADR-281): only the call that flips it counts the scan.
-        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS'));
+        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS', usage.caps));
         // MUT-441 (R10 #5): with the flip, never on its own.
         if (read) Object.assign(r, { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) });
       }
@@ -4464,7 +4472,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (params.usage) this.refuseAtScanCap(params.usage, at);
       r.status = 'READY';
       r.completedAt = at;
-      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS'));
+      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS', params.usage.caps));
       return { kind: 'completed', receipt: { ...r } };
     },
     editRates: async (range) =>
@@ -4898,6 +4906,18 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly billing: BillingRepository = {
     starterPlan: false,
     paidBusinessCaps: false,
+    paidHardCaps: false,
+    overCapGiftOf: async (userId) => {
+      if (!this.people.has(userId)) return null;
+      const gift = this.overCapGifts.get(userId);
+      return gift ? { ...gift } : { usedAt: null, meter: null, month: null };
+    },
+    claimOverCapGift: async ({ userId, meter, month, at, audit }) => {
+      if (!this.people.has(userId) || this.overCapGifts.has(userId)) return false;
+      this.overCapGifts.set(userId, { usedAt: at, meter, month });
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return true;
+    },
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = new Set(ownerUserIds);
       const orgs = new Set(organizationIds);
