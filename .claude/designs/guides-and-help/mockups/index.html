@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTB3A guides, Get started and help centre: mockups</title>
+<style>
+/* Brand v2 primitives (src/styles/brand/mutaba3a-theme.css). Fonts: Thmanyah is licensed and not embedded here, so the mock uses system faces. */
+:root{
+  --canvas:#FCF6ED;--surface:#FFFCF7;--line:#E6E2ED;--field:#F4F2FB;--ink:#392F4B;--ink2:#564E68;
+  --primary:#795DBA;--primary-hover:#5E439E;--on-primary:#FDF8F0;--focus:#866EC5;
+  --lavender:#E0D7FF;--lavender-ink:#4D387E;--mint:#BAEBD4;--mint-ink:#00513E;--butter:#F6E8B3;--butter-ink:#67450A;
+  --peach-strong:#E89960;--shadow:0 1px 2px rgba(60,40,90,.06),0 12px 40px rgba(60,40,90,.07);
+  --spring:cubic-bezier(.32,.72,0,1);--dur:420ms;
+  --r-sm:12px;--r-md:14px;--r-card:24px;--r-pill:999px;
+}
+.dark{--canvas:#221B2D;--surface:#2E273C;--line:#4B435A;--field:#3B334C;--ink:#F4EEE4;--ink2:#BAB3C8;
+  --primary:#BCA9F7;--primary-hover:#C8B7FF;--on-primary:#2B1F3F;--focus:#B39EF2;--lavender:#453A64;--lavender-ink:#DBCEFF;
+  --mint:#134E39;--mint-ink:#A5E9CA;--butter:#57451E;--butter-ink:#F0DE99;--peach-strong:#EEA471;--shadow:0 1px 2px rgba(0,0,0,.4),0 12px 40px rgba(0,0,0,.35)}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Geeza Pro","Segoe UI",sans-serif}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+button:active:not(:disabled){transform:scale(.96)}
+button,.row{transition:transform 120ms var(--spring),background 120ms}
+:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--focus),0 0 0 4px color-mix(in srgb,var(--focus) 25%,transparent)}
+.rm *{transition-duration:0ms!important;animation-duration:0ms!important}
+.rm .drawer,.rm .sheet{transition:opacity 150ms linear!important}
+
+/* mock controls (not product UI) */
+.bar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;direction:ltr;font-size:13px}
+.bar b{font-size:14px}.grp{display:flex;gap:4px;align-items:center}.grp>span{color:var(--ink2);margin-inline-end:4px}
+.seg button{padding:6px 12px;border-radius:var(--r-pill);background:var(--field);color:var(--ink2);min-height:32px}
+.seg button[aria-pressed=true]{background:var(--lavender);color:var(--lavender-ink);font-weight:600}
+.note{max-width:1180px;margin:12px auto 0;padding:0 16px;color:var(--ink2);font-size:13px;direction:ltr}
+.stage{max-width:1180px;margin:12px auto 48px;padding:0 16px}
+.hide,[hidden]{display:none!important}
+
+/* frames */
+.frame{position:relative;background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow);overflow:hidden;min-height:760px}
+.frame.phone{width:390px;min-height:800px;margin:0 auto;border-radius:44px;border-width:8px}
+.chrome{display:flex;justify-content:space-between;align-items:center;padding:14px 20px}
+.pill{display:flex;gap:2px;background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:var(--r-pill);padding:4px}
+.pill span{padding:8px 16px;border-radius:var(--r-pill);font-size:14px;min-height:36px;display:flex;align-items:center}
+.pill .on{background:var(--lavender);color:var(--lavender-ink)}
+.avatar{width:40px;height:40px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-weight:600}
+.page{padding:8px 32px 32px;max-width:960px;margin-inline:auto}
+.phone .page{padding:8px 16px 96px}
+h1{font:700 32px/1.2 Georgia,"Geeza Pro",serif;margin:12px 0 16px}
+.phone h1{font-size:28px}
+h2{font:500 20px/1.3 system-ui;margin:0 0 8px}
+.muted{color:var(--ink2)}.label{font-size:13px;color:var(--ink2)}.micro{font-size:11px;font-weight:500}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow);padding:20px}
+.lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+.phone .lanes{grid-template-columns:1fr}
+.lane{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:16px 20px;min-height:96px}
+.lane .n{font:500 32px/1 ui-monospace,Menlo,monospace}
+.btn{min-height:44px;padding:0 20px;border-radius:var(--r-pill);background:var(--primary-hover);color:var(--on-primary);font-weight:600}
+.btn.sec{background:var(--field);color:var(--ink)}
+.link{color:var(--primary-hover);min-height:44px;padding:0 6px;display:inline-flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
+.banner{display:flex;gap:12px;align-items:flex-start;border-radius:var(--r-md);padding:14px 16px;background:var(--lavender);color:var(--lavender-ink);margin:0 0 16px}
+.banner .acts{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.dot{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;border:2px solid var(--line);color:transparent;font-size:13px;font-weight:700}
+.done .dot{background:var(--mint-ink);border-color:var(--mint-ink);color:var(--canvas)}
+.steps{list-style:none;margin:8px 0 0;padding:0;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.steps li{border-top:1px solid var(--line)}.steps li:first-child{border-top:0}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 14px;width:100%;text-align:start}
+.row:hover{background:var(--field)}
+.row .go{margin-inline-start:auto;color:var(--ink2)}
+[dir=rtl] .go{transform:scaleX(-1)}
+.bar2{height:8px;border-radius:var(--r-pill);background:var(--field);overflow:hidden;margin:10px 0}
+.bar2 i{display:block;height:100%;width:50%;background:var(--primary);border-radius:inherit;transition:width .5s var(--spring)}
+.gsline{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--line);margin-bottom:12px;color:var(--ink2);font-size:14px}
+.gsline .bar2{width:80px;margin:0}
+
+/* Claude Design slots: placeholders, never art */
+.slot{border:2px dashed var(--primary);border-radius:var(--r-md);background:repeating-linear-gradient(135deg,transparent 0 10px,color-mix(in srgb,var(--primary) 8%,transparent) 10px 20px);display:grid;place-items:center;text-align:center;color:var(--lavender-ink);font:600 11px/1.3 ui-monospace,Menlo,monospace;padding:6px;margin-inline:auto}
+.slot small{font-weight:400;opacity:.8;display:block}
+.s160{width:160px;height:160px}.s120{width:120px;height:96px}.s24{width:24px;height:24px;border-radius:6px;padding:0;font-size:8px}
+
+/* drawer + sheet */
+.overlay{position:absolute;inset:0;background:color-mix(in srgb,var(--ink) 40%,transparent);opacity:0;pointer-events:none;transition:opacity var(--dur) var(--spring);z-index:20}
+.open>.overlay{opacity:1;pointer-events:auto}
+.drawer{position:absolute;inset-block:0;inset-inline-end:0;width:480px;max-width:100%;background:var(--surface);z-index:21;display:flex;flex-direction:column;transform:translateX(calc(var(--sx,1)*100%));transition:transform var(--dur) var(--spring);box-shadow:var(--shadow)}
+[dir=rtl] .drawer{--sx:-1}
+.open>.drawer{transform:none}
+.dh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);font-weight:600}
+.db{padding:20px;overflow:auto;flex:1}
+.df{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--line);background:var(--canvas)}
+.x{width:44px;height:44px;border-radius:50%;display:grid;place-items:center}
+.sheet{position:absolute;inset-inline:0;bottom:0;background:var(--surface);z-index:21;border-radius:28px 28px 0 0;max-height:86%;display:flex;flex-direction:column;transform:translateY(100%);transition:transform var(--dur) var(--spring);box-shadow:var(--shadow)}
+.open>.sheet{transform:none}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 0}
+.gstep{display:flex;gap:12px;margin:0 0 16px}
+.gstep .num{width:28px;height:28px;border-radius:50%;background:var(--lavender);color:var(--lavender-ink);display:grid;place-items:center;font-weight:700;flex:none}
+.gview{display:flex;gap:8px;margin:0 0 12px}
+.tabbar{position:absolute;inset-inline:0;bottom:0;display:flex;justify-content:space-around;padding:10px 8px 22px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:5;font-size:12px;color:var(--ink2)}
+.tabbar .on{color:var(--lavender-ink);font-weight:600}
+
+/* website */
+.site{background:var(--canvas)}
+.sh{display:flex;align-items:center;gap:16px;padding:14px 32px;border-bottom:1px solid var(--line);background:var(--surface)}
+.sh .logo{font:700 20px Georgia,serif}
+.sh .sw{margin-inline-start:auto;display:flex;gap:2px}
+.sw button{padding:6px 12px;border-radius:var(--r-pill);min-height:36px;color:var(--ink2)}
+.sw button[aria-pressed=true]{background:var(--lavender);color:var(--lavender-ink);font-weight:600}
+.wrap{max-width:760px;margin:0 auto;padding:24px 32px 64px}
+.crumbs{font-size:13px;color:var(--ink2);margin:8px 0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:16px 0}
+.grid3.two{grid-template-columns:repeat(2,1fr)}
+.cluster{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:16px}
+.cluster ul{padding-inline-start:18px;margin:8px 0 0}
+.meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink2);border-block:1px solid var(--line);padding:10px 0;margin:12px 0 20px}
+.support{margin-top:32px;padding:16px;border-radius:var(--r-md);background:var(--field)}
+.legend{max-width:1180px;margin:0 auto 16px;padding:0 16px;font-size:13px;color:var(--ink2);direction:ltr}
+.legend code{background:var(--field);padding:1px 6px;border-radius:6px}
+@media(max-width:900px){.grid3,.lanes{grid-template-columns:1fr}.frame{min-height:0}.page{padding-inline:16px}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>MTB3A guides, Get started, help centre</b>
+  <div class="grp seg" id="surf"><span>Surface</span>
+    <button data-s="portal" aria-pressed="true">Portal (desktop)</button><button data-s="phone" aria-pressed="false">Phone</button><button data-s="site" aria-pressed="false">Website help</button></div>
+  <div class="grp seg" id="lang"><span>Language</span><button data-l="ar" aria-pressed="true">العربية</button><button data-l="en" aria-pressed="false">English</button></div>
+  <div class="grp seg" id="theme"><span>Theme</span><button data-th="light" aria-pressed="true">Light</button><button data-th="dark" aria-pressed="false">Dark</button></div>
+  <div class="grp seg" id="rmot"><span>Motion</span><button data-r="0" aria-pressed="true">Full</button><button data-r="1" aria-pressed="false">Reduced</button></div>
+</div>
+<div class="bar" id="varbar" style="top:53px">
+  <div class="grp seg" id="vGs"><span>Get started</span><button data-v="A" aria-pressed="true">A: card</button><button data-v="B" aria-pressed="false">B: quiet line</button></div>
+  <div class="grp seg" id="vGuide"><span>Guide (picked: A portal, B phone)</span><button data-v="A" aria-pressed="false">Show A everywhere</button><button data-v="B" aria-pressed="false">Show B everywhere</button></div>
+  <div class="grp seg" id="vPrompt"><span>Prompt</span><button data-v="off" aria-pressed="true">Off</button><button data-v="A" aria-pressed="false">A: banner</button><button data-v="B" aria-pressed="false">B: in the lane</button></div>
+</div>
+<p class="note"><b>Picked 2026-11-27:</b> Get started A (card), guide A on the portal and B on the phone, prompt A (banner). The other layouts stay here for reference. Draft layout and draft copy. Copy is not signed off (MUT-673). Dashed boxes are Claude Design slots: nothing in them is final art or motion. Click a Get started step or "Show me how".</p>
+
+<!-- ============ PORTAL ============ -->
+<div class="stage" id="s-portal">
+ <div class="gview seg" id="pView" style="direction:ltr"><button data-pv="home" aria-pressed="true">Home</button><button data-pv="hub" aria-pressed="false">You › Get started</button></div>
+ <section class="frame" id="portal" data-lang="ar" dir="rtl">
+  <div class="chrome"><div class="pill"><span class="on" data-t="nHome"></span><span data-t="nClients"></span><span data-t="nExpenses"></span><span data-t="nDocs"></span></div><div class="avatar">B</div></div>
+  <main class="page" id="pHome">
+    <h1 data-t="nHome"></h1>
+    <div class="banner" id="pBannerA" hidden>
+      <div><strong data-t="pText"></strong><div class="acts"><button class="link" data-open="portal" data-t="show"></button><button class="link" data-dismiss="prompt" data-t="notNow"></button></div></div>
+    </div>
+    <div class="card gs-A" id="pGsA"></div>
+    <button class="gsline gs-B hide" id="pGsB" data-open-hub><span data-t="gsTitle"></span><span class="bar2"><i style="width:50%"></i></span><span class="micro">2 / 4</span></button>
+    <div class="lanes">
+      <div class="lane"><div class="label" data-t="lAdd"></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" data-t="income"></button><button class="btn sec" data-t="expense"></button></div></div>
+      <div class="lane"><div class="label" data-t="lReview"></div><div class="n">3</div></div>
+      <div class="lane" id="pLaneB" hidden><div class="label" data-t="pText"></div><div class="acts" style="margin-top:8px"><button class="btn" data-open="portal" data-t="show"></button></div></div>
+      <div class="lane" id="pLaneOver"><div class="label" data-t="lOver"></div><div class="n">2</div></div>
+    </div>
+  </main>
+  <main class="page hide" id="pHub">
+    <h1 data-t="gsTitle"></h1>
+    <p class="muted" data-t="hubLead"></p>
+    <ul class="steps" id="hubList"></ul>
+  </main>
+  <div id="pDr"><div class="overlay" data-close="portal"></div>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="pDt">
+      <div class="dh"><span id="pDt" data-t="gTitle"></span><button class="x" data-close="portal" aria-label="close">✕</button></div>
+      <div class="db" id="pGuide"></div>
+      <div class="df"><button class="btn sec" data-close="portal" data-t="close"></button><button class="btn" data-t="connect"></button></div>
+    </aside></div>
+ </section>
+</div>
+
+<!-- ============ PHONE ============ -->
+<div class="stage hide" id="s-phone">
+ <div class="gview seg" id="mView" style="direction:ltr;justify-content:center"><button data-pv="home" aria-pressed="true">Home</button><button data-pv="hub" aria-pressed="false">You › Get started</button></div>
+ <section class="frame phone" id="phone" data-lang="ar" dir="rtl">
+  <main class="page" id="mHome">
+    <h1 data-t="nHome"></h1>
+    <div class="banner" id="mBannerA" hidden><div><strong data-t="pText"></strong><div class="acts"><button class="link" data-open="phone" data-t="show"></button><button class="link" data-dismiss="prompt" data-t="notNow"></button></div></div></div>
+    <div class="card gs-A" id="mGsA"></div>
+    <button class="gsline gs-B hide" id="mGsB" data-open-hub><span data-t="gsTitle"></span><span class="bar2"><i style="width:50%"></i></span><span class="micro">2 / 4</span></button>
+    <div class="lanes">
+      <div class="lane"><div class="label" data-t="lAdd"></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" data-t="income"></button><button class="btn sec" data-t="expense"></button></div></div>
+      <div class="lane" id="mLaneB" hidden><div class="label" data-t="pText"></div><div style="margin-top:8px"><button class="btn" data-open="phone" data-t="show"></button></div></div>
+      <div class="lane"><div class="label" data-t="lReview"></div><div class="n">3</div></div>
+    </div>
+  </main>
+  <main class="page hide" id="mHub"><h1 data-t="gsTitle"></h1><ul class="steps" id="mHubList"></ul></main>
+  <nav class="tabbar"><span class="on" data-t="nHome"></span><span data-t="nClients"></span><span data-t="nExpenses"></span><span data-t="you"></span></nav>
+  <div id="mDr"><div class="overlay" data-close="phone"></div>
+    <aside class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>
+      <div class="dh"><span data-t="gTitle"></span><button class="x" data-close="phone" aria-label="close">✕</button></div>
+      <div class="db" id="mGuide"></div>
+      <div class="df"><button class="btn" style="flex:1" data-t="connect"></button></div>
+    </aside></div>
+ </section>
+</div>
+
+<!-- ============ WEBSITE ============ -->
+<div class="stage hide" id="s-site">
+ <div class="gview seg" id="wView" style="direction:ltr"><button data-wv="index" aria-pressed="true">/help</button><button data-wv="explain" aria-pressed="false">/help/… explainer</button><button data-wv="how" aria-pressed="false">/help/… how-to</button><button data-wv="nf" aria-pressed="false">404</button></div>
+ <section class="frame site" id="site" data-lang="ar" dir="rtl" style="min-height:720px">
+  <header class="sh"><span class="logo">MTB3A · متابعة</span><span class="muted label" data-t="help"></span>
+    <div class="sw" id="wsw" style="direction:ltr"><button data-wl="ar" aria-pressed="true">العربية</button><button data-wl="en" aria-pressed="false">English</button><button data-wl="he" aria-pressed="false">עברית</button></div>
+    <button class="btn" data-t="signup"></button></header>
+  <div class="wrap" id="wIndex">
+    <h1 data-t="help"></h1>
+    <div class="grid3" id="clusters">
+      <div class="cluster"><div class="slot s120" data-s-name="help-cluster-allocation">help-cluster-allocation<small>120×96</small></div><h2 data-t="c1"></h2><ul><li data-t="c1a"></li><li data-t="c1b"></li><li data-t="c1c"></li></ul></div>
+      <div class="cluster"><div class="slot s120">help-cluster-documents<small>120×96</small></div><h2 data-t="c2"></h2><ul><li data-t="c2a"></li><li data-t="c2b"></li><li data-t="c2c"></li></ul></div>
+      <div class="cluster" data-only="ar en"><div class="slot s120">help-cluster-receipts<small>120×96</small></div><h2 data-t="c3"></h2><ul><li data-t="c3a"></li><li data-t="c3b"></li><li data-t="c3c"></li></ul></div>
+    </div>
+    <div class="support"><span data-t="noAnswer"></span> <a class="link" href="#" data-t="supportMail"></a></div>
+  </div>
+  <div class="wrap hide" id="wExplain">
+    <div class="crumbs" data-t="crumb1"></div>
+    <h1 data-t="exTitle"></h1>
+    <p data-t="exBody"></p>
+    <div class="slot s160" style="margin:16px auto">help-explainer-hero<small>160×160, per cluster</small></div>
+    <div class="meta"><span><span data-t="reviewed"></span> <bdi data-t="reviewedDate"></bdi></span><a class="link" href="#" data-t="source"></a></div>
+    <h2 data-t="howTitle"></h2><button class="btn" data-wgo="how" data-t="howCta"></button>
+    <h2 style="margin-top:24px" data-t="related"></h2><ul><li data-t="c1b"></li><li data-t="c2a"></li></ul>
+    <div class="support"><span data-t="noAnswer"></span> <a class="link" href="#" data-t="supportMail"></a></div>
+  </div>
+  <div class="wrap hide" id="wHow">
+    <div class="crumbs" data-t="crumb1"></div>
+    <h1 data-t="hwTitle"></h1>
+    <div id="wSteps"></div>
+    <div class="meta"><span><span data-t="reviewed"></span> <bdi data-t="reviewedDate"></bdi></span><a class="link" href="#" data-t="source"></a></div>
+    <button class="btn" data-t="signup"></button>
+    <div class="support"><span data-t="noAnswer"></span> <a class="link" href="#" data-t="supportMail"></a></div>
+  </div>
+  <div class="wrap hide" id="wNf" style="text-align:center;padding-top:72px">
+    <div class="slot s160">help-not-found<small>160×160, calm</small></div>
+    <h1 data-t="nfTitle"></h1><button class="btn" data-wgo="index" data-t="toHelp"></button>
+  </div>
+ </section>
+</div>
+
+<div class="legend">
+  <p><b>Claude Design slots in this mock</b> (names are what we ask for): <code>guide-tax-hero</code>, <code>guide-tax-1…4</code>, <code>guide-claude-hero</code>, <code>guide-claude-1…4</code>, <code>guide-scan-1…3</code>, <code>guide-banktext-1…3</code>, <code>guide-accountant-1…3</code>, <code>getstarted-done</code>, <code>help-cluster-*</code>, <code>help-explainer-hero</code>, <code>help-not-found</code>, plus 24 px icons and the motions in the brief.</p>
+  <p>Hebrew is on the website only (the receipts cluster is Arabic and English only, as decided). Support address is a placeholder to confirm. Dates use Levantine Arabic month names with Western digits.</p>
+</div>
+
+<script>
+const T={
+en:{nHome:'Home',nClients:'Clients',nExpenses:'Expenses',nDocs:'Documents',you:'You',gsTitle:'Get started',hubLead:'Guides and setup in one place.',
+ lAdd:'Add',lReview:'To review',lOver:'Clients overdue',income:'Income',expense:'Expense',
+ hide:'Hide',show:'Show me how',notNow:'Not now',close:'Close',connect:'Connect now',next:'Next',back:'Back',
+ pText:'Connect the Tax Authority to get allocation numbers',
+ gTitle:'Connect to the Tax Authority',gLead:'You let MTB3A act for your business to get allocation numbers.',
+ gSteps:['Open Connect in Settings › Invoicing.','Sign in to the Tax Authority personal area with your own account.','Approve access.','Back in MTB3A you see Connected until and a date.'],
+ gNote:'Reconnect every 90 days.',gSrc:'Tax Authority page',stepOf:'Step',
+ steps:['Invoicing details','Connect the Tax Authority','Connect Claude','Scan your first receipt'],
+ help:'Help',signup:'Create an account',c1:'Allocation number and the Tax Authority',c1a:'What is an allocation number?',c1b:'Connect to the Tax Authority',c1c:'When the connection expires',
+ c2:'Invoice documents',c2a:'Tax invoice or receipt?',c2b:'Credit note',c2c:'Payment request',c3:'Receipts and expenses',c3a:'Scan a receipt',c3b:'Share a bank text',c3c:'Send your accountant the period',
+ noAnswer:'No answer?',supportMail:'support@mtb3a.com',crumb1:'Help › Allocation number',exTitle:'What is an allocation number?',
+ exBody:'An allocation number is a number the Tax Authority gives an invoice before it is issued.',reviewed:'Last reviewed',reviewedDate:'27 Nov 2026',source:'Tax Authority page ↗',
+ howTitle:'In MTB3A',howCta:'How to connect',related:'Related',hwTitle:'Connect to the Tax Authority',nfTitle:'Page not found',toHelp:'Help'},
+ar:{nHome:'الرئيسية',nClients:'العملاء',nExpenses:'المصاريف',nDocs:'المستندات',you:'أنت',gsTitle:'ابدأ',hubLead:'الأدلة والإعداد في مكان واحد.',
+ lAdd:'إضافة',lReview:'للمراجعة',lOver:'عملاء متأخرون',income:'دخل',expense:'مصروف',
+ hide:'إخفاء',show:'أرني كيف',notNow:'ليس الآن',close:'إغلاق',connect:'ربط الآن',next:'التالي',back:'السابق',
+ pText:'اربط مصلحة الضرائب للحصول على أرقام تخصيص',
+ gTitle:'الربط بمصلحة الضرائب',gLead:'تسمح لـ MTB3A بالعمل باسم عملك للحصول على أرقام تخصيص.',
+ gSteps:['افتح «ربط» في الإعدادات › الفوترة.','سجّل الدخول إلى المنطقة الشخصية في مصلحة الضرائب بحسابك.','وافق على الصلاحية.','عند العودة إلى MTB3A يظهر «مرتبط حتى» مع تاريخ.'],
+ gNote:'أعد الربط كل 90 يومًا.',gSrc:'صفحة مصلحة الضرائب',stepOf:'الخطوة',
+ steps:['تفاصيل الفوترة','ربط مصلحة الضرائب','ربط Claude','امسح أول إيصال'],
+ help:'مساعدة',signup:'أنشئ حسابًا',c1:'رقم التخصيص ومصلحة الضرائب',c1a:'ما هو رقم التخصيص؟',c1b:'الربط بمصلحة الضرائب',c1c:'عند انتهاء الربط',
+ c2:'مستندات الفوترة',c2a:'فاتورة ضريبية أم إيصال؟',c2b:'إشعار دائن',c2c:'طلب دفع',c3:'الإيصالات والمصاريف',c3a:'مسح إيصال',c3b:'مشاركة رسالة البنك',c3c:'أرسل الفترة إلى محاسبك',
+ noAnswer:'لم تجد الجواب؟',supportMail:'support@mtb3a.com',crumb1:'مساعدة › رقم التخصيص',exTitle:'ما هو رقم التخصيص؟',
+ exBody:'رقم التخصيص رقم تمنحه مصلحة الضرائب للفاتورة قبل إصدارها.',reviewed:'آخر مراجعة',reviewedDate:'27 تشرين الثاني 2026',source:'صفحة مصلحة الضرائب ↗',
+ howTitle:'في MTB3A',howCta:'كيف تربط',related:'ذات صلة',hwTitle:'الربط بمصلحة الضرائب',nfTitle:'الصفحة غير موجودة',toHelp:'مساعدة'},
+he:{help:'עזרה',signup:'פתחו חשבון',c1:'מספר הקצאה ורשות המסים',c1a:'מהו מספר הקצאה?',c1b:'חיבור לרשות המסים',c1c:'כשהחיבור פג',
+ c2:'מסמכי חשבונית',c2a:'חשבונית מס או קבלה?',c2b:'חשבונית זיכוי',c2c:'דרישת תשלום',
+ noAnswer:'לא מצאתם תשובה?',supportMail:'support@mtb3a.com',crumb1:'עזרה › מספר הקצאה',exTitle:'מהו מספר הקצאה?',
+ exBody:'מספר הקצאה הוא מספר שרשות המסים נותנת לחשבונית לפני הנפקתה.',reviewed:'נבדק לאחרונה',reviewedDate:'27 בנובמבר 2026',source:'אתר רשות המסים ↗',
+ howTitle:'ב-MTB3A',howCta:'איך מתחברים',related:'קשור',hwTitle:'חיבור לרשות המסים',
+ gSteps:['פתחו ‘חיבור’ בהגדרות › חשבוניות.','היכנסו לאזור האישי ברשות המסים עם החשבון שלכם.','אשרו גישה.','בחזרה ל-MTB3A יופיע ‘מחובר עד’ ותאריך.'],
+ nfTitle:'הדף לא נמצא',toHelp:'עזרה'}};
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const tt=(l,k)=>(T[l]&&T[l][k]!==undefined)?T[l][k]:T.en[k];
+/* Picked 2026-11-27: Get started A (card), guide A on the portal and B (one step at a time) on the phone, prompt A (banner). */
+const S={surf:'portal',lang:'ar',vGs:'A',vGuideP:'A',vGuideM:'B',vPrompt:'off',step:0,done:[true,false,false,false]};
+const GUIDE_SLOTS=['guide-tax-1','guide-tax-2','guide-tax-3','guide-tax-4'];
+
+function guideHTML(l,phone){
+  const st=tt(l,'gSteps'),steps=st.map((s,i)=>({s,a:GUIDE_SLOTS[i]}));
+  const hero=`<div class="slot s120" style="margin-bottom:12px">guide-tax-hero<small>120×96</small></div><p class="muted">${tt(l,'gLead')}</p>`;
+  const v=phone?S.vGuideM:S.vGuideP;
+  if(v==='A'){
+    return hero+steps.map((x,i)=>`<div class="gstep"><div class="num">${i+1}</div><div><div>${x.s}</div><div class="slot s120" style="margin:8px 0 0;width:100%;height:72px">${x.a}<small>120×96, enters once</small></div></div></div>`).join('')
+      +`<p class="label">${tt(l,'gNote')}</p><a class="link" href="#">${tt(l,'gSrc')} ↗</a>`;
+  }
+  const i=S.step,x=steps[i],last=i===steps.length-1;
+  return `<div class="slot s160" style="margin:0 auto 12px">${x.a}<small>160×160, enters once</small></div>
+   <div class="micro muted" style="text-align:center">${tt(l,'stepOf')} ${i+1} / ${steps.length}</div>
+   <p style="text-align:center;font-size:18px;margin:8px 0 16px">${x.s}</p>
+   <div style="display:flex;justify-content:center;gap:8px"><button class="btn sec" data-step="-1" ${i===0?'disabled style="opacity:.4"':''}>${tt(l,'back')}</button>${last?'':`<button class="btn" data-step="1">${tt(l,'next')}</button>`}</div>
+   ${last?`<p class="label" style="text-align:center;margin-top:12px">${tt(l,'gNote')} <a class="link" href="#">${tt(l,'gSrc')} ↗</a></p>`:''}`;
+}
+function gsHTML(l){
+  const n=S.done.filter(Boolean).length;
+  return `<div style="display:flex;justify-content:space-between;align-items:center"><h2>${tt(l,'gsTitle')} <bdi class="micro muted">${n} / 4</bdi></h2><button class="link" data-gs-hide>${tt(l,'hide')}</button></div>
+  <div class="bar2"><i style="width:${n*25}%"></i></div>
+  <ul class="steps">${tt(l,'steps').map((s,i)=>`<li class="${S.done[i]?'done':''}"><button class="row" ${i===1?'data-open="'+(S.surf==='phone'?'phone':'portal')+'"':''}><span class="dot">✓</span><span>${s}</span><span class="go">›</span></button></li>`).join('')}</ul>`;
+}
+function hubHTML(l){
+  return tt(l,'steps').map((s,i)=>`<li class="${S.done[i]?'done':''}"><button class="row" ${i===1?'data-open="'+(S.surf==='phone'?'phone':'portal')+'"':''}><span class="dot">✓</span><span>${s}</span><span class="go">›</span></button></li>`).join('');
+}
+function applyFrame(el,l){
+  el.dataset.lang=l;el.dir=(l==='en')?'ltr':'rtl';el.lang=l;
+  $$('[data-t]',el).forEach(n=>{n.textContent=tt(l,n.dataset.t)});
+  $$('[data-only]',el).forEach(n=>n.classList.toggle('hide',!n.dataset.only.split(' ').includes(l)));
+}
+function render(){
+  const pl=S.lang,wl=$('#site').dataset.lang;
+  [['portal','#pGsA','#pGuide','#hubList'],['phone','#mGsA','#mGuide','#mHubList']].forEach(([k,gs,g,hub])=>{
+    S.surf=k;const f=$('#'+k);applyFrame(f,pl);
+    $(gs).innerHTML=gsHTML(pl);$(g).innerHTML=guideHTML(pl,k==='phone');$(hub).innerHTML=hubHTML(pl);
+    $$('.gs-A',f).forEach(n=>n.classList.toggle('hide',S.vGs!=='A'||n.dataset.gone==='1'));
+    $$('.gs-B',f).forEach(n=>n.classList.toggle('hide',S.vGs!=='B'));
+  });
+  S.surf=$('#surf [aria-pressed=true]').dataset.s;
+  $('#pBannerA').hidden=$('#mBannerA').hidden=S.vPrompt!=='A';
+  $('#pLaneB').hidden=$('#mLaneB').hidden=S.vPrompt!=='B';
+  applyFrame($('#site'),wl);
+  const h=wl==='he'?{...T.he}:null;
+  $('#wSteps').innerHTML=tt(wl,'gSteps').map((s,i)=>`<div class="gstep"><div class="num">${i+1}</div><div><div>${s}</div><div class="slot s120" style="margin:8px 0 0;width:100%;height:72px">${GUIDE_SLOTS[i]}<small>same art as the in-app guide</small></div></div></div>`).join('');
+  $$('#wsw button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.wl===wl));
+}
+function seg(sel,fn){$$(sel+' button').forEach(b=>b.addEventListener('click',()=>{$$(sel+' button').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');fn(b)}))}
+seg('#surf',b=>{['portal','phone','site'].forEach(k=>$('#s-'+k).classList.toggle('hide',k!==b.dataset.s));S.surf=b.dataset.s;$('#varbar').classList.toggle('hide',b.dataset.s==='site')});
+seg('#lang',b=>{S.lang=b.dataset.l;render()});
+seg('#theme',b=>document.body.classList.toggle('dark',b.dataset.th==='dark'));
+seg('#rmot',b=>document.body.classList.toggle('rm',b.dataset.r==='1'));
+seg('#vGs',b=>{S.vGs=b.dataset.v;render()});
+seg('#vGuide',b=>{S.vGuideP=S.vGuideM=b.dataset.v;S.step=0;render()});
+seg('#vPrompt',b=>{S.vPrompt=b.dataset.v;render()});
+seg('#pView',b=>{$('#pHome').classList.toggle('hide',b.dataset.pv!=='home');$('#pHub').classList.toggle('hide',b.dataset.pv!=='hub')});
+seg('#mView',b=>{$('#mHome').classList.toggle('hide',b.dataset.pv!=='home');$('#mHub').classList.toggle('hide',b.dataset.pv!=='hub')});
+seg('#wView',b=>{['index','explain','how','nf'].forEach(k=>$('#w'+{index:'Index',explain:'Explain',how:'How',nf:'Nf'}[k]).classList.toggle('hide',k!==b.dataset.wv))});
+$$('#wsw button').forEach(b=>b.addEventListener('click',()=>{$('#site').dataset.lang=b.dataset.wl;render()}));
+document.addEventListener('click',e=>{
+  const o=e.target.closest('[data-open]');if(o){$('#'+(o.dataset.open==='phone'?'mDr':'pDr')).classList.add('open');return}
+  const c=e.target.closest('[data-close]');if(c){$('#'+(c.dataset.close==='phone'?'mDr':'pDr')).classList.remove('open');return}
+  if(e.target.closest('[data-open-hub]')){const f=e.target.closest('.frame');(f.id==='phone'?$('#mView button[data-pv=hub]'):$('#pView button[data-pv=hub]')).click();return}
+  const st=e.target.closest('[data-step]');if(st){S.step=Math.max(0,Math.min(3,S.step+Number(st.dataset.step)));render();return}
+  if(e.target.closest('[data-gs-hide]')){const f=e.target.closest('.frame');$$('.gs-A',f).forEach(n=>{n.dataset.gone='1';n.classList.add('hide')});return}
+  if(e.target.closest('[data-dismiss]')){S.vPrompt='off';$$('#vPrompt button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='off'));render();return}
+  const w=e.target.closest('[data-wgo]');if(w){$('#wView button[data-wv='+w.dataset.wgo+']').click()}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#pDr').classList.remove('open');$('#mDr').classList.remove('open')}});
+render();
+</script>
+</body>
+</html>

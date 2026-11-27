@@ -5059,3 +5059,21 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Pure | `src/hosted/data/__tests__/planUsage.test.ts` | `nextPlanOf` along the ladder and off it; `sellablePlanOf`; `recommendedPlanOf` 0/1/2/4/9 businesses and none on offer; `planUsageOf` on a paid plan (gift, `graceUntil`) and null on Freelancer/Malafat |
 | Portal | `src/hosted/components/__tests__/BillingDrawer.mut705.test.tsx` | Subscribe opens on Business for two businesses and on `?billingPlan=firm` (Staff: coming soon); headline "Business, renews"; meters butter at 90% with Upgrade to Firm, none on scans; Firm with the gift (no upgrade, "No limit until"); read-only businesses, checklist 3 of 3 → 2 of 3, disabled past the cap, Save sends the pick; New profile on Solo names Business and its price; Home's line on Solo at 46/50 |
 | QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.plan-recommended`, `paid-billing` (en + ar at 375 px), `paid-read-only`, `paid-cap-prompts` |
+## The accountant's desk (MUT-768, epic MUT-762, ADR-325)
+
+| Level | Test | Covers |
+|---|---|---|
+| Unit | `pages/client-books/__tests__/deskRules.test.ts` | the row states, the join by profile, Ended wins, the one next action, filters and counts, search |
+| Unit | `components/__tests__/accountantErrors.test.ts` | every refusal as a banner key, the three daily limits, the activation refusals, the generic fallback |
+| Integration | `pages/client-books/__tests__/DeskCustomers.test.tsx` | badges and actions, chips, an unapproved accountant, the empty state, Add customer (body, key, code, banners), the Customer drawer (new code, change email, claimed meanwhile), Take card (body, Stripe, marker), Activating and polling to Active |
+| Integration | `pages/client-books/__tests__/ClientBooks.test.tsx` (existing) | the plain desk still works with the new columns |
+| Parity | `i18n/__tests__/parity.test.ts` | the `hosted.desk.*` keys in both languages |
+| release-qa | `qa/features/portal/accountant-desk.yaml`, `qa/specs/portal/accountant-desk.spec.ts` | add (with Arabic at 375 px), code, take-card, claimed |
+
+## MUT-770 — CodeReveal, the Activating poll and motion (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/components/__tests__/CodeReveal.test.tsx` | 3+3 groups, spaced aria-label, LTR in ar and en, stagger order, Copy → Copied → Copy after 2 s, a failed copy, the claim-code spec values and the reduced-motion still in CSS |
+| Unit | `src/hosted/components/__tests__/Activating.test.tsx` | `activatingPhase`; the poll every 4 s, late at 2 min, active when paid, late on a late reload; `hopEnd`; loop → finish the hop → resolve; -rtl key frames; reduced motion shows the scene; the activating spec values; the polite live region in ar and en |
+| Guard | `src/styles/__tests__/direction.test.ts`, `brand.test.ts` | the two `dir` sites; the Copy pill's contrast |

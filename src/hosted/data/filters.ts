@@ -359,6 +359,16 @@ export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile'
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
+/** MUT-768 (accountant channel): the drawers on the desk (`/client-books`): Add customer, and one customer's. */
+export interface DeskSearch {
+  newCustomer?: true;
+  /** A customer's user id. */
+  customer?: string;
+  /** The Take card pane of that customer's drawer. */
+  pane?: 'card';
+}
+export const parseDeskSearch = (raw: Raw): DeskSearch => compact({ newCustomer: flag(raw.newCustomer), customer: id(raw.customer), pane: raw.pane === 'card' ? ('card' as const) : undefined });
+
 export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
   compact({
     newProfile: flag(raw.newProfile),
