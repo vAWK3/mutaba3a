@@ -132,7 +132,7 @@ export const stripeObjects = {
 export class FakeCheckoutGateway implements CheckoutGateway {
   readonly prices = new Map<string, PriceFact>();
   /** Customers by id, with the person their metadata names. */
-  readonly customers = new Map<string, { email: string; userId: string }>();
+  readonly customers = new Map<string, { email: string | null; userId: string }>();
   readonly checkoutSessions: Stripe.Checkout.SessionCreateParams[] = [];
   readonly portalSessions: { customer: string; returnUrl: string; flow?: 'card' }[] = [];
   readonly calls: string[] = [];
@@ -227,6 +227,17 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     const id = `cus_new_${this.customers.size + 1}`;
     this.customers.set(id, { email: person.email, userId: person.userId });
     return id;
+  }
+
+  async customerIdOf(userId: string): Promise<string | null> {
+    this.take(`customerOf:${userId}`);
+    return [...this.customers.entries()].find(([, c]) => c.userId === userId)?.[0] ?? null;
+  }
+
+  async setCustomerEmail(customer: string, email: string): Promise<void> {
+    this.take(`email:${customer}`);
+    const found = this.customers.get(customer);
+    if (found) found.email = email;
   }
 
   async createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }> {

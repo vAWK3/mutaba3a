@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-361: The claim's Stripe email has no retry, and Checkout's email field is unverified for a customer with none (MUT-766)
+**Status**: Open (2026-11-27)
+- **What:** (1) if Stripe fails when a customer claims, the verified address is not set on their Stripe customer (a `claim_stripe_email_failed` log line), so Stripe receipts and invoices have no address until someone sets it. (2) Stripe's hosted Checkout may ask for an email when the customer has none and save it, which would put the address typed in the room on the customer before the claim (R5's intent).
+- **Why it's acceptable:** dark behind `ACCOUNTANT_PROVISIONING`; no customer pays this way yet.
+- **Fix:** before the pilot, run one activation in Stripe test mode and look at the customer; if Checkout stores an email, pass `customer_update` or set the email from the claim only and document it. Add the email to the Stripe sync (set it when the mirror links a customer whose person has a verified address and Stripe has none).
+
 ### TD-360: Accountant channel: no alerts yet (MUT-765)
 **Status**: Open (2026-11-27)
 - **What:** a claim-code lock and creation spikes are only log lines (`claim_code_locked`); no alert fires (plan T9). (`src/hosted/api/schema.d.ts` was regenerated with the merge of MUT-733, 2026-11-27.)

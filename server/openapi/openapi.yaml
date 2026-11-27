@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.160.0-mut765
+  version: 1.161.0-mut766
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -2155,6 +2155,8 @@ components:
           required:
             - expiresAt
             - mailStatus
+        paid:
+          type: boolean
       required:
         - userId
         - email
@@ -2163,6 +2165,7 @@ components:
         - provisionedAt
         - state
         - link
+        - paid
     ProvisionedLink:
       type: object
       properties:
@@ -12845,6 +12848,42 @@ components:
         - interval
         - country
         - buyer
+        - returnPath
+      additionalProperties: false
+    ActivationCheckoutRequest:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum:
+            - solo
+            - business
+            - firm
+        interval:
+          type: string
+          enum:
+            - month
+            - year
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+        buyer:
+          type: string
+          enum:
+            - person
+            - business
+        address:
+          $ref: "#/components/schemas/BillingAddress"
+        returnPath:
+          type: string
+          maxLength: 200
+          description: "Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin."
+      required:
+        - plan
+        - interval
+        - country
+        - buyer
+        - address
         - returnPath
       additionalProperties: false
     PortalSessionRequest:
@@ -30822,6 +30861,83 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant/customers/{userId}/checkout-session:
+    post:
+      tags:
+        - Accountants
+      summary: Take the card of a customer you created, in Stripe’s page, before they claim the account (MUT-766)
+      description: "ADR-295. An approved accountant (ACCOUNTANT_PROVISIONING) opens Stripe Checkout for a paid plan (solo, business or firm) on behalf of a customer he created who has not set a password yet; the customer is the payer (their subscription, their profiles, their Stripe customer) and enters the card and the bank’s check on Stripe’s page. The same Checkout as the customer’s own (PLAN_CHECKOUT): the address is required and saved first, the customer’s other open Checkouts are expired. The Stripe customer carries no email until the customer claims the account (then the verified address). The rate limit counts against the accountant; audited `billing.checkout_started` with the accountant as actor and `payerUserId`. The subscription arrives by the webhook (the desk shows it as `paid`). 404 for another accountant’s customer, a claimed one, or with the feature off. Additive since 1.161.0-mut766."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivationCheckoutRequest"
+      responses:
+        "200":
+          description: The Checkout page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingRedirect"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNTANT_NOT_APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No unclaimed customer of yours by this id, or the feature is off
           content:
             application/json:
               schema:

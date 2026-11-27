@@ -787,6 +787,23 @@ export const CheckoutSessionRequestSchema = z
   .strict()
   .openapi('CheckoutSessionRequest');
 
+/**
+ * MUT-766 (ADR-295): an approved accountant opens Stripe Checkout for a customer he created who has not claimed yet,
+ * in the room with them. A paid plan only (Starter needs no card), its billing address required; no trial, no offer.
+ */
+export const ActivationCheckoutRequestSchema = z
+  .object({
+    plan: z.enum(['solo', 'business', 'firm']),
+    interval: z.enum(['month', 'year']),
+    country: z.string().regex(/^[A-Z]{2}$/),
+    buyer: z.enum(['person', 'business']),
+    address: BillingAddressSchema,
+    /** Where Stripe sends the accountant back: the desk, `/client-books`. */
+    returnPath: ReturnPathSchema,
+  })
+  .strict()
+  .openapi('ActivationCheckoutRequest');
+
 export const PortalSessionRequestSchema = z
   .object({
     returnPath: ReturnPathSchema,
@@ -1832,6 +1849,8 @@ export const ProvisionedCustomerRowSchema = z
     state: z.enum(['awaiting_claim', 'link_expired', 'code_locked', 'claimed']),
     /** Null once claimed. */
     link: z.object({ expiresAt: z.string().datetime(), mailStatus: z.enum(['PENDING', 'SENT', 'FAILED']).nullable() }).nullable(),
+    /** MUT-766: a profile-plan subscription covers the customer (active, trialing or past due). Additive since 1.161.0-mut766. */
+    paid: z.boolean(),
   })
   .openapi('ProvisionedCustomerRow');
 

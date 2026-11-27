@@ -52,7 +52,7 @@ import type { Logger } from '../logger.js';
 import { ownedProfilesOf, profileTypeOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
-import { BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema } from '../schemas.js';
+import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema, ProvisionCustomerParamSchema } from '../schemas.js';
 
 /**
  * MUT-362 (plan §2.4, ADR-170): Settings › Billing. Signed in only, outside PORTAL_ROUTES (the signed-out portal has
@@ -281,6 +281,41 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       );
       const metadata = { plan: 'freelancer', interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: applied?.id ?? null };
       await auditOn(store, owned.profiles, user, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
+      return c.json({ url }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/accountant/customers/{userId}/checkout-session',
+      tags: ['Accountants'],
+      summary: 'Take the card of a customer you created, in Stripe’s page, before they claim the account (MUT-766)',
+      description:
+        'ADR-295. An approved accountant (ACCOUNTANT_PROVISIONING) opens Stripe Checkout for a paid plan (solo, business or firm) on behalf of a ' +
+        'customer he created who has not set a password yet; the customer is the payer (their subscription, their profiles, their Stripe ' +
+        'customer) and enters the card and the bank’s check on Stripe’s page. The same Checkout as the customer’s own (PLAN_CHECKOUT): the ' +
+        'address is required and saved first, the customer’s other open Checkouts are expired. The Stripe customer carries no email until the ' +
+        'customer claims the account (then the verified address). The rate limit counts against the accountant; audited `billing.checkout_started` ' +
+        'with the accountant as actor and `payerUserId`. The subscription arrives by the webhook (the desk shows it as `paid`). 404 for another ' +
+        'accountant’s customer, a claimed one, or with the feature off. Additive since 1.161.0-mut766.',
+      security: SESSION_ONLY,
+      request: { params: ProvisionCustomerParamSchema, body: { required: true, content: { 'application/json': { schema: ActivationCheckoutRequestSchema } } } },
+      responses: { ...refusedResponses, 200: { description: 'The Checkout page', content: { 'application/json': { schema: BillingRedirectSchema } } }, 403: errorResponse('PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNTANT_NOT_APPROVED'), 404: errorResponse('No unclaimed customer of yours by this id, or the feature is off') },
+    }),
+    async (c) => {
+      const { user } = c.get('identity');
+      const approval = await store.provision.approvalOf(user.id);
+      if (!approval?.enabled) throw new ApiError('ACCOUNTANT_NOT_APPROVED', 'The operator has not approved you to create customers');
+      const customer = await store.provision.unclaimedCustomerOf(user.id, c.req.valid('param').userId);
+      if (!customer) throw new ApiError('NOT_FOUND', 'Customer not found');
+      const body = c.req.valid('json');
+      const now = c.get('now')();
+      // The accountant's presses, not the customer's, are what is limited.
+      await limit(c, options.limiter, user.id, now);
+      const checkout = requireCheckout(options.checkout);
+      const returnUrl = returnUrlOf(c, body.returnPath, options.portalOrigin);
+      const url = await startPlanCheckout(c, store, checkout, { payer: customer, actor: user, unclaimed: true }, body, returnUrl, now, options, provider);
       return c.json({ url }, 200);
     },
   );
@@ -692,19 +727,43 @@ async function planSale(
   store: LedgerStore,
   checkout: CheckoutGateway,
   user: UserRecord,
-  body: { interval: BillingInterval; country: string; buyer: 'person' | 'business'; plan: PlanName; address?: { country: string; line1: string; city: string; postalCode: string } | undefined; trial?: boolean | undefined },
+  body: PlanSaleBody,
   returnUrl: string,
   now: Date,
   options: BillingRouteOptions,
   provider: BillingProvider | null,
 ): Promise<string> {
+  return startPlanCheckout(c, store, checkout, { payer: user, actor: user, unclaimed: false }, body, returnUrl, now, options, provider);
+}
+
+export type PlanSaleBody = { interval: BillingInterval; country: string; buyer: 'person' | 'business'; plan: PlanName; address?: { country: string; line1: string; city: string; postalCode: string } | undefined; trial?: boolean | undefined };
+
+/**
+ * MUT-766 (eng SC-1, R4): the one plan-Checkout core. `payer` is whose subscription it is (their mirror, their
+ * profiles, their Stripe customer, `client_reference_id`); `actor` is who asked (the audit row's actor). The signed-in
+ * person's own Checkout passes themselves as both; an accountant activating an unclaimed customer passes the customer
+ * as payer and himself as actor, with `unclaimed` so the customer is made with no email (R5). Everything else, the
+ * Stripe parameters and the expiry of open Checkouts included, is the same code (the golden test pins it).
+ */
+export async function startPlanCheckout(
+  c: Context<AppEnv>,
+  store: LedgerStore,
+  checkout: CheckoutGateway,
+  who: { payer: UserRecord; actor: UserRecord; unclaimed: boolean },
+  body: PlanSaleBody,
+  returnUrl: string,
+  now: Date,
+  options: BillingRouteOptions,
+  provider: BillingProvider | null,
+): Promise<string> {
+  const { payer, actor } = who;
   if (!provider) throw refusalError('PLAN_CHECKOUT_OFF');
   const address = body.address ?? null;
   if (!address || address.country !== body.country || addressRefusalOf(address)) throw refusalError('ADDRESS_INVALID');
-  const [summary, owned] = await Promise.all([store.billing.summaryOf(user.id), ownedWithEntitlements(store, user.id, now)]);
+  const [summary, owned] = await Promise.all([store.billing.summaryOf(payer.id), ownedWithEntitlements(store, payer.id, now)]);
   if (body.trial) {
-    const trial = body.plan === 'solo' ? await store.billing.paidTrialOf(user.id) : null;
-    const open = soloTrialOpen({ since: c.get('soloTrialOfferSince'), starterPlan: store.billing.starterPlan, currentPlan: currentPlanOf(owned.entitlements), createdAt: user.createdAt, trial });
+    const trial = body.plan === 'solo' ? await store.billing.paidTrialOf(payer.id) : null;
+    const open = soloTrialOpen({ since: c.get('soloTrialOfferSince'), starterPlan: store.billing.starterPlan, currentPlan: currentPlanOf(owned.entitlements), createdAt: payer.createdAt, trial });
     if (!open) throw refusalError('TRIAL_NOT_OFFERED');
   }
   const profileSubscriptions = profilePlanSubscriptions(summary.subscriptions);
@@ -712,27 +771,28 @@ async function planSale(
   const refusal = checkoutRefusalOf({ ...body, now }, person, options.countries);
   if (refusal) throw refusalError(refusal);
   const vat = body.country === ISRAEL_VAT.country ? israelVatPercent(options.countries) : null;
-  const [catalogs, israelVatRateId] = await viaStripe(() => Promise.all([provider.catalogs(), vat === null ? null : provider.israelVatRate(vat)]), user, null, options.logger);
+  const [catalogs, israelVatRateId] = await viaStripe(() => Promise.all([provider.catalogs(), vat === null ? null : provider.israelVatRate(vat)]), payer, null, options.logger);
   const trialEndsAt = summary.trialStartedAt ? trialTimelineOf(summary.trialStartedAt).endsAt : null;
-  const input = { userId: user.id, ...body, address, soloTrial: body.trial === true, israelVatRateId, returnUrl, now, trialEndsAt };
+  const input = { userId: payer.id, ...body, address, soloTrial: body.trial === true, israelVatRateId, returnUrl, now, trialEndsAt };
   const plan = planCheckout(input, person, options.countries, catalogs[body.plan]);
   if (!plan.ok) throw refusalError(plan.code);
   const linked = summary.account?.stripeCustomerId ?? null;
   const { url } = await viaStripe(
     async () => {
-      const customer = linked ?? (await checkout.findOrCreateCustomer(personOf(user)));
+      // R5: an unclaimed account's customer carries no email until the claim sets the verified one.
+      const customer = linked ?? (await checkout.findOrCreateCustomer(who.unclaimed ? { ...personOf(payer), email: null } : personOf(payer)));
       // Review: the mirror can be late, so Stripe's own word decides before money moves.
       const inStripe = profilePlanSubscriptions(await checkout.subscriptionsOf(customer));
       const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: [...person.subscriptions, ...inStripe] }, options.countries);
       if (stillRefused) throw refusalError(stillRefused);
       return provider.startCheckout({ customer, address, params: plan.params });
     },
-    user,
+    payer,
     linked,
     options.logger,
   );
-  const metadata = { plan: body.plan, interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: null, trial: body.trial === true, seller: provider.seller };
-  await auditOn(store, owned.profiles, user, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
+  const metadata = { plan: body.plan, interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: null, trial: body.trial === true, seller: provider.seller, ...(actor.id !== payer.id ? { payerUserId: payer.id } : {}) };
+  await auditOn(store, owned.profiles, actor, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
   return url;
 }
 

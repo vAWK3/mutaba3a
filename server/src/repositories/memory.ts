@@ -1120,6 +1120,11 @@ export class MemoryLedgerStore implements LedgerStore {
       const createdAt = this.provisionOrigins.get(userId)?.provisionedAt.getTime() ?? -Infinity;
       return [...this.setupLinks.values()].filter((l) => l.userId === userId && l.createdAt.getTime() >= since.getTime() && l.createdAt.getTime() > createdAt).length;
     },
+    unclaimedCustomerOf: async (accountantUserId, customerUserId) => {
+      const person = this.people.get(customerUserId);
+      const origin = this.provisionOrigins.get(customerUserId);
+      return person && origin?.accountantUserId === accountantUserId && person.passwordHash === null ? { ...person } : null;
+    },
     customersOf: async (accountantUserId, { limit, before }) =>
       [...this.provisionOrigins.entries()]
         .filter(([, origin]) => origin.accountantUserId === accountantUserId && (!before || origin.provisionedAt.getTime() < before.getTime()))
