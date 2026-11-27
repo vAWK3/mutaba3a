@@ -561,6 +561,12 @@ variable "starter_plan" {
   default     = false
 }
 
+variable "paid_business_caps" {
+  description = "MUT-734 (ADR-291): sets PAID_BUSINESS_CAPS=true: Solo, Business and Firm keep their plan's business count active (the rest read-only until picked) and creating another is 409 PLAN_LIMIT businesses. false (default) = only Starter's count is enforced. On with the pricing release."
+  type        = bool
+  default     = false
+}
+
 variable "open_signup" {
   description = "MUT-737 (ADR-289): sets OPEN_SIGNUP=true: every verified self-service sign-up the domain screen lets through opens ACTIVE on Starter, with no operator review and no review digest. Needs starter_plan (the server refuses to boot otherwise). Before turning it on: npm --prefix server run signups:release -- --apply. false (default) = webmail and unverified domains wait for review."
   type        = bool

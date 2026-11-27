@@ -84,3 +84,27 @@ run "open_signup_without_starter_refused" {
 
   expect_failures = [var.open_signup]
 }
+
+# MUT-734 (ADR-291): the paid plans' business counts ship off.
+run "paid_business_caps_off_by_default" {
+  command = apply
+
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "PAID_BUSINESS_CAPS"]) == 0
+    error_message = "With paid_business_caps off the service gets no PAID_BUSINESS_CAPS."
+  }
+}
+
+run "paid_business_caps_on" {
+  command = apply
+
+  variables {
+    paid_business_caps = true
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "PAID_BUSINESS_CAPS"] == ["true"]
+    error_message = "With paid_business_caps on the service gets PAID_BUSINESS_CAPS=true."
+  }
+}
+

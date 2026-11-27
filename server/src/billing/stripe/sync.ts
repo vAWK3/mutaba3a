@@ -259,7 +259,23 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     });
     // MUT-702 Part B: the one-time Solo trial is used once its subscription exists (an abandoned Checkout keeps it).
     if (payer !== null && sub.metadata?.[TRIAL_METADATA_KEY] === 'solo') await store.billing.markPaidTrialUsed(payer, now());
+    if (payer !== null) await settlePlanChanges(payer, sub.id, fields.tier, fields.status);
     return { subscriptionId: sub.id, outcome, codes, reachesNobody: profileIds.length === 0, blocked: false };
+  }
+
+  /**
+   * MUT-734 (ADR-291): the mirror is how a plan change lands. An upgrade waiting for the bank, or a scheduled downgrade,
+   * is APPLIED once the subscription's tier is the target's (Stripe switched the price at the boundary); a move to
+   * Starter once the subscription has ended. A missed webhook is caught by the nightly reconcile, which syncs here too.
+   */
+  async function settlePlanChanges(payer: string, subscriptionId: string, tier: string, status: string): Promise<void> {
+    const open = (await store.billing.planChangesOf(payer)).filter((ch) => ch.stripeSubscriptionId === subscriptionId && (ch.state === 'PENDING' || ch.state === 'SCHEDULED'));
+    for (const change of open) {
+      const landed = change.kind === 'TO_STARTER' ? status === 'canceled' : tier === change.toTier;
+      if (!landed) continue;
+      await store.billing.settlePlanChange(change.id, 'APPLIED', now());
+      logger.info({ changeId: change.id, subscriptionId, kind: change.kind, toTier: change.toTier }, 'billing.plan_change_applied');
+    }
   }
 
   /** customer.updated: country and metadata link on an account the sync already made; never creates one (D6). */

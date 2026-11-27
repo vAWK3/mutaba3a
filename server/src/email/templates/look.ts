@@ -98,6 +98,8 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'monthly-summary': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   // MUT-571 AC3: the existing art only: a consent that ends on a day.
   'tax-authority-reconnect': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
+  // MUT-734: a plan change on a day: the existing calendar art.
+  'plan-change-scheduled': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

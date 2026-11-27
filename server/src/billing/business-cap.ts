@@ -1,4 +1,7 @@
 import { ENFORCED_BUSINESS_CAPS, PLAN_LIMITS, planOfTier } from './plans.js';
+
+/** MUT-734 (ADR-291): which entitlements a cap applies to: Starter's always; a paid plan's with PAID_BUSINESS_CAPS on. */
+const PAID_CAPPED_TIERS: ReadonlySet<string> = new Set(['SOLO', 'BUSINESS', 'FIRM']);
 import type { Entitlement } from './entitlement.js';
 
 /**
@@ -33,10 +36,10 @@ export interface BusinessCapState {
 }
 
 /** The cap of an entitlement's plan when the plan's business count is enforced; null otherwise. */
-export function enforcedBusinessCapOf(entitlement: Pick<Entitlement, 'tier' | 'state'>): number | null {
+export function enforcedBusinessCapOf(entitlement: Pick<Entitlement, 'tier' | 'state'>, enforced: ReadonlySet<string> = ENFORCED_BUSINESS_CAPS): number | null {
   if (entitlement.tier === null || entitlement.state !== 'ACTIVE') return null;
   const plan = planOfTier(entitlement.tier);
-  if (!ENFORCED_BUSINESS_CAPS.has(plan) || !Object.hasOwn(PLAN_LIMITS, plan)) return null;
+  if (!enforced.has(plan) || !Object.hasOwn(PLAN_LIMITS, plan)) return null;
   return PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS].businesses;
 }
 
@@ -57,20 +60,21 @@ export function applyBusinessCap(
   entitlements: Map<string, Entitlement>,
   owned: readonly OwnedBusiness[],
   chosen: ReadonlyMap<string, readonly string[] | null>,
+  enforced: ReadonlySet<string> = ENFORCED_BUSINESS_CAPS,
 ): Map<string, BusinessCapState> {
   const byOwner = new Map<string, string[]>();
-  let cap: number | null = null;
+  // MUT-734: one cap per owner (an owner's businesses share the plan that covers them: Starter's, or their subscription's).
+  const capOf = new Map<string, number>();
   for (const { organizationId, ownerUserId } of owned) {
     const entitlement = entitlements.get(organizationId);
-    const ownerCap = entitlement && entitlement.source === 'STARTER' ? enforcedBusinessCapOf(entitlement) : null;
+    const ownerCap = entitlement && cappedSource(entitlement, enforced) ? enforcedBusinessCapOf(entitlement, enforced) : null;
     if (ownerCap === null) continue;
-    cap = ownerCap;
+    capOf.set(ownerUserId, Math.min(capOf.get(ownerUserId) ?? ownerCap, ownerCap));
     byOwner.set(ownerUserId, [...(byOwner.get(ownerUserId) ?? []), organizationId]);
   }
   const states = new Map<string, BusinessCapState>();
-  if (cap === null) return states;
   for (const [owner, businesses] of byOwner) {
-    const state = businessCapStateOf(businesses, chosen.get(owner) ?? null, cap);
+    const state = businessCapStateOf(businesses, chosen.get(owner) ?? null, capOf.get(owner)!);
     states.set(owner, state);
     for (const id of state.readOnly) {
       const entitlement = entitlements.get(id)!;
@@ -78,6 +82,12 @@ export function applyBusinessCap(
     }
   }
   return states;
+}
+
+/** Starter's fallback always; a paid plan's own subscription only once its cap is enforced (PAID_BUSINESS_CAPS). */
+function cappedSource(entitlement: Entitlement, enforced: ReadonlySet<string>): boolean {
+  if (entitlement.source === 'STARTER') return true;
+  return entitlement.source === 'STRIPE' && entitlement.tier !== null && PAID_CAPPED_TIERS.has(entitlement.tier) && enforced !== ENFORCED_BUSINESS_CAPS;
 }
 
 /** The wire shape (GET /v1/billing `activeBusinesses`, PUT /v1/billing/active-businesses). */

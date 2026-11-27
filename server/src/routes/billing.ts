@@ -31,6 +31,7 @@ import {
   type PlanCatalogs,
 } from '../billing/checkout.js';
 import type { BillingProvider } from '../billing/provider.js';
+import { planChangeView } from '../billing/plan-change.js';
 import { stripeProvider } from '../billing/stripe/provider.js';
 import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
 import { offerOrNothing } from '../billing/offer-read.js';
@@ -182,6 +183,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           billingAddress,
           // MUT-750 (ADR-290): the rate the portal shows as the VAT line for an Israeli address.
           vatRate: vatRateView(options.countries),
+          // MUT-734 (ADR-291): the scheduled change and where the person may move (only while plans are on sale).
+          ...(provider ? planChangeView(shown, await store.billing.planChangesOf(user.id)) : { scheduledChange: null, pendingChange: null, planChange: { canUpgradeTo: [], canDowngradeTo: [] } }),
         },
         200,
       );

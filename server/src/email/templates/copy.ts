@@ -882,6 +882,33 @@ const taxAuthorityReconnect: Copy<'tax-authority-reconnect'> = {
         },
 };
 
+const PLAN_NAMES_EN = { starter: 'Starter', solo: 'Solo', business: 'Business', firm: 'Firm' } as const;
+const PLAN_NAMES_AR = { starter: 'البداية', solo: 'مستقل', business: 'تجاري', firm: 'مؤسسة' } as const;
+
+/** MUT-734 (ADR-291): the plan, the day, and where to undo it. Nothing else (Basel's minimal-copy rule). */
+const planChangeScheduled: Copy<'plan-change-scheduled'> = {
+  en: ({ plan, changesOn, manageLink }) => {
+    const day = mailDay(changesOn, 'en');
+    return {
+      subject: `Your MTB3A plan changes to ${PLAN_NAMES_EN[plan]} on ${day}`,
+      preheader: `${PLAN_NAMES_EN[plan]} from ${day}.`,
+      headline: `${PLAN_NAMES_EN[plan]} from ${day}`,
+      intro: [[`Your plan changes to ${PLAN_NAMES_EN[plan]} on ${day}.`]],
+      action: { label: 'Manage billing', href: manageLink },
+    };
+  },
+  ar: ({ plan, changesOn, manageLink }) => {
+    const day = mailDay(changesOn, 'ar');
+    return {
+      subject: `تتغيّر خطتك في متابعة إلى «${PLAN_NAMES_AR[plan]}» يوم ${day}`,
+      preheader: `«${PLAN_NAMES_AR[plan]}» ابتداءً من ${day}.`,
+      headline: `«${PLAN_NAMES_AR[plan]}» ابتداءً من ${day}`,
+      intro: [[`تتغيّر خطتك إلى «${PLAN_NAMES_AR[plan]}» يوم ${day}.`]],
+      action: { label: 'إدارة الاشتراك', href: manageLink },
+    };
+  },
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -907,4 +934,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'two-factor-changed': twoFactorChanged,
   'monthly-summary': monthlySummary,
   'tax-authority-reconnect': taxAuthorityReconnect,
+  'plan-change-scheduled': planChangeScheduled,
 };

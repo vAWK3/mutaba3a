@@ -4973,3 +4973,15 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Sync | `billing/stripe/__tests__/retax.test.ts` | into/out of Israel and no-op; IL→JO and JO→IL re-tax once, same country nothing; Freelancer never; transient 500 and refused code leave the old country |
 | Route | `billing-yearly-switch.test.ts`, `billing-plan-checkout.test.ts` | an Israeli item keeps its rate through the switch; `vatRate` on `GET /v1/billing` |
 | QA | with the UI half | `portal.billing.vat-lines-israel`, `portal.billing.no-vat-abroad`, `portal-live.billing.address-moves-out` |
+
+## MUT-734 (server half) — plan changes (2026-11-27, ADR-291)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/plan-change.test.ts` | every tier pair, Starter, business counts at cap−1/cap/cap+1, invalid picks, each refusal in order; the options |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | upgrade payload (proration, pending_if_incomplete, tax rates, metadata, key); two-phase schedule; release |
+| Route | `__tests__/billing-plan-change.test.ts` | previews; upgrade applied/pending/failed/AMOUNT_CHANGED/PREVIEW_EXPIRED; downgrade with and without a pick, mail, scheduled line, SCHEDULE_PENDING; undo; to Starter and its undo; the mirror applies a scheduled downgrade; PAID_BUSINESS_CAPS on/off |
+| Mail | `email/__tests__/templates.test.ts`, `mailer.test.ts` | `plan-change-scheduled` in both languages |
+| Terraform | `starter_plan.tftest.hcl` | `PAID_BUSINESS_CAPS` off by default, on when set |
+| test:db | (CI) | the migration; cascade on closure (purge list entry) |
+| QA | with the UI half | `portal-live.billing.upgrade-solo-business`, `downgrade-business-solo`, `to-starter`, `undo-downgrade`, `portal.billing.change-plan-pane` |

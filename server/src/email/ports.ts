@@ -40,6 +40,7 @@ export const TEMPLATE_IDS = [
   'two-factor-code',
   'two-factor-changed',
   'tax-authority-reconnect',
+  'plan-change-scheduled',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -85,6 +86,8 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'monthly-summary',
   // MUT-571 AC3: only the daily run sends it, twice per consent at most (ten days before its end, then on it).
   'tax-authority-reconnect',
+  // MUT-734: one per scheduled change, which only the signed-in person asks for.
+  'plan-change-scheduled',
 ]);
 
 export interface TemplateVars {
@@ -169,6 +172,8 @@ export interface TemplateVars {
    * `ended`. `link` opens the profile's invoicing setup, whose Tax Authority step connects again. No date (ADR-159 §5).
    */
   'tax-authority-reconnect': { stage: 'soon' | 'ended'; daysLeft: number; profileName: string; link: string };
+  /** MUT-734 (ADR-291): a downgrade (or the move to Starter) was scheduled; the plan changes on `changesOn` (the period end). */
+  'plan-change-scheduled': { plan: 'starter' | 'solo' | 'business' | 'firm'; changesOn: CalendarDay; manageLink: string };
 }
 
 /** MUT-535: an amount in one currency, as the API writes it (a canonical decimal); the template formats it. */

@@ -119,6 +119,7 @@ async function subscribed(h: Harness, userId: string, over: SubscribedOptions = 
       currentPeriodEnd: PERIOD_END,
       billingCycleAnchor: ANCHOR,
       taxRateIds: [],
+      scheduleId: null,
       managedBySchedule: over.managedBySchedule ?? false,
       paused: pausedFrom !== null,
       pause: pausedFrom !== null ? { from: pausedFrom, resumesAt: over.pauseResumesAt ?? null } : null,

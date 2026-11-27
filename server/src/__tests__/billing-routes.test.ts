@@ -111,6 +111,9 @@ describe('GET /v1/billing (MUT-362)', () => {
       // MUT-531: no subscription, so no switch to yearly.
       yearlySwitch: null,
       vatRate: null,
+      scheduledChange: null,
+      pendingChange: null,
+      planChange: { canUpgradeTo: [], canDowngradeTo: [] },
       comeback: null,
       // MUT-565: accountant access is off in this harness.
       accountantPlan: null,

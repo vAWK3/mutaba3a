@@ -32,6 +32,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: 'https://portal.example.test/?billing=true' },
   'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe', offLink: 'https://portal.example.test/mail-off?mail=offers#tok_ABC123def' },
   'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
+  'plan-change-scheduled': { plan: 'solo', changesOn: { year: 2026, month: 12, day: 15 }, manageLink: 'https://portal.example.test/?billing=true' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
@@ -68,6 +69,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'card-failed-reminder': ['6'],
   // MUT-571 AC3: the days left and the Tax Authority's 90-day rule; no date.
   'tax-authority-reconnect': ['90', '6'],
+  // MUT-734: the day the plan changes.
+  'plan-change-scheduled': [mailDay({ year: 2026, month: 12, day: 15 }, 'en'), mailDay({ year: 2026, month: 12, day: 15 }, 'ar')],
   // MUT-534 (ADR-243, overriding ADR-159 §5): the come-back prices, longest first so none hides inside another.
   // '18' and the contact address (mtb3a) are in the sender's details (s.30A).
   'comeback-offer': ['₪290', '₪270', '₪29', '₪9', '18', 'info@mtb3a.com'],
@@ -307,6 +310,7 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'two-factor-code': { en: '482913 is your MTB3A two-step code', ar: 'رمز التحقق بخطوتين في متابعة: 482913' },
   'two-factor-changed': { en: 'Two-step sign-in is on for your MTB3A account', ar: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة' },
   'tax-authority-reconnect': { en: 'Your MTB3A connection to the Tax Authority ends within 6 days', ar: 'ينتهي ربط متابعة بسلطة الضرائب خلال 6 أيام' },
+  'plan-change-scheduled': { en: 'Your MTB3A plan changes to Solo on December 15, 2026', ar: 'تتغيّر خطتك في متابعة إلى «مستقل» يوم 15 كانون الأول 2026' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
@@ -432,7 +436,7 @@ describe('MUT-468 frame', () => {
     const closing = renderMail('account-closing', 'ar', SAMPLE['account-closing'], FRAME);
     expect(closing.html).toContain('data-details');
     expect(closing.text).toContain(`يوم الحذف: ${mailDay(SAMPLE['account-closing'].deleteOn, 'ar')}`);
-    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon' && t !== 'comeback-offer' && t !== 'accountant-invite' && t !== 'monthly-summary')) {
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon' && t !== 'comeback-offer' && t !== 'accountant-invite' && t !== 'monthly-summary' && t !== 'plan-change-scheduled')) {
       expect(renderMail(id, 'en', SAMPLE[id] as never, FRAME).html).not.toContain('data-details');
     }
   });
