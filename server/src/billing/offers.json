@@ -1,5 +1,8 @@
 [
-  { "id": "launch-2026", "couponId": "mtb3a_launch_yearly_2026", "interval": "year", "tier": "freelancer" },
-  { "id": "stay-2026", "couponId": "mtb3a_stay_monthly_50", "kind": "stay", "interval": "month", "tier": "freelancer" },
-  { "id": "comeback-2026", "kind": "comeback", "couponIds": { "ILS": "mtb3a_comeback_first_month_ils", "USD": "mtb3a_comeback_first_month_usd" }, "tier": "freelancer" }
+  { "id": "launch-2026", "couponId": "mtb3a_launch_yearly_2026", "interval": "year", "plans": ["freelancer"] },
+  { "id": "stay-2026", "couponId": "mtb3a_stay_monthly_50", "kind": "stay", "interval": "month", "plans": ["freelancer"] },
+  { "id": "comeback-2026", "kind": "comeback", "couponIds": { "ILS": "mtb3a_comeback_first_month_ils", "USD": "mtb3a_comeback_first_month_usd" }, "plans": ["freelancer"] },
+  { "id": "launch-plans-2026", "couponId": "mtb3a_launch_yearly_plans_2026", "interval": "year", "plans": ["solo", "business", "firm"] },
+  { "id": "stay-plans-2026", "couponId": "mtb3a_stay_monthly_plans_50", "kind": "stay", "interval": "month", "plans": ["solo", "business", "firm"] },
+  { "id": "comeback-plans-2026", "kind": "comeback", "couponId": "mtb3a_comeback_first_month_plans_67", "interval": "month", "plans": ["solo", "business", "firm"] }
 ]

@@ -141,7 +141,7 @@ export interface TemplateVars {
    * MUT-525 (DD8): ~30 days before a launch-offer subscription's first renewal. `listAmount` is the subscription's own
    * price in minor units of `currency` (not the current catalog's); `manageLink` opens Billing.
    */
-  'offer-renewing-soon': { renewsOn: CalendarDay; listAmount: number; currency: string; manageLink: string };
+  'offer-renewing-soon': { renewsOn: CalendarDay; listAmount: number; currency: string; manageLink: string; /** MUT-703: the subscription's plan; absent is the legacy Freelancer plan. */ plan?: OfferMailPlan };
   /**
    * MUT-533: a renewal payment failed and Stripe is retrying. No amount and no card details (Basel, 2026-11-02).
    * `updateLink` opens Billing, whose past-due panel goes straight to Stripe's card form.
@@ -157,7 +157,22 @@ export interface TemplateVars {
    * units of `currency` (the person's last subscription's), the catalog's less the come-back coupon's amount;
    * `subscribeLink` opens Billing's Subscribe step.
    */
-  'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string; /** ADR-279: the mail-off page for promotional mail, `{portal}/mail-off?mail=offers#{token}`. */ offLink: string };
+  'comeback-offer': {
+    stage: 'day-30' | 'day-90';
+    firstMonth: number;
+    listMonth: number;
+    /** MUT-703: null when the offer is monthly only (the plans' come-back, §13 Q4). */
+    firstYear: number | null;
+    listYear: number | null;
+    currency: string;
+    subscribeLink: string;
+    /** ADR-279: the mail-off page for promotional mail, `{portal}/mail-off?mail=offers#{token}`. */
+    offLink: string;
+    /** MUT-703: the plan offered (the lapsed plan; Solo for a legacy Freelancer lapse); absent is the legacy offer. */
+    plan?: OfferMailPlan;
+    /** MUT-703: the plans' coupon's percent off; null for the legacy amount off. */
+    percentOff?: number | null;
+  };
   /**
    * MUT-559 (ADR-245): an owner invites an accountant to read one profile. `link` is `{portal}/accountant-invite#{token}`
    * (the token in the fragment, D3); `expiresOn` is the last day it works (14 days, in the profile's zone). Not exempt
@@ -210,6 +225,9 @@ export interface MailSummaryProfile {
   overdue: MailMoney[];
   overdueCount: number;
 }
+
+/** MUT-703: the plan an offer mail names: one on sale, or the legacy Freelancer plan. */
+export type OfferMailPlan = 'freelancer' | 'solo' | 'business' | 'firm';
 
 /** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */
 export interface MailOffer {

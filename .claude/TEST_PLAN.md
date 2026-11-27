@@ -5061,6 +5061,20 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/data/__tests__/pilot.test.ts` | `pilot` and `pilotEnded` panels (day 1–46, last 14 days, Starter on/off, subscription first, ended onto Starter or read-only, never over a new grant, older server); plans' currency; usage lines butter at 90% and not at 89%, over cap, no caps |
 | Drawer | `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx` | order (status, lines, plans, Write to us), Expected prices from `pilot.plans`, no Subscribe, butter at 90%, last 14 days, Pilot ended with its scene and Starter's lines, Arabic Levantine month |
 
+## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/offer.test.ts` | `parseOffers` plans/tier alias, mixed/unknown/repeated/empty plans refused, the percent come-back shape; lookup by (kind, plan, interval) for every plan and legacy; coupon inside the entry's products and covering the plan sold; `resolveOffer` per plan; Q6 eligibility (incomplete, unpaid trial, running trial); 67% rounding |
+| Rule | `billing/__tests__/retention.test.ts` | `listPriceOf` for every key family; switch savings per plan; pause and stay on each plan from its own catalog; coupon outside or not covering; one stay per person; `SCHEDULED` |
+| Rule | `billing/__tests__/comeback.test.ts` | Firm lapses count; already-had across legacy and plan ids; the percent come-back per plan and currency, monthly only, shapes refused; the plan a come-back names |
+| Script | `scripts/__tests__/stripe-plans.test.ts` | `COUPON_SPEC` values (Jerusalem `redeem_by`); offers.json ↔ spec tie; create (with products made in the same run), nothing to do, each differing field refused with the new-id message, missing products, name/metadata update, retired delete, legacy coupons untouched |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | `discounts: ''` on an upgrade's preview and update; a downgrade's phases carry `di_…`; `discountIds` read |
+| Mail | `billing/__tests__/renewal-mail.test.ts`, `comeback-mail.test.ts` | a plan launch subscription is due and the mail names the plan (en, ar); the come-back mail per lapsed plan (Firm; legacy → Solo), no yearly line, one offer read per plan; plans off = legacy |
+| Route | `__tests__/billing-plan-offers.test.ts` | GET `plans[].launch`/`.comeback`, `offer` and `comeback` under PLAN_CHECKOUT, `yearlySwitch.plan`, `renewsAtListPrice`; yearly plan Checkout carries the coupon, metadata, pay-page line, audit; monthly none; OFFER_ENDED; Stripe-held paid sub; unpaid trial; come-back monthly on the plan picked, yearly none; already had; stay/pause per plan, legacy stay for ₪29; `SCHEDULED`; plan change `offerEnds`, drop on upgrade, carry on downgrade |
+| Route | `__tests__/routes-accountant-activation.test.ts` | an activation carries no offer (no coupon read); the customer's own Checkout later does |
+| QA | with the UI half | §10's `portal.billing.plan-launch-yearly`, `plan-launch-monthly-none`, `plan-offer-ended`, `stay-offer-plan`, `switch-yearly-plan`, `comeback-plan`, `change-plan-offer-ends`; live flows after TD-347 |
+
 ## The accountant's desk (MUT-768, epic MUT-762, ADR-325)
 
 | Level | Test | Covers |
