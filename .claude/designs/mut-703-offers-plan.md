@@ -1,6 +1,6 @@
 # MUT-703: offers on Solo, Business and Firm (launch, stay, come-back, switch to yearly)
 
-Status: **APPROVED with all 12 default answers in §13 (Basel, 2026-11-27); not built.** Epic MUT-701. Blocked by MUT-702 (Part B merged).
+Status: **APPROVED with all 12 default answers in §13 (Basel, 2026-11-27). Server half BUILT (API 1.210.0-mut703, ADR-340; see "Build decisions" at the end); UI half with the billing lane (§11).** Epic MUT-701. Blocked by MUT-702 (Part B merged).
 Basel (2026-11-27): the offers must be live before Switch rollout stage 1 (`STARTER_PLAN` + `PLAN_CHECKOUT`).
 
 ```
@@ -431,3 +431,28 @@ ADR "Offers per plan" (amends ADR-237 d1/d3/d4, ADR-238 d2, ADR-240 d5/d7, ADR-2
 script is the one place offer amounts and dates are written). CHANGELOG, SYSTEM_OVERVIEW §8 (billing), TEST_PLAN,
 COMPONENT_REGISTRY (the picker's offer note), TECH_DEBT (S1 outcome if accepted), before-release stage 1 (§12),
 `docs/operations` billing runbook (support reply for "why didn't I get the launch").
+
+## Build decisions (server half, 2026-11-27)
+
+API `1.210.0-mut703`, ADR-340. No migration. The §13 defaults as approved, with these specifics:
+
+**Spikes (Stripe sandbox, test clocks, API `2026-09-30.endive`; own `spike_mut703_*` products, prices and coupons on ₪39/₪89 monthly, ₪390/₪890 yearly; the script `billing:plans` was not run):**
+
+- **S1, proration after a spent `once` launch coupon:** Solo yearly at 50% off (first invoice ₪195), upgraded to Business yearly on day 30. The once coupon is already gone from the subscription (`discounts: []`). Stripe's credit line is "Unused time on Solo (with 50.0% off)": **−₪178.98**, i.e. 335/365 of the **₪195 actually paid**, not of the ₪390 list (which would be −₪357.95). Business's remaining time is charged at list (₪816.85), due ₪637.87. **No over-credit, so nothing to cap and no tech debt** (the §13 Q7 fallback "accept and log" isn't needed).
+- **S1b, an upgrade during the stay offer:** Solo monthly with the plans' 50% stay coupon, upgraded to Business monthly on day 10. Without `discounts`, the coupon (it covers Business's product too) **follows** the person: Business's remaining time at 50% off, due ₪3.66. With `discounts: ''` on the preview (`invoices.createPreview`) and on `subscriptions.update`, the discount is gone, the preview and the invoice agree (₪33.33), no pending update. → **Upgrade: drop it in the same update, preview without it, `offerEnds` names it** (Q7 default).
+- **S2, a scheduled downgrade and a running stay discount:** Business monthly with the stay coupon applied, then `scheduleDowngrade` as built for MUT-734 (`from_subscription`, then phases with no `discounts`). `from_subscription`'s phase 0 shows the coupon, but **the phases update drops it from the subscription at once** (`discounts: []`; the next invoice, Solo, ₪39 full). Carrying the subscription's own discount id (`{ discount: 'di_…' }`, not the coupon, which would start a fresh 2 months) into **both** phases keeps it: the next invoice is Solo at ₪19.50, and it ends on its own schedule (the following invoice ₪39, schedule released). → **Downgrade: carry the discount ids into both phases** (Q7 default "keep until its own end").
+- S3 (percent come-back on a yearly Checkout / VAT line) not run: §13 Q4 makes the plans' come-back monthly only, and the launch's percent-on-a-VAT-line path is MUT-702's tested Checkout with `discounts` added (the pay-page note already says prices exclude VAT).
+
+**Coupons (`COUPON_SPEC`):** `mtb3a_launch_yearly_plans_2026` "Launch offer · عرض الإطلاق" 50% once, `redeem_by` 2027-02-21T22:59:00Z (= 2027-02-22 00:59 Jerusalem); `mtb3a_stay_monthly_plans_50` "Stay offer · عرض البقاء" 50% repeating 2; `mtb3a_comeback_first_month_plans_67` "Welcome back · عرض العودة" 67% once. All `applies_to` = the three plans' products, `metadata.mtb3a_offer` = the kind. Offer ids `launch-plans-2026`, `stay-plans-2026`, `comeback-plans-2026` (the come-back `interval: "month"`). `RETIRED_COUPON_IDS` empty.
+
+**Rules as built:**
+
+1. Eligibility (Q6): a subscription "took money" unless `incomplete`/`incomplete_expired` or `canceled` with `ended_at ≤ trial_end`; a running trial counts. Stripe's own list now returns `trialEnd`/`endedAt` for this. Applies to the legacy launch too (one rule).
+2. GET `/v1/billing` while `PLAN_CHECKOUT` is on: `offer` = the plans' launch priced on Solo; `plans[].launch` = `{ id, firstYear }` whenever the coupon makes an offer on that plan (eligibility stays person-level in `offer.eligible`); `plans[].comeback` only while the come-back is open to the person (its yearly pair null, monthly only); `comeback` = the lapsed plan's (legacy Freelancer → Solo), with `plan` and `percentOff`. Off: the legacy `offer` and `comeback` exactly as before.
+3. Plan Checkout: launch on a yearly Checkout, else the come-back (monthly only, so a yearly Checkout of a come-back person is full price); none with `trial: true` or when actor ≠ payer (accountant activation; no coupon is even read). "Already had" any come-back id in Stripe's list → none.
+4. `SCHEDULED` = the live subscription is on a Stripe schedule (`managedBySchedule`) while on a list price; the GET switch line also hides while the mirror holds a SCHEDULED plan change.
+5. `offerEnds` names the first running coupon that is one of offers.json's; a discount that is none of ours is still dropped on an upgrade (logged), with `offerEnds: null`.
+6. Come-back mail with `PLAN_CHECKOUT` on: one offer read per lapsed plan per run; the copy names the plan and leaves out the yearly sentence when there is no first year. `skipped.firm` stays in the summary at 0 (TD-372).
+7. QA overrides (`BILLING_OFFER_COUPON_ID`, `BILLING_STAY_COUPON_ID`) now replace the coupon of every entry of their kind, keeping ids and plans; the come-back pair replaces only the legacy coupons (TD-372).
+
+**For the portal lane (§11):** `plans[].launch.firstYear` for the first-year line (Yearly opens when the chosen plan has a launch and `offer.eligible`); `plans[].comeback.firstMonth`/`listMonth` for the come-back line on the chosen plan; keep sending `expectedOffer` (the plan offer's id: `launch-plans-2026` or `comeback-plans-2026`) and the shared OFFER_ENDED banner; the change pane's line from the preview's `offerEnds` (`kind` stay or comeback); `SCHEDULED` in the cancel and switch steps' refusal copy. Types are in `src/hosted/api/schema.d.ts` (`BillingPlanLaunch`, `BillingPlanComeback`).

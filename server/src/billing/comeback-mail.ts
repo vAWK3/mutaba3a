@@ -6,9 +6,10 @@ import type { Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { ComebackCandidate, LedgerStore, UserLocale } from '../repositories/ports.js';
-import { COMEBACK_STAGES, comebackRefusalOf, comebackStageOf, type ComebackOffer, type ComebackRefusal, type ComebackStage } from './comeback.js';
+import { COMEBACK_STAGES, comebackPlanOf, comebackRefusalOf, comebackStageOf, type ComebackOffer, type ComebackRefusal, type ComebackStage } from './comeback.js';
 import { comebackFactsOf } from './comeback-read.js';
 import type { OfferEntry } from './offer.js';
+import type { PlanName } from './plans.js';
 
 /**
  * MUT-534 (plan D10–D13, ADR-243): the come-back mail. Once a day (Cloud Scheduler, `POST /jobs/v1/billing/comeback-mail`,
@@ -20,11 +21,14 @@ import type { OfferEntry } from './offer.js';
  * (`COMEBACK_OFFERED`, `reason` = the stage) before it is mailed, once per person ever (a unique index); that record is
  * what opens the offer in Billing and at Checkout. A mail that didn't go out releases its record, so the next run tries
  * again and the offer stays shut for someone who was never told.
+ *
+ * MUT-703 (ADR-340, §13 Q5): with the plans on sale (PLAN_CHECKOUT) the mail offers the plan the person lapsed from
+ * (Solo for a legacy Freelancer lapse), Firm included, at the plans' percent come-back; off, the legacy offer as before.
  */
 export const COMEBACK_MAIL_TIME_BUDGET_MS = 200_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type ComebackSkip = 'paying' | 'no-lapse' | 'too-soon' | 'firm' | 'already-had' | 'stay-offer-recent' | 'covered' | 'no-profile' | 'no-stage' | 'already-mailed' | 'never-paid' | 'no-offer' | 'no-price' | 'suppressed' | 'opted-out';
+export type ComebackSkip = 'paying' | 'no-lapse' | 'too-soon' | 'already-had' | 'stay-offer-recent' | 'covered' | 'no-profile' | 'no-stage' | 'already-mailed' | 'never-paid' | 'no-offer' | 'no-price' | 'suppressed' | 'opted-out';
 
 export interface ComebackMailRow {
   userId: string;
@@ -56,8 +60,11 @@ export interface ComebackRunOptions {
   logger: Logger;
   now: Date;
   stripe: {
-    /** The running come-back offer (the coupon and the catalog), read once per run; null when there is none. */
-    offer(): Promise<ComebackOffer | null>;
+    /**
+     * The running come-back offer (the coupon and the catalog), read once per run and plan; null when there is none.
+     * MUT-703: `plan` null is the legacy Freelancer offer.
+     */
+    offer(plan: PlanName | null): Promise<ComebackOffer | null>;
     /** Invoices of the subscription that took money. */
     paidInvoices(stripeSubscriptionId: string): Promise<number>;
   };
@@ -69,6 +76,8 @@ export interface ComebackRunOptions {
    */
   optOut: { portalOrigin: string; pepper: string };
   offers?: readonly OfferEntry[];
+  /** MUT-703 (PLAN_CHECKOUT): offer the lapsed plan at the plans' come-back. Absent = off (the legacy offer). */
+  planSales?: boolean;
   dryRun: boolean;
   elapsedMs?: () => number;
   budgetMs?: number;
@@ -78,7 +87,6 @@ const REFUSAL_SKIP: Record<Exclude<ComebackRefusal, 'NOT_OFFERED'>, ComebackSkip
   PAYING: 'paying',
   NO_LAPSE: 'no-lapse',
   TOO_SOON: 'too-soon',
-  FIRM: 'firm',
   ALREADY_HAD: 'already-had',
   STAY_OFFER_RECENT: 'stay-offer-recent',
   COVERED: 'covered',
@@ -93,8 +101,22 @@ export async function runComebackMail(options: ComebackRunOptions): Promise<{ su
   const window = { endedAfter: new Date(now.getTime() - COMEBACK_STAGES[1].toDays * DAY_MS), endedUpTo: new Date(now.getTime() - COMEBACK_STAGES[0].fromDays * DAY_MS) };
   // MUT-565: an Accountant plan that ended is no come-back for the Freelancer plan (and has no offer of its own).
   const people = latestPerPerson((await store.billing.comebackCandidates(window)).filter((c) => c.tier !== 'ACCOUNTANT'));
-  const offer = people.length > 0 ? await options.stripe.offer() : null;
-  if (people.length > 0 && !offer) options.logger.warn('come-back mail: no running come-back offer (check the coupon in offers.json); nobody is mailed');
+  // One read per offer a run needs (the legacy one, or each lapsed plan's), warned once when there is none.
+  const offers = new Map<string, Promise<ComebackOffer | null>>();
+  const offerFor = (candidate: ComebackCandidate) => {
+    const plan = options.planSales ? comebackPlanOf(candidate.tier) : null;
+    const key = plan ?? 'legacy';
+    if (!offers.has(key)) {
+      offers.set(
+        key,
+        options.stripe.offer(plan).then((offer) => {
+          if (!offer) options.logger.warn({ plan: key }, 'come-back mail: no running come-back offer (check the coupon in offers.json); nobody is mailed it');
+          return offer;
+        }),
+      );
+    }
+    return offers.get(key)!;
+  };
 
   const rows: ComebackMailRow[] = [];
   let incomplete = false;
@@ -107,6 +129,7 @@ export async function runComebackMail(options: ComebackRunOptions): Promise<{ su
     const row: ComebackMailRow = { userId, email, locale, stripeSubscriptionId, stage: comebackStageOf(candidate.endedAt, now), action: 'skip', skip: null, outcome: null };
     let claimId: string | null = null;
     try {
+      const offer = row.stage ? await offerFor(candidate) : null;
       row.skip = await skipReason(options, candidate, row.stage, offer);
       if (!row.skip) {
         row.action = 'send';
@@ -115,7 +138,7 @@ export async function runComebackMail(options: ComebackRunOptions): Promise<{ su
           if (claim === 'taken') row.outcome = 'duplicate';
           else {
             claimId = claim;
-            row.outcome = (await send(options, candidate, row.stage!, offer!)).status;
+            row.outcome = (await send(options, candidate, row.stage!, (await offerFor(candidate))!)).status;
             // Only a mail that went out keeps its record: it is what opens the offer.
             if (row.outcome !== 'sent' && row.outcome !== 'duplicate') await store.billing.releaseRetentionEvent(claimId);
           }
@@ -181,7 +204,19 @@ function send(options: ComebackRunOptions, candidate: ComebackCandidate, stage: 
     locale: candidate.locale,
     template: 'comeback-offer',
     idempotencyKey: `comeback:${candidate.userId}:${stage}`,
-    vars: { stage, firstMonth: offer.firstMonth[c]!, listMonth: offer.listMonth[c]!, firstYear: offer.firstYear[c]!, listYear: offer.listYear[c]!, currency: c, subscribeLink: options.subscribeLink, offLink: `${origin}/mail-off?mail=offers#${token}` },
+    vars: {
+      stage,
+      firstMonth: offer.firstMonth[c]!,
+      listMonth: offer.listMonth[c]!,
+      firstYear: offer.firstYear[c],
+      listYear: offer.listYear[c],
+      currency: c,
+      subscribeLink: options.subscribeLink,
+      offLink: `${origin}/mail-off?mail=offers#${token}`,
+      // MUT-703: the plan offered and the plans' percent (the legacy offer: Freelancer, an amount off).
+      plan: offer.plan,
+      percentOff: offer.percentOff,
+    },
     headers: unsubscribeHeaders(origin, 'offers', options.optOut.pepper, candidate.userId),
   });
 }
@@ -200,7 +235,8 @@ function summarize(rows: readonly ComebackMailRow[], dryRun: boolean, incomplete
       paying: skipped('paying'),
       noLapse: skipped('no-lapse'),
       tooSoon: skipped('too-soon'),
-      firm: skipped('firm'),
+      // MUT-703 (§13 Q5): a Firm lapse is mailed now; the count stays for older operator tools.
+      firm: 0,
       alreadyHad: skipped('already-had'),
       stayOfferRecent: skipped('stay-offer-recent'),
       covered: skipped('covered'),
