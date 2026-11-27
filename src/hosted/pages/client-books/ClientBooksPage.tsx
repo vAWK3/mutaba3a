@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { SearchInput } from '../../../components/filters/SearchInput';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -13,34 +13,86 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { InPlaceConfirm } from '../../components/InPlaceConfirm';
 import { QueryView, Skeleton } from '../../components/QueryView';
 import { Scene } from '../../components/Scene';
+import { useAccountantCustomers } from '../../data/accountantCustomersQueries';
+import { activatingIds, clearActivating, lapsedActivationIds } from '../../data/activating';
 import { useClientBooks, useRemoveClientBook } from '../../data/clientBooksQueries';
+import type { DeskSearch } from '../../data/filters';
 import { PageHeader } from '../views/shared';
-import { addMonths, dayLabel, isEnded, matchesClient, monthOfDate, periodLabel } from './clientBooksRules';
+import { AddCustomerDrawer } from './AddCustomerDrawer';
+import { CustomerDrawer } from './CustomerDrawer';
+import { DeskBadge } from './DeskBadge';
+import { buildDeskRows, filterCounts, matchesDeskFilter, matchesDeskRow, nextActionOf, type DeskFilter, type DeskRow } from './deskRules';
+import { addMonths, dayLabel, monthOfDate, periodLabel } from './clientBooksRules';
 
 /**
- * `/client-books` (MUT-562, layout C1): the accountant's desk, every client book shared with them. Owner, profile,
- * entries this month and last activity per row (AC1); a row opens the client's book. An ended client stays faded with
- * "No longer shared" and Remove until removed (AW4). With none, the empty state says how a client invites you (AW5).
+ * `/client-books` (MUT-562, layout C1): the accountant's desk, every client book shared with them. MUT-768 (accountant
+ * channel) adds the customers the accountant created: a state badge on every row (always the word), filter chips, ONE
+ * next action per row (New code, Resend link, Take card), Add customer and the Customer drawer (`?newCustomer=`,
+ * `?customer=`). An accountant the operator has not approved sees the desk as before: no chips, no Add customer.
+ *
+ * Owner, profile, entries this month and last activity per row (AC1); a row opens the client's book. An ended client
+ * stays faded with "No longer shared" and Remove until removed (AW4). With none, the empty state says how a client invites
+ * you (AW5), or, for an approved accountant, offers Add customer.
  *
  * Each readable row downloads last month's Excel report (Basel 13244: the report only). With MUT-565's fields: "{readable}
  * of {freeLimit} free client books" under the title while no plan covers, and a row past the free ones (`needsPlan`)
  * is faded with Subscribe (the Accountant plan, back to the desk).
  */
+/** After Stripe the list is re-read this often, for up to two minutes (DR-5). */
+const ACTIVATING_POLL_MS = 5_000;
+
 export function ClientBooksPage() {
   const { t } = useLanguage();
   const books = useClientBooks();
+  const search = useSearch({ strict: false }) as DeskSearch;
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<DeskFilter>('all');
   const summary = clientBooksOf(useMe());
   const [subscribing, setSubscribing] = useState(false);
+
+  // Activating (DR-5): the customers sent to Stripe in the last two minutes. A tick re-evaluates the window.
+  const [now, setNow] = useState(() => Date.now());
+  const activating = activatingIds(now);
+  const lapsed = lapsedActivationIds(now);
+  const waiting = activating.size > 0;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => setNow(Date.now()), ACTIVATING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waiting]);
+  const customersQuery = useAccountantCustomers(waiting ? ACTIVATING_POLL_MS : false);
+  const customers = customersQuery.data;
+  const approved = customers?.approved === true;
+
+  const activatingKey = [...activating].sort().join(',');
+  const rows = useMemo(
+    () => buildDeskRows(books.data?.items ?? [], customers?.items ?? [], new Set(activatingKey ? activatingKey.split(',') : [])),
+    [books.data, customers, activatingKey],
+  );
+  // Paid customers need no mark any more.
+  useEffect(() => {
+    for (const customer of customers?.items ?? []) if (customer.paid) clearActivating(customer.userId);
+  }, [customers]);
+
+  const goTo = (next: DeskSearch, replace = false) => void navigate({ to: '/client-books', search: next, replace });
+  const closeDrawers = () => goTo({}, true);
+  const customerRow = search.customer ? rows.find((row) => row.customer?.userId === search.customer) : undefined;
+  const addButton = approved ? (
+    <Button type="button" onClick={() => goTo({ newCustomer: true })}>
+      {t('hosted.desk.add')}
+    </Button>
+  ) : null;
 
   return (
     <div className="hp-desk">
       <PageHeader title={t('hosted.clientBooks.title')}>
-        {(books.data?.items.length ?? 0) > 0 && (
+        {rows.length > 0 && (
           <div className="hp-search">
             <SearchInput value={query} onChange={setQuery} placeholder={t('hosted.clientBooks.search')} />
           </div>
         )}
+        {addButton}
       </PageHeader>
       {summary && summary.cap !== null && !planCovers(summary) && (
         <p className="hp-free-books">{t('hosted.clientBooks.free', { readable: Math.min(summary.readable, summary.freeLimit), freeLimit: summary.freeLimit })}</p>
@@ -51,83 +103,151 @@ export function ClientBooksPage() {
           <AccountantPlanOffer returnPath="/client-books" place="client_books" />
         </section>
       )}
+      {approved && rows.length > 0 && <DeskChips rows={rows} filter={filter} onFilter={setFilter} />}
       <QueryView
         queries={[books]}
-        data={books.data?.items}
+        data={books.data ? rows : undefined}
         loading={<Skeleton rows={3} />}
         isEmpty={(items) => items.length === 0}
         empty={
           <div className="hp-empty hp-client-books-empty">
             <Scene name="client-books-empty" motion="drop-in" />
-            <h2>{t('hosted.clientBooks.empty.title')}</h2>
-            <p>{t('hosted.clientBooks.empty.body')}</p>
+            <h2>{approved ? t('hosted.desk.emptyTitle') : t('hosted.clientBooks.empty.title')}</h2>
+            {approved ? (
+              <>
+                {addButton}
+                <p>{t('hosted.desk.emptyOr')}</p>
+              </>
+            ) : (
+              <p>{t('hosted.clientBooks.empty.body')}</p>
+            )}
           </div>
         }
       >
-        {(items) => <ClientBooksTable items={items} query={query} onSubscribe={() => setSubscribing(true)} />}
+        {(items) => (
+          <ClientBooksTable
+            items={items}
+            query={query}
+            filter={approved ? filter : 'all'}
+            lapsed={lapsed}
+            onSubscribe={() => setSubscribing(true)}
+            onOpen={(row, pane) => goTo({ customer: row.customer!.userId, ...(pane ? { pane } : {}) })}
+          />
+        )}
       </QueryView>
+      {search.newCustomer && approved && <AddCustomerDrawer onClose={closeDrawers} />}
+      {customerRow?.customer && <CustomerDrawer key={customerRow.key} row={customerRow} pane={search.pane} onClose={closeDrawers} onPane={(pane) => goTo({ customer: search.customer!, ...(pane ? { pane } : {}) }, true)} />}
     </div>
   );
 }
 
-const needsPlan = (row: AccountantClientWithStats) => (row as ClientRowWithPlan).needsPlan === true;
+/** Filter chips with counts (DR-2): All, Awaiting claim, Needs card, Active. */
+function DeskChips({ rows, filter, onFilter }: { rows: DeskRow[]; filter: DeskFilter; onFilter: (filter: DeskFilter) => void }) {
+  const { t } = useLanguage();
+  const counts = filterCounts(rows);
+  return (
+    <div className="hp-desk-chips" role="group" aria-label={t('hosted.desk.filters.label')}>
+      {(['all', 'awaiting', 'needcard', 'active'] as const).map((key) => (
+        <button key={key} type="button" className="hp-chip" aria-pressed={filter === key} onClick={() => onFilter(key)}>
+          {t(`hosted.desk.filters.${key}`)} <span className="hp-chip-count">{counts[key]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
-function ClientBooksTable({ items, query, onSubscribe }: { items: AccountantClientWithStats[]; query: string; onSubscribe: () => void }) {
+const needsPlan = (row: AccountantClientWithStats | null) => (row as ClientRowWithPlan | null)?.needsPlan === true;
+
+interface TableProps {
+  items: DeskRow[];
+  query: string;
+  filter: DeskFilter;
+  lapsed: ReadonlySet<string>;
+  onSubscribe: () => void;
+  onOpen: (row: DeskRow, pane?: 'card') => void;
+}
+
+function ClientBooksTable({ items, query, filter, lapsed, onSubscribe, onOpen }: TableProps) {
   const { t, language } = useLanguage();
-  const rows = useMemo(() => items.filter((client) => matchesClient(client, query)), [items, query]);
-  const columns = useMemo<Column<AccountantClientWithStats>[]>(
+  const rows = useMemo(() => items.filter((row) => matchesDeskFilter(row, filter) && matchesDeskRow(row, query)), [items, query, filter]);
+  const columns = useMemo<Column<DeskRow>[]>(
     () => [
-      { key: 'owner', header: t('hosted.clientBooks.cols.owner'), cell: (row) => <bdi dir="auto">{row.ownerName ?? '—'}</bdi> },
       {
-        key: 'profile',
-        header: t('hosted.clientBooks.cols.profile'),
-        cell: (row) =>
-          isEnded(row) || needsPlan(row) ? (
-            <bdi dir="auto">{row.name}</bdi>
-          ) : (
-            <Link to="/client-books/$profileId" params={{ profileId: row.profileId }} aria-label={t('hosted.clientBooks.open', { profile: row.name })}>
+        key: 'customer',
+        header: t('hosted.desk.cols.customer'),
+        cell: (row) => (
+          <>
+            {row.client && row.state !== 'ended' && !needsPlan(row.client) ? (
+              <Link to="/client-books/$profileId" params={{ profileId: row.client.profileId }} aria-label={t('hosted.clientBooks.open', { profile: row.name })}>
+                <bdi dir="auto">{row.name}</bdi>
+              </Link>
+            ) : (
               <bdi dir="auto">{row.name}</bdi>
-            </Link>
-          ),
+            )}
+            <div className="hp-muted">
+              <bdi dir="auto">{row.ownerName ?? '—'}</bdi>
+            </div>
+          </>
+        ),
+      },
+      {
+        key: 'state',
+        header: t('hosted.desk.cols.state'),
+        cell: (row) => (
+          <>
+            <DeskBadge state={row.state} />
+            {row.state === 'card' && row.customer && lapsed.has(row.customer.userId) && <div className="hp-ended-note">{t('hosted.desk.checkBack')}</div>}
+          </>
+        ),
       },
       {
         key: 'thisMonth',
         header: t('hosted.clientBooks.cols.thisMonth'),
         numeric: true,
-        cell: (row) =>
-          isEnded(row) ? (
-            <span className="hp-ended-note">{t('hosted.clientBooks.ended')}</span>
-          ) : needsPlan(row) ? (
-            <span className="hp-ended-note">{t('hosted.clientBooks.needsPlan')}</span>
-          ) : (
-            (row.entriesThisMonth ?? 0)
-          ),
+        cell: (row) => (needsPlan(row.client) ? <span className="hp-ended-note">{t('hosted.clientBooks.needsPlan')}</span> : row.client && row.state !== 'ended' ? (row.client.entriesThisMonth ?? 0) : '—'),
       },
       {
         key: 'lastActivity',
         header: t('hosted.clientBooks.cols.lastActivity'),
-        cell: (row) => (row.lastActivityAt && !isEnded(row) ? dayLabel(row.lastActivityAt, language) : t('hosted.clientBooks.noActivity')),
+        cell: (row) => (row.client?.lastActivityAt && row.state !== 'ended' ? dayLabel(row.client.lastActivityAt, language) : t('hosted.clientBooks.noActivity')),
       },
       {
         key: 'action',
         header: t('hosted.clientBooks.cols.action'),
         stickyEnd: true,
-        cell: (row) =>
-          isEnded(row) ? (
-            <RemoveEnded client={row} />
-          ) : needsPlan(row) ? (
-            <Button variant="ghost" size="sm" onClick={onSubscribe} aria-label={t('hosted.clientBooks.subscribeAria', { profile: row.name })}>
-              {t('hosted.accountantPlan.subscribe')}
-            </Button>
-          ) : (
-            <LastMonthReport client={row} />
-          ),
+        cell: (row) => {
+          const next = nextActionOf(row.state);
+          if (row.state === 'ended' && row.client) return <RemoveEnded client={row.client} />;
+          if (needsPlan(row.client) && row.client) {
+            return (
+              <Button variant="ghost" size="sm" onClick={onSubscribe} aria-label={t('hosted.clientBooks.subscribeAria', { profile: row.name })}>
+                {t('hosted.accountantPlan.subscribe')}
+              </Button>
+            );
+          }
+          if (next && row.customer) {
+            return (
+              <Button variant="ghost" size="sm" onClick={() => onOpen(row, next === 'takeCard' ? 'card' : undefined)} aria-label={t('hosted.desk.nextAria', { action: t(`hosted.desk.next.${next}`), profile: row.name })}>
+                {t(`hosted.desk.next.${next}`)}
+              </Button>
+            );
+          }
+          return row.client ? <LastMonthReport client={row.client} /> : null;
+        },
       },
     ],
-    [t, language, onSubscribe],
+    [t, language, lapsed, onSubscribe, onOpen],
   );
   if (rows.length === 0) return <p className="hp-muted">{t('hosted.clientBooks.searchEmpty', { query: query.trim() })}</p>;
-  return <HostedTable columns={columns} rows={rows} rowKey={(row) => row.profileId} label={t('hosted.clientBooks.title')} rowClassName={(row) => (isEnded(row) ? 'hp-row-ended' : needsPlan(row) ? 'hp-row-ended hp-row-needs-plan' : undefined)} />;
+  return (
+    <HostedTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.key}
+      label={t('hosted.clientBooks.title')}
+      rowClassName={(row) => (row.state === 'ended' ? 'hp-row-ended' : needsPlan(row.client) ? 'hp-row-ended hp-row-needs-plan' : undefined)}
+    />
+  );
 }
 
 /** AW4: Remove on an ended row, confirmed in place (DESIGN.md › Destructive confirm). */
