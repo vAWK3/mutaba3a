@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Pilot milestones: first scan, first invoice (ADR-332)
+
+### Added
+- `PilotMilestones` (`src/hosted/shell/PilotMilestones.tsx`): a small card with the milestone scene and `motion-milestone` on a tester's first scan and first invoice, once; `firstsReached`, `nextFirstsMemory`, `hoursSinceStart`, `readFirstsMemory`/`writeFirstsMemory` in `src/hosted/data/pilot.ts`.
+
+### Changed
+- Billing is re-read after a receipt is added to an expense and after a document is issued (`receiptQueries.ts`, `issuedQueries.ts`). `CloseIcon` is exported from `DrawerFrame`.
+
+### Technical
+- Tests: `src/hosted/shell/__tests__/PilotMilestones.test.tsx`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-755: the pilot Welcome, once per account (ADR-331)
 
 ### Added

@@ -1965,6 +1965,31 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
   .hp-pilot-welcome-step-2 [data-part="nuqta"] { animation-delay: 530ms; }
   .hp-pilot-welcome-step-3 [data-part="nuqta"] { animation-delay: 580ms; }
 }
+/* Pilot milestones: a small card above the floating chrome, the milestone scene and two words; it leaves after 4 s.
+   Motion from docs/design/motion/2026-11-27/milestone/motion-milestone-spec.md, in the art's own coordinates (the
+   nuqta and the badge centre at 74,52 in both drawings): the nuqta fades in (120ms linear) and drops 36px into the
+   badge (420ms overshoot); the badge bumps to 1.06 at 380ms (140ms spring) and settles at 520ms (200ms spring); the
+   three dots spring out from the nuqta, scale 0→1 from 420ms, 25ms apart, all ending at 940ms (overshoot). The
+   individual `translate`/`scale` properties keep the art's own transform attributes. Reduced motion: the still. */
+.hp-milestone-region { position: fixed; inset-inline: 0; inset-block-end: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; pointer-events: none; z-index: 50; padding-inline: var(--space-4); }
+.hp-milestone { pointer-events: auto; display: flex; align-items: center; gap: var(--space-3); max-inline-size: 100%; padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); }
+.hp-milestone-art { flex: none; }
+.hp-milestone-text { font-weight: var(--weight-medium); }
+.hp-milestone-close { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 44px; min-block-size: 44px; background: none; border: 0; color: var(--text-secondary); cursor: pointer; }
+.hp-milestone-art [data-part="badge"], .hp-milestone-art [data-part="confetti"] > * { transform-box: view-box; transform-origin: 74px 52px; }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-milestone-art [data-part="nuqta"] { animation: hp-milestone-nuqta-in 120ms linear both, hp-milestone-nuqta-drop 420ms var(--ease-overshoot) both; }
+  .hp-milestone-art [data-part="badge"] { animation: hp-milestone-bump 140ms var(--ease-spring) 380ms both, hp-milestone-settle 200ms var(--ease-spring) 520ms forwards; }
+  .hp-milestone-art [data-part="confetti"] > * { animation: hp-milestone-dot 520ms var(--ease-overshoot) 420ms both; }
+  .hp-milestone-art [data-part="confetti"] > :nth-child(2) { animation-duration: 495ms; animation-delay: 445ms; }
+  .hp-milestone-art [data-part="confetti"] > :nth-child(3) { animation-duration: 470ms; animation-delay: 470ms; }
+}
+@keyframes hp-milestone-nuqta-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hp-milestone-nuqta-drop { from { translate: 0 -36px; } to { translate: 0 0; } }
+@keyframes hp-milestone-bump { from { scale: 1; } to { scale: 1.06; } }
+@keyframes hp-milestone-settle { from { scale: 1.06; } to { scale: 1; } }
+@keyframes hp-milestone-dot { from { scale: 0; } to { scale: 1; } }
+
 @keyframes hp-pilot-step-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes hp-pilot-nuqta-pop { from { transform: scale(0); } to { transform: scale(1); } }
 .hp-pick-business { display: grid; gap: var(--space-3); }

@@ -3635,6 +3635,12 @@
       },
       "later": "Later",
       "start": "Start with a receipt"
+    },
+    "pilot": {
+      "milestone": {
+        "scan": "First scan saved",
+        "invoice": "First invoice issued"
+      }
     }
   }
 }

@@ -166,10 +166,13 @@ export function useAddReceipt(profileId: string, expenseId: string) {
   return useMutation({
     mutationFn: (file: File) => uploadExpenseReceipt(profileId, expenseId, file),
     // Listed at once, so the drawer's "Uploading…" row hands over to the READY one without a gap before the refetch.
-    onSuccess: (receipt) =>
+    onSuccess: (receipt) => {
       queryClient.setQueryData<ExpenseDetail>(expenseKey(profileId, expenseId), (expense) =>
         expense ? { ...expense, receipts: [...expense.receipts.filter((r) => r.id !== receipt.id), receipt] } : expense,
-      ),
+      );
+      // MUT-731 meters, and the pilot's first scan (its milestone, MUT-758).
+      void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
+    },
     onSettled: () => refreshExpenseReceipts(queryClient, profileId, expenseId),
   });
 }
