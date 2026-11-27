@@ -207,7 +207,7 @@ test('An accountant’s customer: who set it up, the code, the password, the acc
     await openLink(page, api);
     await expect(page.getByText('Hadi Khatib set up MTB3A for Café Nour.')).toBeVisible();
     await expect(page.locator('[data-scene="handover-welcome"]')).toBeVisible();
-    await expect(page.getByText('Step 1 of 3')).toBeAttached();
+    await expect(page.getByText('Step 1 of 3', { exact: true })).toBeAttached();
     await expect(page.getByRole('heading', { level: 1, name: 'Enter the code your accountant gave you' })).toBeFocused();
     await expect(page.getByLabel('New password')).toHaveCount(0);
   });
@@ -230,7 +230,7 @@ test('An accountant’s customer: who set it up, the code, the password, the acc
   await step('The right code opens the password step, step 2 of 3, under the same context line', async () => {
     await typeClaimCode(page, CLAIM_CODE);
     await page.getByRole('button', { name: 'Verify' }).click();
-    await expect(page.getByText('Step 2 of 3')).toBeAttached();
+    await expect(page.getByText('Step 2 of 3', { exact: true })).toBeAttached();
     await expect(page.getByText('Hadi Khatib set up MTB3A for Café Nour.')).toBeVisible();
     await expect(page.getByLabel('New password')).toBeVisible();
   });
