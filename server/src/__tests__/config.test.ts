@@ -766,3 +766,33 @@ describe('loadConfig — the issued-document signer (MUT-641, ADR-265)', () => {
     expect(() => loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'ftp://tsa.example/' })).toThrow(/ISSUING_TSA_URL/);
   });
 });
+
+describe('server/.env.example: the Switch rollout target for dev (Basel, 2026-11-27)', () => {
+  /** The uncommented KEY=value lines, with the real-looking secrets from `base` over the shipped placeholders. */
+  function shippedEnv(): Record<string, string> {
+    const example = readFileSync(resolve(process.cwd(), '.env.example'), 'utf8');
+    const env: Record<string, string> = {};
+    for (const line of example.split('\n')) {
+      const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line);
+      if (match) env[match[1]!] = match[2]!;
+    }
+    return { ...env, ...base };
+  }
+
+  it('boots with every target switch on and INVOICING_FOR_ALL and ACCOUNTANT_PLAN off', () => {
+    const config = loadConfig(shippedEnv());
+    expect(config).toMatchObject({
+      STARTER_PLAN: true,
+      PLAN_CHECKOUT: true,
+      OPEN_SIGNUP: true,
+      PAID_BUSINESS_CAPS: true,
+      PAID_HARD_CAPS: true,
+      ACCOUNTANT_PROVISIONING: true,
+      TWO_FACTOR_ISSUING_GATE_ENABLED: true,
+      MALAFAT_SIGN_IN: true,
+      MALAFAT_DELEGATION: true,
+      INVOICING_FOR_ALL: false,
+      ACCOUNTANT_PLAN: false,
+    });
+  });
+});
