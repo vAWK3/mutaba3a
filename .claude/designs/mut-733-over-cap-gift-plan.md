@@ -1,6 +1,6 @@
 # MUT-733: paid plans' monthly caps: notices at 80% and 90%, a one-time gift, then upgrade or a hard cap
 
-Status: **planned, not built** (2026-11-27). Epic MUT-701. Builds on MUT-735 (ADR-281: counter, levels, the gift
+Status: **APPROVED with every default answer (Basel, 2026-11-27); not built.** Epic MUT-701. Builds on MUT-735 (ADR-281: counter, levels, the gift
 marker columns), MUT-731 (ADR-284/285: `PLAN_LIMIT`, `HARD_CAP_PLANS`, `PlanLimitNotice`, usage reads). Replaces the
 soft-cap and "two months over → move up at renewal" rules of MUT-704.
 

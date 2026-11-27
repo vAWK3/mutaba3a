@@ -1,6 +1,6 @@
 # MUT-750: Israeli VAT on subscriptions, and an Israeli tax invoice-receipt for each Israeli payment
 
-Status: **planned, not built** (2026-11-27). Epic MUT-566. Blocked (for the tax-document half only) by MUT-749, MUT-355,
+Status: **APPROVED with every default answer (Basel, 2026-11-27); not built.** Epic MUT-566. Blocked (for the tax-document half only) by MUT-749, MUT-355,
 MUT-639's accountant answer and the production signing certificate (ADR-286 d4). Builds on ADR-286 and ADR-288.
 
 ```

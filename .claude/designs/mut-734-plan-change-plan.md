@@ -1,6 +1,6 @@
 # MUT-734: change plan: up now with a pro-rata charge, down at the end of the paid cycle
 
-Status: **planned, not built** (2026-11-27). Epic MUT-701. Builds on ADR-275 (`changeTimingOf`, `RANK`), ADR-284
+Status: **APPROVED with every default answer (Basel, 2026-11-27); not built.** Epic MUT-701. Builds on ADR-275 (`changeTimingOf`, `RANK`), ADR-284
 (Starter, `starterChosenAt`, `activeBusinessIds`, the business-cap post-pass), ADR-288 (the provider port, per-plan
 catalogs), ADR-240 (MUT-532 pause / cancel / stay, `billing_retention_events`), MUT-531 (the yearly switch: Stripe
 proration preview + `always_invoice` with one `proration_date`).

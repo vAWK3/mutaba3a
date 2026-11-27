@@ -1,6 +1,6 @@
 # MUT-706: the phone knows every plan and the whole subscription lifecycle (names, caps, usage, gift, scheduled change)
 
-Status: **planned, not built** (2026-11-27). Epic MUT-701. Work is in the Flutter repo
+Status: **APPROVED with every default answer (Basel, 2026-11-27); not built.** Epic MUT-701. Work is in the Flutter repo
 (`~/Work/Barmajiyat/Mutaba3a/mutaba3a-flutter/mutaba3a`), on its own branch there; this brief lives in mini-crm with
 its siblings because every item reads a mini-crm API contract. Basel's scope comment 13535 (2026-11-25) widens the
 ticket from "names and notices" to all plans and the whole lifecycle.

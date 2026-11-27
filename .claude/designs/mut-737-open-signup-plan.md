@@ -1,6 +1,6 @@
 # MUT-737: open sign-up: no email review, everyone starts on Starter, onboarding offers Try Solo
 
-Status: **planned, not built** (2026-11-27). Epic MUT-701. Supersedes the review parts of ADR-178 (MUT-367). Builds on
+Status: **APPROVED with every default answer (Basel, 2026-11-27); not built.** Epic MUT-701. Supersedes the review parts of ADR-178 (MUT-367). Builds on
 ADR-284 (Starter, no new no-card trials, the one-time Solo trial offer) and ADR-288 (the Solo trial Checkout).
 
 ```
