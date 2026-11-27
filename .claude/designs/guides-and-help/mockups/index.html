@@ -128,10 +128,10 @@ h2{font:500 20px/1.3 system-ui;margin:0 0 8px}
 </div>
 <div class="bar" id="varbar" style="top:53px">
   <div class="grp seg" id="vGs"><span>Get started</span><button data-v="A" aria-pressed="true">A: card</button><button data-v="B" aria-pressed="false">B: quiet line</button></div>
-  <div class="grp seg" id="vGuide"><span>Guide</span><button data-v="A" aria-pressed="true">A: all steps</button><button data-v="B" aria-pressed="false">B: one step at a time</button></div>
+  <div class="grp seg" id="vGuide"><span>Guide (picked: A portal, B phone)</span><button data-v="A" aria-pressed="false">Show A everywhere</button><button data-v="B" aria-pressed="false">Show B everywhere</button></div>
   <div class="grp seg" id="vPrompt"><span>Prompt</span><button data-v="off" aria-pressed="true">Off</button><button data-v="A" aria-pressed="false">A: banner</button><button data-v="B" aria-pressed="false">B: in the lane</button></div>
 </div>
-<p class="note">Draft layout and draft copy for Basel's choice. Copy is not signed off (MUT-673). Dashed boxes are Claude Design slots: nothing in them is final art or motion. Click a Get started step or "Show me how".</p>
+<p class="note"><b>Picked 2026-11-27:</b> Get started A (card), guide A on the portal and B on the phone, prompt A (banner). The other layouts stay here for reference. Draft layout and draft copy. Copy is not signed off (MUT-673). Dashed boxes are Claude Design slots: nothing in them is final art or motion. Click a Get started step or "Show me how".</p>
 
 <!-- ============ PORTAL ============ -->
 <div class="stage" id="s-portal">
@@ -275,13 +275,15 @@ he:{help:'עזרה',signup:'פתחו חשבון',c1:'מספר הקצאה ורש�
  nfTitle:'הדף לא נמצא',toHelp:'עזרה'}};
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const tt=(l,k)=>(T[l]&&T[l][k]!==undefined)?T[l][k]:T.en[k];
-const S={surf:'portal',lang:'ar',vGs:'A',vGuide:'A',vPrompt:'off',step:0,done:[true,false,false,false]};
+/* Picked 2026-11-27: Get started A (card), guide A on the portal and B (one step at a time) on the phone, prompt A (banner). */
+const S={surf:'portal',lang:'ar',vGs:'A',vGuideP:'A',vGuideM:'B',vPrompt:'off',step:0,done:[true,false,false,false]};
 const GUIDE_SLOTS=['guide-tax-1','guide-tax-2','guide-tax-3','guide-tax-4'];
 
 function guideHTML(l,phone){
   const st=tt(l,'gSteps'),steps=st.map((s,i)=>({s,a:GUIDE_SLOTS[i]}));
   const hero=`<div class="slot s120" style="margin-bottom:12px">guide-tax-hero<small>120×96</small></div><p class="muted">${tt(l,'gLead')}</p>`;
-  if(S.vGuide==='A'){
+  const v=phone?S.vGuideM:S.vGuideP;
+  if(v==='A'){
     return hero+steps.map((x,i)=>`<div class="gstep"><div class="num">${i+1}</div><div><div>${x.s}</div><div class="slot s120" style="margin:8px 0 0;width:100%;height:72px">${x.a}<small>120×96, enters once</small></div></div></div>`).join('')
       +`<p class="label">${tt(l,'gNote')}</p><a class="link" href="#">${tt(l,'gSrc')} ↗</a>`;
   }
@@ -328,7 +330,7 @@ seg('#lang',b=>{S.lang=b.dataset.l;render()});
 seg('#theme',b=>document.body.classList.toggle('dark',b.dataset.th==='dark'));
 seg('#rmot',b=>document.body.classList.toggle('rm',b.dataset.r==='1'));
 seg('#vGs',b=>{S.vGs=b.dataset.v;render()});
-seg('#vGuide',b=>{S.vGuide=b.dataset.v;S.step=0;render()});
+seg('#vGuide',b=>{S.vGuideP=S.vGuideM=b.dataset.v;S.step=0;render()});
 seg('#vPrompt',b=>{S.vPrompt=b.dataset.v;render()});
 seg('#pView',b=>{$('#pHome').classList.toggle('hide',b.dataset.pv!=='home');$('#pHub').classList.toggle('hide',b.dataset.pv!=='hub')});
 seg('#mView',b=>{$('#mHome').classList.toggle('hide',b.dataset.pv!=='home');$('#mHub').classList.toggle('hide',b.dataset.pv!=='hub')});
