@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — A rules read: what the invoicing screens show comes from the issuer's pack (MUT-743 server piece, ADR-287, API 1.149.0-mut743)
+
+Epic MUT-738. First of three pieces (server, then the portal, then the phone in the Flutter repo); this one changes no screen. Plan `.claude/designs/MUT-743-rules-read.md` (eng-reviewed). No migration.
+
+### Added
+- `GET /v1/issuing/rules?country=XX` (scope `issuing:read`, the gate of `GET /v1/issuing/setup`): `{ country, live, rulesVersion, rules }`. `rules` (null when the country is not live, so clients show "not available yet"): `currency`, `languages` (available, default), `taxId` (scheme, pattern, maxLength: a mask, the server's check stays the authority), `vat.perLineExemption`, `documentTypes[]` (vatBearing, takesPayment, hasDueDate, needsCustomer), `dealerTypes[]` (value, labelKey, issues, exemptFromVat, defaultType, entryTypes owed/received), `clearance` (`{ kind }` or null). `country` absent means the issuer's country, else the default. `Cache-Control: private, max-age=300`. A 404 means invoicing is off for the profile, never "no rules".
+- `issuing/rules.ts` (`rulesFor`), `jurisdictions/il/dealers.ts` (Israel's business types as one table: `issues`, `defaultType`, `entryTypes`, `labelKey` `IL.<TYPE>`; the dealer rule `refusal` is derived from `issues`, so what the clients show and the server accepts cannot disagree).
+- Pack interface: `languages`, `taxId.pattern/maxLength`, `dealer.types`, `vat.perLineExemption`, `clearance.kind`, and `documentTypes[].{takesPayment, hasDueDate, needsCustomer}`.
+
+### Changed
+- AC2 reads: a pack that removes or relabels a dealer type, document type or setup step, or changes currency, default language, tax-ID format or clearance, needs no client release. `DealerType`, document language and `IssuedDocType` are closed lists (Prisma enum and clients): a new value is a server, schema and migration change plus a one-off client release.
+- `IL_PACK.version` stays 1.0.0 (no rule that decides a document changed; the version is stamped on every issued document).
+
 ## [Unreleased] - 2026-11-26 — Every issued document records its jurisdiction and pack version (MUT-742, ADR-287, API 1.148.0-mut742)
 
 Epic MUT-738. Option A of `.claude/designs/MUT-742-issuing-schema.md` (eng-reviewed): the immutable table gets the two columns now, while it holds almost no rows; the clearance table and the customer `country`/`taxIdScheme` columns wait for their first readers (TD-351).

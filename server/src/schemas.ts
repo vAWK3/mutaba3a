@@ -5533,6 +5533,41 @@ export const IssuingNumberingRequestSchema = z
   })
   .openapi('IssuingNumberingRequest');
 
+/** MUT-743: the query of the rules read. */
+export const IssuingRulesQuerySchema = z.object({
+  country: z.string().regex(/^[A-Z]{2}$/).optional().openapi({ description: 'MUT-743: ISO 3166-1 alpha-2. Absent: the issuer details’ country, or the default country before they are saved. Lets the setup ask about a country before anything is saved.' }),
+});
+
+export const IssuingRulesSchema = z
+  .object({
+    country: z.string(),
+    live: z.boolean().openapi({ description: 'False when invoicing is not available for this country yet (it is not on INVOICING_JURISDICTIONS or has no pack): `rules` is null and clients show "not available yet".' }),
+    rulesVersion: z.string().nullable().openapi({ description: 'The jurisdiction pack’s version; null when not live.' }),
+    rules: z
+      .object({
+        currency: z.object({ base: z.string(), issuing: z.array(z.string()) }).openapi({ description: 'The currency documents are issued in and what an amount is shown in.' }),
+        languages: z.object({ available: z.array(z.string()), default: z.string() }).openapi({ description: 'Document languages offered (a subset of he, ar, en) and the one a new business starts with.' }),
+        taxId: z.object({ scheme: z.string(), pattern: z.string(), maxLength: z.number().int() }).openapi({ description: 'How a typed tax number is masked: the regular expression (source) and the longest length. The server’s check is the authority (422 VAT_ID_INVALID).' }),
+        vat: z.object({ perLineExemption: z.boolean() }).openapi({ description: 'Whether one line of a document may be marked VAT-exempt.' }),
+        documentTypes: z.array(z.object({ type: IssuedDocTypeSchema, vatBearing: z.boolean(), takesPayment: z.boolean(), hasDueDate: z.boolean(), needsCustomer: z.boolean() })).openapi({ description: 'Each document type and what its form asks of the person.' }),
+        dealerTypes: z
+          .array(
+            z.object({
+              value: DealerTypeSchema,
+              labelKey: z.string().openapi({ description: 'The key the client looks its label up by (the copy stays in the client’s own translations): `<country>.<value>`.' }),
+              issues: z.array(IssuedDocTypeSchema).openapi({ description: 'The document types this business type may issue, in the order shown.' }),
+              exemptFromVat: z.boolean(),
+              defaultType: IssuedDocTypeSchema,
+              entryTypes: z.object({ owed: z.array(IssuedDocTypeSchema), received: z.array(IssuedDocTypeSchema) }).openapi({ description: 'What an entry already recorded may become: an Owed one, a Received one.' }),
+            }),
+          )
+          .openapi({ description: 'The business types offered, in the order shown (a subset of the closed DealerType list).' }),
+        clearance: z.object({ kind: z.string() }).nullable().openapi({ description: 'The tax authority’s pre-issue clearance (Israel: IL_ALLOCATION); null where the country has none.' }),
+      })
+      .nullable(),
+  })
+  .openapi('IssuingRules', { description: 'MUT-743 (ADR-287): what the clients show and ask for in the invoicing setup and the issue drawer, from the issuer’s jurisdiction pack. Since 1.149.0-mut743.' });
+
 const SetupStepSchema = z.enum(['done', 'todo', 'later']);
 export const IssuingSetupSchema = z
   .object({

@@ -23,6 +23,7 @@ import { settlementOf } from '../issuing/settlement.js';
 import { formatMoney, type Currency } from '../money.js';
 import { creditCap } from '../issuing/credit-split.js';
 import { registerDocumentsDueRoutes } from './documents-due.js';
+import { rulesFor } from '../issuing/rules.js';
 import { issuerPackOf } from '../issuing/issuer-pack.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
@@ -44,6 +45,8 @@ import {
   IssuingCounterSchema,
   IssuingGapsSchema,
   IssuingNumberingRequestSchema,
+  IssuingRulesQuerySchema,
+  IssuingRulesSchema,
   IssuingSetupSchema,
   IssuingStylesSchema,
   IssuingSettingsSchema,
@@ -792,6 +795,28 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     async (c) => {
       const organization = await issuingProfile(c, false);
       return c.json(await setupOf(organization, c.get('invoicingJurisdictions')), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/issuing/rules',
+      tags: ['Issuing'],
+      summary: 'What the invoicing screens show and ask for, for the profile’s country',
+      description:
+        'MUT-743 (ADR-287): the business types, document types (and what each form asks), currency, document languages, tax-ID mask, per-line VAT exemption and clearance of the issuer’s jurisdiction pack, so the portal and the phone stop hard-coding Israel. `country` (optional) asks about a country before any details are saved; absent, it is the issuer details’ country, else the default. A country that is not live answers `live: false` with `rules: null` (clients show "not available yet"). A 404 means invoicing is off or does not apply to this profile, never "no rules". Display data only: the server keeps refusing what the pack refuses. Cacheable for five minutes. Since 1.149.0-mut743.',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:read')] as const,
+      request: { query: IssuingRulesQuerySchema },
+      responses: { 200: json('The rules', IssuingRulesSchema), ...validationResponse, ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, false);
+      const asked = c.req.valid('query').country;
+      const country = asked ?? (await store.issuing.getIssuer(organization.id))?.country ?? DEFAULT_COUNTRY;
+      c.header('cache-control', 'private, max-age=300');
+      return c.json(rulesFor(country, c.get('invoicingJurisdictions')), 200);
     },
   );
 
