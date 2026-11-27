@@ -443,7 +443,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.200.0-mut753';
+export const API_VERSION = '1.213.0-mut753';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -767,6 +767,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
       mailer,
       settings: sessions,
+      ...(deps.offers ? { offers: deps.offers } : {}),
     }),
   );
   // MUT-733 (ADR-293): the once-ever over-cap gift.
@@ -852,6 +853,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
       checkout: deps.stripe?.checkoutGateway ?? null,
       ...(deps.offers ? { offers: deps.offers } : {}),
+      planSales: deps.planSales ?? false,
     }),
   );
   // MUT-525 (DD8): the daily launch-offer renewal notices (job + operator), on the unguarded store like the trial mails.
@@ -894,6 +896,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       plan: deps.stripe?.planGateway ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
       ...(deps.offers ? { offers: deps.offers } : {}),
+      planSales: deps.planSales ?? false,
     }),
   );
   // MUT-535: the monthly summary mails (job + operator) and their switch (You › Account, the opt-out page). The job and

@@ -98,7 +98,7 @@ describe('GET /v1/billing yearlySwitch (AC2, D2, D3, R1)', () => {
     const { id } = await subscribed(h, u.userId);
     const body = await read(await u.billing());
     // The fake catalog: ₪39 a month, ₪390 a year → 12 × 3900 − 39000.
-    expect(body.yearlySwitch).toEqual({ currency: 'ILS', savings: 7800 });
+    expect(body.yearlySwitch).toEqual({ currency: 'ILS', savings: 7800, plan: 'freelancer' });
     expect(h.plan.calls).toEqual([`paid:${id}`]);
   });
 
