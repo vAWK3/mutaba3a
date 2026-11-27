@@ -6,6 +6,7 @@ import { SectionTabs } from '../../components/SectionTabs';
 import { useOperatorAccount, useOperatorFirmRequests, useOperatorSignups } from '../../data/operatorQueries';
 import { OperatorStepUpProvider } from '../../operator/OperatorStepUp';
 import { useMe } from '../../session/me';
+import { useSelfServiceDoors } from '../../session/selfServiceDoors';
 
 /**
  * MUT-460 (ADR-213, design 6A): the operator console's frame, under `/operator`, in the shell with no profile (the You
@@ -20,8 +21,10 @@ export function OperatorLayout({ headingRef, children }: { headingRef: RefObject
   const firms = useOperatorFirmRequests();
   const waiting = signups.data?.data.length;
   const requests = firms.data?.data.length;
+  // MUT-737 (AC4): with open sign-up nothing waits for review, so Signups is a filter of Accounts, not a tab.
+  const openSignup = useSelfServiceDoors().openSignup;
   const tabs = [
-    { to: '/operator/signups', label: waiting ? t('hosted.operator.tabs.signupsCount', { count: waiting }) : t('hosted.operator.tabs.signups') },
+    ...(openSignup ? [] : [{ to: '/operator/signups', label: waiting ? t('hosted.operator.tabs.signupsCount', { count: waiting }) : t('hosted.operator.tabs.signups') }]),
     { to: '/operator/accounts', label: t('hosted.operator.tabs.accounts') },
     { to: '/operator/firms', label: requests ? t('hosted.operator.tabs.firmsCount', { count: requests }) : t('hosted.operator.tabs.firms') },
     // MUT-735 (ADR-281): who uses what, on which plan.

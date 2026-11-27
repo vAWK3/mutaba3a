@@ -58,6 +58,8 @@ import { useMe, useProfile } from './session/me';
 import { useIsOperator } from './session/features';
 import { OperatorLayout } from './pages/operator/OperatorLayout';
 import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
+import { SignupHistory } from './pages/operator/SignupHistory';
+import { useSelfServiceDoors } from './session/selfServiceDoors';
 import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
 import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
 import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
@@ -524,7 +526,11 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/signups',
-    component: () => <OperatorPage>{(heading) => <OperatorSignupsPage headingRef={heading} />}</OperatorPage>,
+    // MUT-737: with open sign-up there is nothing to review; an old link shows the read-only history.
+    component: function OperatorSignups() {
+      const openSignup = useSelfServiceDoors().openSignup;
+      return <OperatorPage>{(heading) => (openSignup ? <SignupHistory /> : <OperatorSignupsPage headingRef={heading} />)}</OperatorPage>;
+    },
   });
 
   /**
@@ -535,15 +541,17 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/accounts',
-    validateSearch: (search: Record<string, unknown>): { q?: string } => {
+    validateSearch: (search: Record<string, unknown>): { q?: string; view?: 'signups' } => {
       const q = typeof search.q === 'string' ? search.q : typeof search.email === 'string' ? search.email : '';
-      return q.trim() ? { q: q.trim() } : {};
+      // MUT-737: the sign-up history filter.
+      return { ...(q.trim() ? { q: q.trim() } : {}), ...(search.view === 'signups' ? { view: 'signups' as const } : {}) };
     },
     component: function OperatorAccounts() {
-      const { q = '' } = operatorAccountsRoute.useSearch();
+      const { q = '', view } = operatorAccountsRoute.useSearch();
       const navigate = useNavigate();
       const onSearch = useCallback((next: string) => void navigate({ to: '/operator/accounts', search: next ? { q: next } : {}, replace: true }), [navigate]);
-      return <OperatorPage>{() => <OperatorAccountsPage q={q} onSearch={onSearch} />}</OperatorPage>;
+      const onView = useCallback((next: 'all' | 'signups') => void navigate({ to: '/operator/accounts', search: next === 'signups' ? { view: 'signups' } : {} }), [navigate]);
+      return <OperatorPage>{() => <OperatorAccountsPage q={q} onSearch={onSearch} view={view} onView={onView} />}</OperatorPage>;
     },
   });
 

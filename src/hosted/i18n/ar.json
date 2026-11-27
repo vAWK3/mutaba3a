@@ -2576,6 +2576,15 @@
           "UNDONE": "أُلغي",
           "FAILED": "فشل"
         }
+      },
+      "history": {
+        "empty": "لا سجل",
+        "listLabel": "التسجيلات",
+        "filterLabel": "عرض",
+        "all": "الكل",
+        "approved": "قُبل",
+        "declined": "رُفض",
+        "waiting": "بانتظار المراجعة"
       }
     },
     "welcome": {

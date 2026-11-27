@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -10,6 +10,9 @@ import { useOperatorAccountList } from '../../data/operatorQueries';
 import { useFeatureText } from '../../operator/featureNames';
 import { agoText } from '../../operator/time';
 import { AccountStatusBadge } from './AccountStatusBadge';
+import { SegmentedControl } from '../../../components/ui/SegmentedControl';
+import { useSelfServiceDoors } from '../../session/selfServiceDoors';
+import { SignupHistory } from './SignupHistory';
 
 /** How long typing rests before the list is asked again. */
 export const SEARCH_DEBOUNCE_MS = 300;
@@ -21,7 +24,34 @@ const SKELETON_ROWS = 5;
  * (`?q=`), so Back and a shared link land on the same list. Each row says who, how they stand, when they last signed
  * in and which features are on, and opens the account.
  */
-export function OperatorAccountsPage({ q, onSearch }: { q: string; onSearch: (q: string) => void }) {
+export function OperatorAccountsPage({ q, onSearch, view, onView }: { q: string; onSearch: (q: string) => void; view?: 'signups'; onView?: (view: 'all' | 'signups') => void }) {
+  const t = useT();
+  // MUT-737 (wireframe mut-737 A): with open sign-up, the sign-up history is a filter of this list.
+  const openSignup = useSelfServiceDoors().openSignup;
+  const filter = openSignup && onView && (
+    <SegmentedControl
+      className="hp-operator-filter"
+      ariaLabel={t('hosted.operator.history.filterLabel')}
+      value={view ?? 'all'}
+      onChange={onView}
+      options={[
+        { value: 'all', label: t('hosted.operator.history.all') },
+        { value: 'signups', label: t('hosted.operator.tabs.signups') },
+      ]}
+    />
+  );
+  if (openSignup && view === 'signups') {
+    return (
+      <>
+        {filter}
+        <SignupHistory />
+      </>
+    );
+  }
+  return <AccountsList q={q} onSearch={onSearch} filter={filter || null} />;
+}
+
+function AccountsList({ q, onSearch, filter }: { q: string; onSearch: (q: string) => void; filter: ReactNode }) {
   const t = useT();
   const [draft, setDraft] = useState(q);
   const [seenQ, setSeenQ] = useState(q);
@@ -49,6 +79,7 @@ export function OperatorAccountsPage({ q, onSearch }: { q: string; onSearch: (q:
   const accounts = query.data?.pages.flatMap((page) => page.data);
   return (
     <>
+      {filter}
       <form className="hp-operator-search" role="search" onSubmit={submit}>
         <Input
           label={t('hosted.operator.accounts.searchLabel')}

@@ -10,6 +10,9 @@ import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
  * as the terms step does; otherwise it could never appear. The step is dark (SOLO_TRIAL_CHECKOUT off), so the switch
  * is turned on here.
  */
+const { trackPortal } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}) }));
+vi.mock('../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../analytics/portalAnalytics')>()), trackPortal }));
+
 vi.mock('../../pages/onboarding/SoloTrialStep', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../pages/onboarding/SoloTrialStep')>()),
   SOLO_TRIAL_CHECKOUT: true,
@@ -34,6 +37,19 @@ describe('the Solo trial step at sign-in (MUT-731)', () => {
     renderPortal(`/p/${ORG_A}`);
     expect(await screen.findByTestId('solo-trial-step')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Choose how to start' })).toBeInTheDocument();
+  });
+
+  it('MUT-737 (AC6): counts the step shown once, and the choice (Stay on Starter)', async () => {
+    trackPortal.mockClear();
+    stubApi({
+      ...emptyProfileRoutes(),
+      'GET /v1/me': () => ok({ ...me([profile()]), plan: { current: 'starter', businesses: null, soloTrialOffer: true } }),
+      'POST /v1/billing/solo-trial/offered': () => ok({}),
+    });
+    const { user } = renderPortal(`/p/${ORG_A}`);
+    await user.click(await screen.findByTestId('solo-trial-skip'));
+    expect(trackPortal.mock.calls.filter(([event]) => event === 'onboarding_plan_shown')).toHaveLength(1);
+    expect(trackPortal).toHaveBeenCalledWith('onboarding_plan_chosen', { choice: 'starter' });
   });
 
   it('is not shown when the server does not offer it', async () => {

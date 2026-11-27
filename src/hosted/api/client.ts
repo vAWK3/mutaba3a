@@ -685,6 +685,9 @@ export const api = {
    */
   operatorSignupReviews: (signal?: AbortSignal) =>
     request<OperatorSignupReviewList>('GET', '/v1/operator/signup-reviews', { query: { state: 'pending', limit: OPERATOR_LIST_LIMIT }, signal }),
+  /** MUT-737: the decided signups (the history once open sign-up retires the review), newest page the server gives. */
+  operatorSignupHistory: (signal?: AbortSignal) =>
+    request<OperatorSignupReviewList>('GET', '/v1/operator/signup-reviews', { query: { state: 'decided', limit: OPERATOR_LIST_LIMIT }, signal }),
   /** MUT-460: approve, decline, or mail an approved signup again. The server keys each mail; 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
   decideSignupReview: (userId: string, verb: SignupReviewVerb) =>
     request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),

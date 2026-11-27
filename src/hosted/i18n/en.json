@@ -2436,6 +2436,15 @@
           "UNDONE": "Undone",
           "FAILED": "Failed"
         }
+      },
+      "history": {
+        "empty": "No history",
+        "listLabel": "Signups",
+        "filterLabel": "Show",
+        "all": "All",
+        "approved": "Approved",
+        "declined": "Declined",
+        "waiting": "Waiting"
       }
     },
     "welcome": {

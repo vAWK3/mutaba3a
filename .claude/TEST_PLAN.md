@@ -5102,3 +5102,12 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Pure | `data/__tests__/planUsage.test.ts` | `planLimitOf` with and without `gift`; Firm's null next plan |
 | Portal | `BillingDrawer.mut705.test.tsx` | the meters' butter, Upgrade, and the gift's "No limit until" |
 | QA | `qa/specs/portal/paid-caps.spec.ts` | `portal.paid-caps.paid-cap-gift`, `paid-cap-hard`, `paid-scan-gift`, `paid-usage-nudge` |
+
+## MUT-737 (UI) — open sign-up (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Portal | `pages/operator/__tests__/OperatorSignupHistory.test.tsx` | open sign-up: no Signups tab, Accounts › Signups (`?view=signups`) lists the history newest first with class and outcome, no actions; flag off: the tab stays, no filter |
+| Portal | `session/__tests__/AuthGate.soloTrial.test.tsx` | `onboarding_plan_shown` once, `onboarding_plan_chosen { choice: starter }` |
+| Contract | `scripts/__tests__/analytics-taxonomy.test.ts` | 2.14.0 pinned; the new events' emitters and properties |
+| QA | with TD-371 | `portal-selfservice.signup.webmail-starter`, `portal-selfservice.operator.signups-history` |
