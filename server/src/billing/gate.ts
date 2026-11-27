@@ -110,6 +110,11 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/operator/firm-requests/:organizationId/decline': 'open',
   // MUT-593: the per-firm Malafat switch.
   'POST /v1/operator/organizations/:organizationId/malafat-delegation': 'open',
+  // MUT-764: approving an accountant to create customers, the same rule.
+  'GET /v1/operator/accounts/:userId/accountant-provisioning': 'open',
+  'PUT /v1/operator/accounts/:userId/accountant-provisioning': 'open',
+  'DELETE /v1/operator/accounts/:userId/accountant-provisioning': 'open',
+  'GET /v1/operator/provisioned-accounts': 'open',
   // MUT-735 (ADR-281): Operator › Usage, the same rule.
   'GET /v1/operator/usage/overview': 'open',
   'GET /v1/operator/usage/people': 'open',
@@ -123,6 +128,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/profiles/:profileId/accountants': 'pathProfile',
   'POST /v1/accountant-invites/accept': 'open',
   'DELETE /v1/clients/:profileId': 'open',
+  // MUT-764 (accountant channel): the accountant never pays, so creating a customer's account is never gated by their own billing; the customer's plan is theirs.
+  'POST /v1/accountant/customers': 'open',
   // MUT-575: the client books list reads only who shared what with the person; reading a client is gated per profile.
   'GET /v1/clients': 'open',
   // MUT-560 (ADR-247): seeing and revoking who can read a profile is privacy, never paid; making a link is a write on

@@ -133,5 +133,70 @@ export function describeLedgerStoreAccountantProvisionContract(name: string, mak
       expect(await store.provision.approvalOf(user.id)).toEqual({ enabled: true, createLimitPerDay: 80, lookupLimitPerDay: 120 });
       expect(await store.provision.approvalOf('00000000-0000-4000-8000-000000000000')).toBeNull();
     });
+
+    it('writes the approval’s audit rows with the change, and none for an unknown person', async () => {
+      const store = await makeStore();
+      const { user, personalOrganization } = await store.users.create(userInput('audited'));
+      const row = (action: string): AuditEventInput => ({ organizationId: personalOrganization.id, actorType: 'USER', actorId: null, action, entityType: 'user', entityId: user.id, metadata: { createLimitPerDay: 5 }, requestId: null });
+      await store.provision.setApproval({ userId: user.id, enabled: true, createLimitPerDay: 5, lookupLimitPerDay: null, at: at(3), audit: [row('accountant.provisioning_approved')] });
+      expect((await store.audit.listByOrganization(personalOrganization.id, 20)).map((e) => e.action)).toContain('accountant.provisioning_approved');
+
+      const unknown = '00000000-0000-4000-8000-000000000000';
+      expect(await store.provision.setApproval({ userId: unknown, enabled: true, createLimitPerDay: null, lookupLimitPerDay: null, at: at(4), audit: [row('accountant.provisioning_approved')] })).toBeNull();
+      expect((await store.audit.listByOrganization(personalOrganization.id, 20)).filter((e) => e.action === 'accountant.provisioning_approved')).toHaveLength(1);
+    });
+
+    // MUT-764: the per-day counts behind the accountant's two limits, and the operator's list of unclaimed accounts.
+    describe('counts and the unclaimed list (MUT-764)', () => {
+      const lookupAudit = (organizationId: string, actorId: string): AuditEventInput => ({
+        organizationId, actorType: 'USER', actorId, action: 'accountant.customer_lookup_existing', entityType: 'user', entityId: actorId, metadata: {}, requestId: null,
+      });
+
+      it('counts the accounts an accountant created since a moment, and no one else’s', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const b = await accountant(store);
+        created(await store.provision.create(provisionInput(a.userId, { at: at(10) })));
+        created(await store.provision.create(provisionInput(a.userId, { at: at(20) })));
+        created(await store.provision.create(provisionInput(b.userId, { at: at(30) })));
+
+        expect(await store.provision.countCreatedSince(a.userId, at(0))).toBe(2);
+        expect(await store.provision.countCreatedSince(a.userId, at(15))).toBe(1);
+        expect(await store.provision.countCreatedSince(a.userId, at(25))).toBe(0);
+        expect(await store.provision.countCreatedSince(b.userId, at(0))).toBe(1);
+      });
+
+      it('counts the existing-address attempts an accountant made since a moment, from their audit rows', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const b = await accountant(store);
+        await store.audit.append(lookupAudit(a.personalId, a.userId));
+        await store.audit.append(lookupAudit(a.personalId, a.userId));
+        await store.audit.append(lookupAudit(b.personalId, b.userId));
+        // Another action by the same actor is not a lookup.
+        await store.audit.append({ ...lookupAudit(a.personalId, a.userId), action: 'accountant.customer_created' });
+
+        const since = new Date(Date.now() - 60_000);
+        expect(await store.provision.countLookupsSince(a.userId, since)).toBe(2);
+        expect(await store.provision.countLookupsSince(b.userId, since)).toBe(1);
+        expect(await store.provision.countLookupsSince(a.userId, new Date(Date.now() + 60_000))).toBe(0);
+      });
+
+      it('lists unclaimed provisioned accounts, newest first, and drops one once it has a password', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const first = created(await store.provision.create(provisionInput(a.userId, { at: at(10) })));
+        const second = created(await store.provision.create(provisionInput(a.userId, { at: at(20) })));
+
+        const rows = await store.provision.listUnclaimed({ limit: 10 });
+        const ids = rows.map((r) => r.userId);
+        expect(ids.indexOf(second.user.id)).toBeLessThan(ids.indexOf(first.user.id));
+        expect(rows.find((r) => r.userId === first.user.id)).toMatchObject({ email: first.user.email, accountantUserId: a.userId, provisionedAt: at(10) });
+
+        await store.users.setPassword(first.user.id, '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', at(40));
+        expect((await store.provision.listUnclaimed({ limit: 10 })).map((r) => r.userId)).not.toContain(first.user.id);
+        expect(await store.provision.listUnclaimed({ limit: 1 })).toHaveLength(1);
+      });
+    });
   });
 }

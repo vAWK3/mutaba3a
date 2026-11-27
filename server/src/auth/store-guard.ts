@@ -522,7 +522,7 @@ export const STORE_ACCESS: StoreAccess = {
    */
   // MUT-763: `create` and `approvalOf` are the approved accountant's own session (create re-checks the approval inside
   // its transaction); the operator stamps the approval, and the claim step reads the origin and the setup link, all below the guards.
-  provision: { create: 'provision', approvalOf: 'provision', setApproval: 'operator', originOf: 'operator', setupLinkOf: 'operator' },
+  provision: { create: 'provision', approvalOf: 'provision', countCreatedSince: 'provision', countLookupsSince: 'provision', setApproval: 'operator', originOf: 'operator', setupLinkOf: 'operator', listUnclaimed: 'operator' },
   accountantGrants: {
     invite: 'sessionOnly',
     listByOrganization: 'sessionOnly',

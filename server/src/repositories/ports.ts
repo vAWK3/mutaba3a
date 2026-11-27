@@ -3442,12 +3442,27 @@ export interface ProvisionRepository {
    */
   create(input: ProvisionCustomerInput): Promise<ProvisionCustomerResult>;
   /** The operator's approval and limits, stamped together. Null for an unknown person. */
-  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date }): Promise<ProvisionApproval | null>;
+  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date; audit?: AuditEventInput[] }): Promise<ProvisionApproval | null>;
   approvalOf(userId: string): Promise<ProvisionApproval | null>;
   /** Who created this account, and when; null when the account was not provisioned. `accountantUserId` is null once theirs is deleted. */
   originOf(userId: string): Promise<{ accountantUserId: string | null; provisionedAt: Date } | null>;
   /** The person's newest setup link (the provisioned one at creation). */
   setupLinkOf(userId: string): Promise<ProvisionedSetupLink | null>;
+  /** MUT-764: accounts this accountant created at or after `since` (from `users.provisionedByUserId`), for the daily creation limit. */
+  countCreatedSince(accountantUserId: string, since: Date): Promise<number>;
+  /** MUT-764: this accountant's existing-address attempts at or after `since` (`accountant.customer_lookup_existing` audit rows by actor), for the daily lookup limit. */
+  countLookupsSince(accountantUserId: string, since: Date): Promise<number>;
+  /** MUT-764: provisioned accounts that still have no password (the operator's list), newest first. */
+  listUnclaimed(input: { limit: number }): Promise<UnclaimedProvisionedAccount[]>;
+}
+
+/** One provisioned account not yet claimed (no password). `accountantUserId` is null once the accountant's account is deleted. */
+export interface UnclaimedProvisionedAccount {
+  userId: string;
+  email: string;
+  displayName: string;
+  accountantUserId: string | null;
+  provisionedAt: Date;
 }
 
 export interface AccountantGrantRepository {

@@ -602,3 +602,10 @@ Synthesized from the approved decisions (also saved as JSONL; five unrelated tas
 
 **UNRESOLVED DECISIONS:**
 - + 2 unresolved from prior reviews
+
+## Build decisions (server halves, MUT-764 to MUT-767, 2026-11-27)
+Taken during the build where the plan was silent; each is the plan's default or the most conservative option.
+- **B1 (MUT-764):** the operator console's approve, withdraw and unclaimed-list routes work while `ACCOUNTANT_PROVISIONING` is off, so the operator can approve the partner before the switch; only the accountant's routes answer 404 while it is off.
+- **B2 (MUT-764):** operator limits are whole numbers from 1 to 1000; null or omitted means the default (50 / 100). Withdrawing keeps the limits for a later approval.
+- **B3 (MUT-764):** a throwaway or relay address is refused (422 `ADDRESS_REFUSED`) before any count, so it uses neither daily limit.
+- **B4 (MUT-764):** no Terraform variable yet for `ACCOUNTANT_PROVISIONING`; unset is off. Adding it is a before-release item for the pilot.

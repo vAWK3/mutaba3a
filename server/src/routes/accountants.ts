@@ -108,7 +108,7 @@ const sharedMailDomainLists = () => (sharedDomainLists ??= DOMAIN_LIST_NAMES.map
 
 /** Decision A: an invite never goes to a disposable or relay address (the same lists signup refuses or reviews). */
 let refusedInviteLists: ReadonlySet<string>[] | null = null;
-function isRefusedInviteDomain(domain: string): boolean {
+export function isRefusedInviteDomain(domain: string): boolean {
   refusedInviteLists ??= (['disposable', 'relay'] as const).map((name) => loadDomainList(name));
   return refusedInviteLists.some((list) => isListedDomain(domain, list));
 }

@@ -160,6 +160,8 @@ const ACCOUNTANT_OPERATIONS = [
   // MUT-575: the accountant's client books.
   'GET /v1/clients',
   'DELETE /v1/clients/{profileId}',
+  // MUT-764: an operator-approved accountant creates a customer's account.
+  'POST /v1/accountant/customers',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
@@ -234,6 +236,11 @@ const OPERATOR_OPERATIONS = [
   'POST /v1/operator/firm-requests/{organizationId}/decline',
   // MUT-593: the per-firm Malafat switch.
   'POST /v1/operator/organizations/{organizationId}/malafat-delegation',
+  // MUT-764: approving an accountant to create customers, and the accounts not yet claimed.
+  'GET /v1/operator/accounts/{userId}/accountant-provisioning',
+  'PUT /v1/operator/accounts/{userId}/accountant-provisioning',
+  'DELETE /v1/operator/accounts/{userId}/accountant-provisioning',
+  'GET /v1/operator/provisioned-accounts',
   // MUT-735: Operator › Usage.
   'GET /v1/operator/usage/overview',
   'GET /v1/operator/usage/people',
@@ -428,6 +435,7 @@ beforeAll(async () => {
     receiptsLibrary: true,
     // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
     accountantAccess: true,
+    accountantProvisioning: true,
     malafatDelegation: true,
     // MUT-560: and share links (SHARE_LINKS).
     shareLinks: true,
