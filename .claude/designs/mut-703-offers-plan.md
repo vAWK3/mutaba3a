@@ -1,6 +1,6 @@
 # MUT-703: offers on Solo, Business and Firm (launch, stay, come-back, switch to yearly)
 
-Status: **planned, not built; waiting for Basel's answers (§13).** Epic MUT-701. Blocked by MUT-702 (Part B merged).
+Status: **APPROVED with all 12 default answers in §13 (Basel, 2026-11-27); not built.** Epic MUT-701. Blocked by MUT-702 (Part B merged).
 Basel (2026-11-27): the offers must be live before Switch rollout stage 1 (`STARTER_PLAN` + `PLAN_CHECKOUT`).
 
 ```
