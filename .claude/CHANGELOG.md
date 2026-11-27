@@ -44,6 +44,25 @@ Epic MUT-566. Plan `.claude/designs/mut-750-israeli-vat-plan.md` (approved with 
 
 ---
 
+## [Unreleased] - 2026-11-27 — The pack contract: every jurisdiction pack passes one suite, with its own fixture (MUT-745, epic MUT-738, tests only)
+
+Brief: `.claude/designs/mut-745-pack-contract.md` (built under Basel's 2026-11-27 go-ahead). ADR-287 §8 built.
+
+### Added
+- `JurisdictionPack.datedTables`: each dated rate/threshold table by its step start dates; Israel declares `vat.standardRate` and `expense.allocationThreshold`. Not in any API; pack version unchanged.
+- `server/src/jurisdictions/__tests__/pack-contract.ts`: the pure contract checks; `pack.contract.test.ts` runs them for every registered pack, checks each pack against its fixture, and proves every check with deliberately broken packs.
+- `server/src/jurisdictions/__tests__/fixtures/` (`il.ts`, `index.ts`, `types.ts`): one fixture per pack.
+- `server/src/__tests__/routes-pack-contract.test.ts`: the issuing contract under every pack: stamp, gap-free numbers, idempotent retry, lines adding up, no change after issue, refused clearance leaves no trace.
+- `docs/operations/jurisdiction-packs.md`: version and review date per pack.
+
+### Changed
+- `golden.test.ts` reads each pack's golden cases from its fixture (Israel's hashes unchanged); `il-pack.contract.test.ts` keeps only Israel-only promises and the registry, the rest moved into the Israel fixture unchanged; `boundary.test.ts` guards every pack directory, not only `il/`.
+
+### Open
+- AC3 (a release-QA map per live pack) is TD-352.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Open sign-up: no email review, every verified sign-up opens on Starter (MUT-737 server half, ADR-289, API 1.155.0-mut737)
 
 Epic MUT-701. Plan `.claude/designs/mut-737-open-signup-plan.md` (approved with defaults). Server only; the portal (Signups page read-only, the domain chip, the first-run analytics events) and the legal-draft edit come with the UI half. Dark behind `OPEN_SIGNUP`. No migration.
