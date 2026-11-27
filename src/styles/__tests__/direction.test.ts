@@ -72,6 +72,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/CodeReveal.tsx': { ltr: 1 }, // MUT-770: the claim code, LTR in both languages (codes are LTR)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
   'src/hosted/components/ManualAllocationPanel.tsx': { ltr: 2 }, // MUT-711: the invoice facts to copy (number, date, amount, VAT id) and the 9-digit number field (B)
+  'src/hosted/pages/operator/SignupHistory.tsx': { ltr: 1 }, // MUT-737: the sign-up's email address
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
   'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)
