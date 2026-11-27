@@ -8,7 +8,9 @@ export function ActivatingRtlScene({ size = 120, className }: SceneArtProps) {
         <rect x={"18"} y={"22"} width={"84"} height={"54"} rx={"9"} fill={"var(--m-field-bg)"} stroke={"var(--m-primary)"} strokeWidth={3} strokeLinecap={"round"} strokeLinejoin={"round"} data-part="card" />
         <rect x={"28"} y={"34"} width={"16"} height={"12"} rx={"3"} fill={"var(--m-field-bg)"} stroke={"var(--m-primary)"} strokeWidth={3} strokeLinecap={"round"} strokeLinejoin={"round"} data-part="chip" />
         <path d={"M28 62h22"} fill={"none"} stroke={"var(--m-primary)"} strokeWidth={3} strokeLinecap={"round"} strokeLinejoin={"round"} data-part="bars" />
-        <path d={"M68 58l6 6 13-13"} fill={"none"} stroke={"var(--m-primary)"} strokeWidth={3} strokeLinecap={"round"} strokeLinejoin={"round"} strokeDasharray={"31"} strokeDashoffset={"0.00"} data-part="check" />
+        <g transform={"matrix(-1 0 0 1 155 0)"}>
+          <path d={"M68 58l6 6 13-13"} fill={"none"} stroke={"var(--m-primary)"} strokeWidth={3} strokeLinecap={"round"} strokeLinejoin={"round"} strokeDasharray={"31"} strokeDashoffset={"0.00"} data-part="check" />
+        </g>
         <circle cx={"102.00"} cy={"22.00"} r={"6.00"} fill={"var(--m-peach-strong)"} data-part="nuqta" />
       </g>
     </svg>
