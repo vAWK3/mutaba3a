@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-769: /setup for an accountant's customer: who set it up, the code, the password, the account is theirs, the card (ADR-320, API 1.190.0-mut769)
+
+Plan `docs/designs/accountant-channel.md` (DR-1, DR-7; B7, B9). No new page: the existing `/setup` takes a provisioned branch.
+
+### Added
+- `ClaimCodeStep` (`src/hosted/pages/auth/ClaimCodeStep.tsx`): the context line with the `handover-welcome` scene, step 1 of 3, six digit boxes, Verify on `POST /v1/account-setup/claim-code`; wrong code with tries left; `ClaimDeadEnd` for the locked code (`code-locked`) and a dead accountant's link (`link-expired`). Rules in `claimStep.ts` (`claimContextKey`, `claimCodeFailure`, `isClaimRefusal`, `paysAlready`, `claimNext`).
+- `HandoverClaimedMotion` (`src/hosted/components/HandoverClaimedMotion.tsx`): `motion-handover-claimed` from its spec on the two generated scenes, stacked; reduced motion shows the claimed scene.
+- `api.checkClaimCode`. `hosted.accountantChannel.claim.*` strings (ar + en).
+- Server: the dead-link check adds `provisioned: true` for an accountant's customer's link (ADR-320 d3). API 1.190.0-mut769, OpenAPI and hosted types regenerated. No migration.
+
+### Changed
+- `SetupPage`: the provisioned branch (code, then the password with `claimCode`, step 2 of 3 under the context line); after sign-in the hand-over moment on the passkey nudge (or on its own card with Continue), then Billing › Subscribe on the business profile when no covering subscription, else the app. A lock or a replaced code at the redeem goes back to the right screen. A dead accountant's link asks for the accountant, never Send a new link.
+- `PinBoxes`: `length` (a fixed number of boxes) and `boxLabel` ("Digit n of 6"); PIN behaviour unchanged.
+- `SetupPasskeyStep`: an `art` slot above the title.
+- QA: `FakeApi` setup links take `claim` (code, tries) and answer the claim-code route and `provisioned` on dead links.
+
+### Technical
+- Tests: `SetupClaim.test.tsx`, `claimStep.test.ts` (with motion-handover-claimed's spec values), `server/src/__tests__/routes-accountant-claim.test.ts` (the dead-link flag); release QA `portal.setup.claim-code`, `portal.setup.claim-refused`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-770: CodeReveal, the Activating poll and motion, live regions, ar/en strings (accountant channel, portal)
 
 Plan `docs/designs/accountant-channel.md` (DR-5, DR-8, DR-11; DT5, DT6). Shared parts the desk (MUT-768) and `/setup` (MUT-769) use.

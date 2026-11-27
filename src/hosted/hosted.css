@@ -1673,6 +1673,56 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 @keyframes hp-activating-dot-out { from { scale: 1; } to { scale: 0; } }
 @keyframes hp-activating-check-draw { from { stroke-dashoffset: 31; } to { stroke-dashoffset: 0; } }
 .hp-activating-still { animation: hp-fade-in-still 150ms linear both; }
+
+/*
+ * ---------- Handover claimed (MUT-769): motion-handover-claimed, 1.32 s once ----------
+ * docs/design/motion/2026-11-27/handover-claimed/motion-handover-claimed-spec.md. The claimed scene animates from the
+ * welcome pose; the welcome scene above it shows only the offer trail and the label, and fades them. The key: held
+ * out (116, 34) → resting (106, 114) over 700 ms, y on the spring (`translate`) and x linear (`transform`), so the
+ * path bows outward as an arc, tilting −16° mid-way (`rotate`, about the key's head). The tab: peach cross-fade at
+ * 640 ms (280 ms spring) and scale from its base 1 → 1.08 (160 ms overshoot) → 1 (240 ms spring). Sparkles at 900 ms,
+ * 420 ms on the spring. Origins are fill-box, so the -rtl drawings (flipped inside the SVG) use the same rules.
+ */
+/* /setup for an accountant's customer (MUT-769, DR-1): who set it up, the step count, the code, the hand-over moment */
+.hp-claim-card > .hp-scene, .hp-claim-card > .hp-handover-claimed { display: grid; margin-inline: auto; }
+.hp-claim-context { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; }
+.hp-claim-context-line { margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--on-accent-subtle); overflow-wrap: anywhere; }
+.hp-claim-steps { display: flex; gap: var(--space-1-5); margin: 0; }
+.hp-claim-steps > .hp-claim-step { flex: 1; block-size: 4px; border-radius: var(--radius-pill); background: var(--border); }
+.hp-claim-steps > .hp-claim-step-on { background: var(--accent); }
+.hp-claim-claimed { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.hp-claim-claimed-line { margin: 0; font-weight: var(--weight-semibold); }
+.hp-handover-claimed { display: inline-grid; justify-items: center; }
+.hp-handover-claimed > .hp-scene { grid-area: 1 / 1; }
+.hp-handover-claimed-welcome [data-part]:not([data-part="offer"]):not([data-part="offer-tick"]):not([data-part="label"]) { visibility: hidden; }
+.hp-handover-claimed-welcome [data-part="offer"], .hp-handover-claimed-welcome [data-part="offer-tick"] { animation: hp-fade-out-once 200ms linear both; }
+.hp-handover-claimed-welcome [data-part="label"] { animation: hp-fade-out-once 200ms linear 400ms both; }
+@keyframes hp-fade-out-once { from { opacity: 1; } to { opacity: 0; } }
+.hp-handover-claimed-art [data-part="key"] {
+  transform-box: fill-box; transform-origin: 80.36% 50%;
+  animation: hp-handover-key-y 700ms var(--ease-spring) both, hp-handover-key-x 700ms linear both, hp-handover-key-tilt 700ms var(--ease-spring) both;
+}
+@keyframes hp-handover-key-y { from { translate: 0 -80px; } to { translate: 0 0; } }
+@keyframes hp-handover-key-x { from { transform: translateX(10px); } to { transform: none; } }
+@keyframes hp-handover-key-tilt { 0% { rotate: 0deg; } 50% { rotate: -16deg; } 100% { rotate: 0deg; } }
+.hp-handover-claimed-art [data-part="tab"], .hp-handover-claimed-art [data-part="tab-claimed"] {
+  transform-box: fill-box; transform-origin: 33.333% 100%; animation: hp-handover-tab-pop 400ms 640ms both;
+}
+.hp-handover-claimed-art [data-part="tab-claimed"] { animation: hp-handover-tab-pop 400ms 640ms both, hp-handover-peach 280ms var(--ease-spring) 640ms both; }
+@keyframes hp-handover-tab-pop {
+  0% { scale: 1; animation-timing-function: var(--ease-overshoot); }
+  40% { scale: 1.08; animation-timing-function: var(--ease-spring); }
+  100% { scale: 1; }
+}
+@keyframes hp-handover-peach { from { opacity: 0; } to { opacity: 1; } }
+.hp-handover-claimed-art [data-part="sparkles"] { transform-box: fill-box; transform-origin: center; animation: hp-handover-sparkles 420ms var(--ease-spring) 900ms both; }
+@keyframes hp-handover-sparkles { from { opacity: 0; scale: 0; } to { opacity: 1; scale: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  /* The still (motion-handover-claimed-still.svg is the claimed scene), with the one 150 ms fade-in */
+  .hp-handover-claimed-welcome { display: none; }
+  .hp-handover-claimed-art [data-part] { animation: none; }
+  .hp-handover-claimed-art { animation: hp-fade-in-still 150ms linear both; }
+}
 .hp-activating-status { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-4); margin-block-end: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .hp-activating-status-text { display: flex; flex-direction: column; gap: var(--space-1); flex: 1 1 12rem; min-inline-size: 0; }
 .hp-activating-status-name { font-weight: var(--weight-semibold); overflow-wrap: anywhere; }

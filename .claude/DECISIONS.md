@@ -7503,6 +7503,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** A customer who claims between the sweep and the purge (at most an hour) cannot: the sweep cancelled the links. Reminder days are constants in `UNCLAIMED_POLICY`.
 
+## ADR-320: The Customer Claims on the Existing /setup: Who Set It Up, the Code, the Password, the Passkey Nudge, Then the Card Through Billing › Subscribe; a Dead Accountant's Link Points Back to Him (MUT-769, epic MUT-762; extends ADR-294, keeps ADR-088 and MUT-619)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md` DR-1, DR-7, B7, B9; wireframe approved).
+
+**Decision:**
+1. No new page (DR-1). `/setup` takes the provisioned branch when the check answers `claim`: the context line ("{accountant} set up MTB3A for {business}", with the `handover-welcome` scene; either name may be missing) and step 1 of 3, the six-digit code (`PinBoxes` with a fixed six, each box "Digit n of 6", LTR, a paste fills all) checked on `POST /v1/account-setup/claim-code` (B9), then the existing password form (step 2 of 3) with `claimCode` sent again on the redeem. A wrong code says the tries left; CLAIM_CODE_LOCKED, now or at the redeem, or `codeLocked` on the check, ends on the `code-locked` screen ("ask your accountant for a new code"). A redeem refused with CLAIM_CODE_WRONG (the accountant sent a new code meanwhile) returns to the code step. Operator, recovery and signup links are unchanged.
+2. Once signed in (DR-7): the `handover-claimed` moment (`motion-handover-claimed`) sits on the MUT-619 passkey nudge when a passkey is offerable, else on its own card with Continue; then the card step when one is due, else the app. The card step is the customer's own Checkout through the Billing drawer's Subscribe step on the business profile the accountant made (`/p/{id}?billing=true&step=subscribe`), where the free plan goes on without a card (ACCT-4); no second plan picker is built. "Due" means `GET /v1/billing` is configured and shows no covering subscription (active, trialing, past due); billing that can't be read never blocks the app.
+3. `POST /v1/account-setup/check` adds `provisioned: true` to a dead link (expired, used, superseded) that was an accountant's customer's, to the token's holder only, like `purpose` (API 1.190.0-mut769). `/setup` then shows the `link-expired` screen with "ask your accountant for a new one" and never Send a new link: recovery mails nothing for an unclaimed provisioned account (ADR-294 d3), so the self-service door would be a dead end. A used one keeps "go to sign in".
+
+**Consequences:** A customer who closes the tab after the password lands on the app without the card step; the Billing banner and the trial rules (MUT-418) still apply. The moment's motion is CSS from Claude Design's spec (PATTERNS: a Claude Design motion is built in CSS from its spec).
+
+---
+
 ## ADR-301: An Accepted Analytics Choice Is Kept for Good on the Browser; Declining the First Question Is Asked Again (Basel, 2026-11-27; overrides ADR-090 rule 6 for the portal)
 
 **Status**: Active
