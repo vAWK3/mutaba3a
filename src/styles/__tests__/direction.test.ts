@@ -64,6 +64,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 5, auto: 2 },
   // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
   'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 3 }, // MUT-662: + the cancel reason (D)
+  'src/hosted/components/ActivatingStatus.tsx': { auto: 1 }, // MUT-770: the customer's name beside Activating
+  'src/hosted/components/CodeReveal.tsx': { ltr: 1 }, // MUT-770: the claim code, LTR in both languages (codes are LTR)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
   'src/hosted/components/ManualAllocationPanel.tsx': { ltr: 2 }, // MUT-711: the invoice facts to copy (number, date, amount, VAT id) and the 9-digit number field (B)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)

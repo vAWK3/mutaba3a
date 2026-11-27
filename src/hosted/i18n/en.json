@@ -3603,6 +3603,35 @@
         "skip": "Continue on Starter",
         "back": "Back"
       }
+    },
+    "accountantChannel": {
+      "code": {
+        "label": "Code",
+        "copyFailed": "Couldn’t copy."
+      },
+      "activating": {
+        "activating": "Activating…",
+        "active": "Active",
+        "late": "Check back shortly",
+        "announce": "{name}: {state}",
+        "close": "Close"
+      },
+      "state": {
+        "awaiting_claim": "Awaiting claim",
+        "link_expired": "Link expired",
+        "code_locked": "Code locked",
+        "claimed": "Active",
+        "needsCard": "Needs card",
+        "paid": "Paid",
+        "activating": "Activating"
+      },
+      "chips": {
+        "label": "Show",
+        "all": "All",
+        "awaiting": "Awaiting claim",
+        "needsCard": "Needs card",
+        "active": "Active"
+      }
     }
   }
 }
