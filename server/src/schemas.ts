@@ -4310,7 +4310,13 @@ export const VendorVatSchema = z.object({ treatment: VatTreatmentSchema, rateBas
  * empty, not read and not edited; `vat` is null unless the profile has firm features.
  */
 export const ReceiptVendorDefaultsSchema = z
-  .object({ vendorId: uuid, currency: CurrencySchema.nullable(), vat: VendorVatSchema.nullable() })
+  .object({
+    vendorId: uuid,
+    currency: CurrencySchema.nullable(),
+    vat: VendorVatSchema.nullable(),
+    /** MUT-775: the vendor's last category, when the receipt's read registration no. names the vendor and the category is live on this profile; else null. A client prefills it only into an empty, untouched category. Since 1.150.0-mut775. */
+    categoryId: uuid.nullable(),
+  })
   .openapi('ReceiptVendorDefaults');
 
 export const VendorSuggestionSchema = z

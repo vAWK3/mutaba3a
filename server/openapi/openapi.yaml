@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.149.0-mut743
+  version: 1.150.0-mut775
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -13082,10 +13082,15 @@ components:
             - nullable: true
         vat:
           $ref: "#/components/schemas/VendorVat"
+        categoryId:
+          type: string
+          nullable: true
+          format: uuid
       required:
         - vendorId
         - currency
         - vat
+        - categoryId
     ApproveReceiptResponse:
       type: object
       properties:
