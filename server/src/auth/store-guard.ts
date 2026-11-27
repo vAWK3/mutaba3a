@@ -26,11 +26,15 @@ import { accountantReadOnly, shareLinkReadOnly, mayRead, mayWriteFor, writeRefus
  *                 first of its kind). Distinct from `control`, which accepts
  *                 any principal: an API key has no person behind it and so has
  *                 no inbox to reach.
+ *  - `provision` — MUT-763 (accountant channel): creating another person's account. Only a signed-in person's session
+ *                 reaches it, like `sessionOnly`, but it is a class of its own because that is not enough: any signed-in
+ *                 person is a session, so the store method re-checks the operator's approval inside its transaction.
+ *                 Every read-only guard (accountant, share link, period download) refuses it, and so does the agent guard.
  *
  * The map is typed over LedgerStore, so a new store method does not compile
  * until it is classified here.
  */
-export type MethodAccess = 'read' | 'control' | 'operator' | 'sessionOnly' | { read: Domain } | { write: Domain };
+export type MethodAccess = 'read' | 'control' | 'operator' | 'sessionOnly' | 'provision' | { read: Domain } | { write: Domain };
 
 type Repositories = Omit<LedgerStore, 'ping'>;
 export type StoreAccess = { readonly [R in keyof Repositories]: { readonly [M in keyof Repositories[R]]-?: MethodAccess } };
@@ -510,6 +514,9 @@ export const STORE_ACCESS: StoreAccess = {
    * an accountant accepts, leaves and reads their clients from theirs. The public invite routes and selectProfile's
    * lookup and "last viewed" stamp run on the store beneath the guard, so those methods are refused to every principal.
    */
+  // MUT-763: `create` and `approvalOf` are the approved accountant's own session (create re-checks the approval inside
+  // its transaction); the operator stamps the approval, and the claim step reads the origin and the setup link, all below the guards.
+  provision: { create: 'provision', approvalOf: 'provision', setApproval: 'operator', originOf: 'operator', setupLinkOf: 'operator' },
   accountantGrants: {
     invite: 'sessionOnly',
     listByOrganization: 'sessionOnly',
@@ -604,7 +611,7 @@ export function accountantExpenseView(repo: string, method: string, args: readon
 /** The decision for one classified method, for a principal on a profile whose writer of record is `profileWriter`. */
 export function storeRefusal(principal: Principal, profileWriter: ProfileWriter, access: MethodAccess): ApiError | null {
   if (access === 'read' || access === 'control') return null;
-  if (access === 'sessionOnly') return principal === 'session' ? null : principalNotAccepted();
+  if (access === 'sessionOnly' || access === 'provision') return principal === 'session' ? null : principalNotAccepted();
   if (access === 'operator' || ('read' in access && !mayRead(principal, access.read))) {
     return principalNotAccepted();
   }

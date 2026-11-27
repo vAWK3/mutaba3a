@@ -67,6 +67,9 @@ import type {
   AgreementFilter,
   AccountantGrantRecord,
   AccountantGrantRepository,
+  ProvisionApproval,
+  ProvisionRepository,
+  ProvisionedSetupLink,
   ShareLinkRecord,
   ShareLinkRepository,
   ShareLinkViewerRecord,
@@ -422,6 +425,10 @@ export class MemoryLedgerStore implements LedgerStore {
    * has one person and no one to share with.
    */
   private readonly accountantGrantMap = new Map<string, AccountantGrantRecord>();
+  /** MUT-763: an accountant's operator approval, who created each provisioned account, and each provisioned setup link's claim state. Outside the snapshot, like grants. */
+  private readonly provisionApprovals = new Map<string, ProvisionApproval>();
+  private readonly provisionOrigins = new Map<string, { accountantUserId: string | null; provisionedAt: Date }>();
+  private readonly provisionedLinks = new Map<string, Pick<ProvisionedSetupLink, 'claimCodeDigest' | 'claimCodeAttempts' | 'mailStatus'>>();
   /** MUT-560 (ADR-247): share links and their viewers by id, outside the snapshot too (local mode shares nothing). */
   private readonly shareLinkMap = new Map<string, ShareLinkRecord>();
   private readonly shareLinkViewerMap = new Map<string, ShareLinkViewerRecord>();
@@ -964,6 +971,82 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!grant || grant.status !== 'ACTIVE') return;
       grant.lastViewedAt = at;
       this.pushEvents(audit, at);
+    },
+  };
+
+  /**
+   * MUT-763: an approved accountant creates a customer's account. Every check runs before the first write (the in-memory
+   * stand-in for the Postgres transaction), so a refusal or a duplicate leaves nothing behind.
+   */
+  readonly provision: ProvisionRepository = {
+    create: async (input) => {
+      const approval = this.provisionApprovals.get(input.accountantUserId);
+      const accountant = this.people.get(input.accountantUserId);
+      if (!accountant || !approval?.enabled) return { kind: 'not_approved' };
+      if ([...this.people.values()].some((u) => u.email === input.email)) return { kind: 'account_exists' };
+      this.assertSetupDigestFree(input.setupLink.tokenDigest);
+      const slugs = [input.personal.slug, input.profile.slug];
+      if (slugs[0] === slugs[1] || [...this.orgs.values()].some((o) => slugs.includes(o.slug))) throw new UniqueViolation('organizations.slug');
+      const { user, personalOrganization } = this.insertPerson({
+        email: input.email,
+        displayName: input.displayName,
+        passwordHash: null,
+        locale: input.locale,
+        personal: input.personal,
+        at: input.at,
+        status: 'ACTIVE',
+        emailVerifiedAt: null,
+      });
+      const link = this.storeSetupLink(user.id, { tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt }, input.at, true);
+      this.provisionedLinks.set(link.id, { claimCodeDigest: input.claimCodeDigest, claimCodeAttempts: 0, mailStatus: 'PENDING' });
+      this.provisionOrigins.set(user.id, { accountantUserId: input.accountantUserId, provisionedAt: input.at });
+      const owned = await this.organizations.createOwned(
+        user.id,
+        { ...input.profile, profileType: 'BUSINESS', at: input.at },
+        Number.MAX_SAFE_INTEGER,
+        { actorId: input.accountantUserId, requestId: null },
+      );
+      if (owned.kind !== 'created') throw new Error('provision: the owned profile was not created');
+      const grant: AccountantGrantRecord = {
+        id: randomUUID(),
+        organizationId: owned.organization.id,
+        inviteEmail: accountant.email,
+        locale: input.locale,
+        invitedByUserId: null,
+        accountantUserId: input.accountantUserId,
+        status: 'ACTIVE',
+        tokenDigest: null,
+        inviteExpiresAt: input.at,
+        acceptedAt: input.at,
+        revokedAt: null,
+        dismissedAt: null,
+        lastViewedAt: null,
+        createdAt: input.at,
+      };
+      this.accountantGrantMap.set(grant.id, grant);
+      this.pushEvents(input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id, organizationId: owned.organization.id, grant: { ...grant } }), input.at);
+      return { kind: 'created', user, personalOrganization, organization: owned.organization, grant: { ...grant } };
+    },
+    setApproval: async ({ userId, enabled, createLimitPerDay, lookupLimitPerDay, at }) => {
+      const person = this.people.get(userId);
+      if (!person) return null;
+      this.provisionApprovals.set(userId, { enabled, createLimitPerDay, lookupLimitPerDay });
+      person.updatedAt = at;
+      return { enabled, createLimitPerDay, lookupLimitPerDay };
+    },
+    approvalOf: async (userId) => {
+      if (!this.people.has(userId)) return null;
+      return { ...(this.provisionApprovals.get(userId) ?? { enabled: false, createLimitPerDay: null, lookupLimitPerDay: null }) };
+    },
+    originOf: async (userId) => {
+      const origin = this.provisionOrigins.get(userId);
+      return origin ? { ...origin } : null;
+    },
+    setupLinkOf: async (userId) => {
+      const newest = [...this.setupLinks.values()].filter((l) => l.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      if (!newest) return null;
+      const extra = this.provisionedLinks.get(newest.id);
+      return { tokenDigest: newest.tokenDigest, purpose: newest.purpose, claimCodeDigest: extra?.claimCodeDigest ?? null, claimCodeAttempts: extra?.claimCodeAttempts ?? 0, mailStatus: extra?.mailStatus ?? null, expiresAt: newest.expiresAt };
     },
   };
 

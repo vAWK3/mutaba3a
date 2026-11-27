@@ -298,55 +298,65 @@ enum SignupReviewDecision {
 /// SIGNUP link; recovery mails a reset link. Not organization-scoped: access
 /// is the Membership join.
 model User {
-  id                 String     @id @default(uuid()) @db.Uuid
+  id                              String     @id @default(uuid()) @db.Uuid
   /// Normalised before storage (trim, NFKC, lower-case), so uniqueness is case-insensitive.
-  email              String     @unique
-  displayName        String
+  email                           String     @unique
+  displayName                     String
   /// argon2id PHC string. The password itself is never stored.
   /// MUT-235: NULL until the person sets one through their setup link (and after a reset with --lock).
-  passwordHash       String?
+  passwordHash                    String?
   /// 'en' | 'ar', validated by the API.
-  locale             String     @db.VarChar(5)
-  status             UserStatus @default(ACTIVE)
+  locale                          String     @db.VarChar(5)
+  status                          UserStatus @default(ACTIVE)
   /// Written by sign-in (MUT-38).
-  failedSignIns      Int        @default(0)
-  lockedUntil        DateTime?
-  passwordChangedAt  DateTime
+  failedSignIns                   Int        @default(0)
+  lockedUntil                     DateTime?
+  passwordChangedAt               DateTime
   /// MUT-596: false while the account's only password is the random one Sign in with Malafat gave it (MUT-595) and
   /// nobody knows; the person's own password (a change, a setup link, recovery) makes it true. Drives Me.ownSignIn.
-  passwordChosen     Boolean    @default(true)
-  lastSignInAt       DateTime?
+  passwordChosen                  Boolean    @default(true)
+  lastSignInAt                    DateTime?
   /// MUT-366 (D18): when the person proved they read this address: a signup, or redeeming a mailed recovery link.
-  emailVerifiedAt    DateTime?
+  emailVerifiedAt                 DateTime?
   /// MUT-191: `{ off, dismissed[] }` for the Malafat suggestions; NULL = on, nothing dismissed.
-  malafatSuggestions Json?
+  malafatSuggestions              Json?
   /// MUT-418: `{ welcomedAt, welcomeAnswer, bannerSnoozedUntil }`, the person's answers to the trial's card prompt
   /// (server/src/billing/trial-prompt.ts); NULL = nothing answered yet.
-  trialPrompt        Json?
+  trialPrompt                     Json?
   /// MUT-370: `{ notNowCount, hiddenUntil }`, the "Add a passkey" suggestion's state (server/src/auth/passkey-prompt.ts);
   /// NULL = never answered. Read and written through the passkeys port, never part of the person's record.
-  passkeyPrompt      Json?
+  passkeyPrompt                   Json?
   /// MUT-459 (ADR-212): when the CLI made this person an operator (the portal's operator console); NULL = not one.
-  operatorAt         DateTime?
+  operatorAt                      DateTime?
   /// MUT-535 (D6): the monthly summary mail: 'OFF' | 'ON_ALL'; NULL = the default (on, without Malafat-covered profiles).
-  monthlySummaryMail String?    @db.VarChar(8)
+  monthlySummaryMail              String?    @db.VarChar(8)
   /// ADR-279: promotional mail (the come-back offer): 'OFF' once opted out; NULL = the default (on).
-  offerMail          String?    @db.VarChar(8)
+  offerMail                       String?    @db.VarChar(8)
   /// MUT-735 (ADR-281, Basel 2026-11-25): MUT-733's over-cap gift is one per account, ever. When it was used, and on
   /// which meter (DOCUMENTS | SCANS) and usage month (YYYY-MM). Nothing writes these until MUT-733; NULL = not used.
-  overCapGiftUsedAt  DateTime?
-  overCapGiftMeter   String?    @db.VarChar(16)
-  overCapGiftMonth   String?    @db.Char(7)
+  overCapGiftUsedAt               DateTime?
+  overCapGiftMeter                String?    @db.VarChar(16)
+  overCapGiftMonth                String?    @db.Char(7)
   /// MUT-731 (ADR-284): when the person chose "Continue free on Starter" after a cancel; NULL = never.
-  starterChosenAt    DateTime?
+  starterChosenAt                 DateTime?
   /// MUT-731 (ADR-284, Basel Q5): the business profiles kept active while the person owns more than their plan allows.
   /// Empty = not chosen yet (every business past the cap is read-only until they pick).
-  activeBusinessIds  String[]   @db.Uuid
+  activeBusinessIds               String[]   @db.Uuid
   /// MUT-731 (ADR-284, Basel Q7): the one-time 14-day Solo trial: when web onboarding showed it, and when one started.
-  paidTrialOfferedAt DateTime?
-  paidTrialUsedAt    DateTime?
-  createdAt          DateTime
-  updatedAt          DateTime
+  paidTrialOfferedAt              DateTime?
+  paidTrialUsedAt                 DateTime?
+  /// MUT-763 (accountant channel): the accountant who created this person's account (SET NULL when theirs is deleted),
+  /// and when. "Unclaimed" is derived (passwordHash IS NULL AND provisionedAt IS NOT NULL: provisionedAt survives the accountant leaving), never stored.
+  provisionedByUserId             String?    @db.Uuid
+  provisionedBy                   User?      @relation("UsersProvisioned", fields: [provisionedByUserId], references: [id], onDelete: SetNull)
+  provisionedAt                   DateTime?
+  /// MUT-763: when an operator approved this person to create customers; NULL = not approved. Re-checked inside
+  /// the store's provision.create. Per-accountant daily limits: NULL = the default (50 creations, 100 existing-address tries).
+  accountantProvisioningEnabledAt DateTime?
+  provisionCreateLimitPerDay      Int?
+  provisionLookupLimitPerDay      Int?
+  createdAt                       DateTime
+  updatedAt                       DateTime
 
   memberships      Membership[]
   sessions         Session[]
@@ -360,6 +370,8 @@ model User {
   ownedProfiles    Organization[]      @relation("OwnedProfiles")
   /// MUT-300: firm-feature requests this user made (MUT-333: SET NULL when the account is deleted).
   firmRequests     Organization[]      @relation("FirmRequests")
+  /// MUT-763: the accounts this person (an approved accountant) created for customers.
+  provisionedUsers User[]              @relation("UsersProvisioned")
 
   expenses            Expense[]
   expenseReceipts     ExpenseReceipt[]            @relation("ReceiptUploadedBy")
@@ -417,6 +429,8 @@ model User {
   twoFactorRecoveryCodes TwoFactorRecoveryCode[]
   twoFactorChallenges    TwoFactorChallenge[]
 
+  /// MUT-763: the accountant's daily creation count, and the unclaimed list. The partial unclaimed-sweep index is raw SQL in the migration.
+  @@index([provisionedByUserId, provisionedAt])
   @@map("users")
 }
 
@@ -577,25 +591,30 @@ enum SetupLinkPurpose {
 /// CHECK constraints (migration 20261023180000_mut366_signup_links): userId is null exactly for SIGNUP, and then
 /// email and locale are set; otherwise both are null.
 model AccountSetupToken {
-  id            String            @id @default(uuid()) @db.Uuid
-  userId        String?           @db.Uuid
-  user          User?             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String?           @db.Uuid
+  user              User?             @relation(fields: [userId], references: [id], onDelete: Restrict)
   /// MUT-366: SIGNUP only, normalised (trim, NFKC, lower-case).
-  email         String?
+  email             String?
   /// MUT-366: SIGNUP only: 'en' | 'ar', the language the person signed up in.
-  locale        String?           @db.VarChar(5)
-  tokenDigest   String            @unique @db.VarChar(64)
-  purpose       SetupLinkPurpose
+  locale            String?           @db.VarChar(5)
+  tokenDigest       String            @unique @db.VarChar(64)
+  purpose           SetupLinkPurpose
   /// MUT-366: mailed to the address (signup, recovery), not handed over by the operator. Redeeming one verifies the address.
-  mailed        Boolean           @default(false)
-  createdAt     DateTime
-  expiresAt     DateTime
-  usedAt        DateTime?
-  cancelledAt   DateTime?
+  mailed            Boolean           @default(false)
+  createdAt         DateTime
+  expiresAt         DateTime
+  usedAt            DateTime?
+  cancelledAt       DateTime?
   /// MUT-367: SIGNUP only: what the signup screen made of the address's domain, and why. The redeem opens a BUSINESS
   /// address at once and sends every other to review (PENDING_REVIEW). Null on a SIGNUP link issued before MUT-367.
-  domainClass   EmailDomainClass?
-  domainReasons String[]
+  domainClass       EmailDomainClass?
+  domainReasons     String[]
+  /// MUT-763: a provisioned account's spoken claim code: HMAC bound to the address (auth/sign-in-code.ts, purpose-separated),
+  /// the wrong tries so far (the fifth kills it), and the mail's state: PENDING | SENT | FAILED (NULL = not a provisioned link).
+  claimCodeDigest   String?           @db.VarChar(64)
+  claimCodeAttempts Int               @default(0)
+  mailStatus        String?           @db.VarChar(8)
 
   @@index([userId])
   @@index([email])
@@ -787,6 +806,8 @@ model AuditEvent {
   @@index([organizationId, createdAt])
   @@index([entityType, entityId])
   @@index([organizationId, entityType, entityId, createdAt])
+  /// MUT-763: an accountant's attempts per day are counted by actor across their customers' profiles.
+  @@index([actorId, action, createdAt])
   @@map("audit_events")
 }
 

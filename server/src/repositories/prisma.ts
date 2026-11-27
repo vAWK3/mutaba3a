@@ -177,6 +177,8 @@ import type {
   UserLocale,
   UserRecord,
   UserRepository,
+  ProvisionCustomerResult,
+  ProvisionRepository,
   ConversionCursor,
   ConversionFilter,
   ConversionRecord,
@@ -833,6 +835,99 @@ export class PrismaLedgerStore implements LedgerStore {
         const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, status: 'ACTIVE' }, data: { lastViewedAt: at } });
         if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
       });
+    },
+  };
+
+  /**
+   * MUT-763 (accountant channel): an approved accountant creates a customer's account in ONE transaction. Order: the
+   * accountant's row is read FOR SHARE (a withdrawal of the approval queues behind it, and a create that starts after a
+   * withdrawal sees it), the address lock the signup uses (MUT-366 D12), the address check, then the user, the personal
+   * profile, the provisioning stamp, the setup link with the claim code's digest, the owned BUSINESS profile and its
+   * membership, the ACTIVE read grant and the audit rows. Any failure rolls everything back.
+   */
+  readonly provision: ProvisionRepository = {
+    create: async (input) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx): Promise<ProvisionCustomerResult> => {
+            const [accountant] = await tx.$queryRaw<Array<{ email: string; accountantProvisioningEnabledAt: Date | null }>>`SELECT "email", "accountantProvisioningEnabledAt" FROM "users" WHERE "id" = ${input.accountantUserId}::uuid FOR SHARE`;
+            if (!accountant || accountant.accountantProvisioningEnabledAt === null) return { kind: 'not_approved' };
+            await lockSignupAddress(tx, input.email);
+            if (await tx.user.findUnique({ where: { email: input.email }, select: { id: true } })) return { kind: 'account_exists' };
+            const { user, personalOrganization } = await insertPerson(tx, {
+              email: input.email,
+              displayName: input.displayName,
+              passwordHash: null,
+              locale: input.locale,
+              personal: input.personal,
+              at: input.at,
+              status: 'ACTIVE',
+              emailVerifiedAt: null,
+              trialStartedAt: null,
+            });
+            await tx.user.update({ where: { id: user.id }, data: { provisionedByUserId: input.accountantUserId, provisionedAt: input.at } });
+            await tx.accountSetupToken.create({
+              data: { userId: user.id, tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt, createdAt: input.at, mailed: true, claimCodeDigest: input.claimCodeDigest, claimCodeAttempts: 0, mailStatus: 'PENDING' },
+            });
+            const organization = await tx.organization.create({ data: { ...input.profile, profileType: 'BUSINESS', ownerUserId: user.id, createdAt: input.at } });
+            await tx.membership.create({ data: { userId: user.id, organizationId: organization.id, createdAt: input.at } });
+            const grant = toAccountantGrant(
+              await tx.accountantGrant.create({
+                data: {
+                  organizationId: organization.id,
+                  inviteEmail: accountant.email,
+                  locale: input.locale,
+                  invitedByUserId: null,
+                  accountantUserId: input.accountantUserId,
+                  status: 'ACTIVE',
+                  tokenDigest: null,
+                  inviteExpiresAt: input.at,
+                  acceptedAt: input.at,
+                  createdAt: input.at,
+                },
+              }),
+            );
+            const audit = [
+              ...ownedProfileCreatedAudit(organization, { actorId: input.accountantUserId, requestId: null }),
+              ...input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id, organizationId: organization.id, grant }),
+            ];
+            await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+            return { kind: 'created', user, personalOrganization, organization, grant };
+          }),
+        );
+      } catch (err) {
+        // A signup or the operator created this address's account between our check and our insert.
+        if (err instanceof UniqueViolation && err.constraint.includes('email')) return { kind: 'account_exists' };
+        throw err;
+      }
+    },
+    setApproval: async ({ userId, enabled, createLimitPerDay, lookupLimitPerDay, at }) => {
+      const { count } = await this.prisma.user.updateMany({
+        where: { id: userId },
+        data: { accountantProvisioningEnabledAt: enabled ? at : null, provisionCreateLimitPerDay: createLimitPerDay, provisionLookupLimitPerDay: lookupLimitPerDay, updatedAt: at },
+      });
+      return count === 0 ? null : { enabled, createLimitPerDay, lookupLimitPerDay };
+    },
+    approvalOf: async (userId) => {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { accountantProvisioningEnabledAt: true, provisionCreateLimitPerDay: true, provisionLookupLimitPerDay: true } });
+      return row ? { enabled: row.accountantProvisioningEnabledAt !== null, createLimitPerDay: row.provisionCreateLimitPerDay, lookupLimitPerDay: row.provisionLookupLimitPerDay } : null;
+    },
+    originOf: async (userId) => {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { provisionedByUserId: true, provisionedAt: true } });
+      return row?.provisionedAt ? { accountantUserId: row.provisionedByUserId, provisionedAt: row.provisionedAt } : null;
+    },
+    setupLinkOf: async (userId) => {
+      const row = await this.prisma.accountSetupToken.findFirst({ where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+      if (!row) return null;
+      const mail = row.mailStatus;
+      return {
+        tokenDigest: row.tokenDigest,
+        purpose: row.purpose,
+        claimCodeDigest: row.claimCodeDigest,
+        claimCodeAttempts: row.claimCodeAttempts,
+        mailStatus: mail === 'PENDING' || mail === 'SENT' || mail === 'FAILED' ? mail : null,
+        expiresAt: row.expiresAt,
+      };
     },
   };
 

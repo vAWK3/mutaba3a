@@ -3084,6 +3084,8 @@ export interface LedgerStore {
   oauth: OAuthRepository;
   /** MUT-559 (ADR-245): read-only access an owner gives an accountant to one profile. Never a membership. */
   accountantGrants: AccountantGrantRepository;
+  /** MUT-763: an approved accountant creates a customer's account (own guard class `provision`). */
+  provision: ProvisionRepository;
   /** MUT-560 (ADR-247): one-time links to a period of one profile, opened with a PIN and no account. */
   shareLinks: ShareLinkRepository;
   /** MUT-314 (ADR-248): a period download's size estimate and its batched name lookups. Reads only. */
@@ -3325,6 +3327,76 @@ export interface AcceptAccountantInput {
 
 /** MUT-565: accepted, or refused at the cap (`active`: the ACTIVE grants counted under the lock). */
 export type AcceptAccountantResult = { kind: 'accepted'; grant: AccountantGrantRecord } | { kind: 'cap_reached'; active: number };
+
+// ---- MUT-763 (accountant channel, epic MUT-762): an approved accountant creates a customer's account -----------------
+
+/**
+ * One customer an approved accountant creates. The whole write is ONE transaction (`provision.create`): a passwordless
+ * user (no trial, address unverified), their personal profile, an owned BUSINESS profile, an ACTIVE read grant for the
+ * accountant (ADR-245: his access stays read-only), a SETUP-purpose setup link carrying the claim code's digest, and the
+ * audit rows. The setup link and the code are never returned to the accountant; only their digests are stored.
+ */
+export interface ProvisionCustomerInput {
+  /** The acting accountant. Their approval is re-checked inside the transaction. */
+  accountantUserId: string;
+  /** Normalised (normalizeEmail). */
+  email: string;
+  displayName: string;
+  /** The language of the account and of the mail. */
+  locale: UserLocale;
+  /** The customer's own personal profile, as every account has (MUT-120). */
+  personal: { name: string; slug: string; defaultCurrency: string; timezone: string };
+  /** The owned BUSINESS profile the accountant reads. */
+  profile: { name: string; slug: string; defaultCurrency: string; timezone: string };
+  /** The SETUP link: its HMAC digest and when it ends (14 days). */
+  setupLink: { tokenDigest: string; expiresAt: Date };
+  /** HMAC of the 6-digit claim code, bound to `email` (auth/sign-in-code.ts, purpose-separated). */
+  claimCodeDigest: string;
+  at: Date;
+  /** Written in the same transaction, on the new BUSINESS profile. */
+  auditFor(created: { userId: string; personalOrganizationId: string; organizationId: string; grant: AccountantGrantRecord }): AuditEventInput[];
+}
+
+export type ProvisionCustomerResult =
+  | { kind: 'created'; user: UserRecord; personalOrganization: Organization; organization: Organization; grant: AccountantGrantRecord }
+  /** The accountant has no operator approval (or it was withdrawn). Nothing is written. */
+  | { kind: 'not_approved' }
+  /** The address already has an account. Nothing is written. */
+  | { kind: 'account_exists' };
+
+/** An accountant's operator approval and daily limits; a null limit means the default (50 creations, 100 existing-address tries). */
+export interface ProvisionApproval {
+  enabled: boolean;
+  createLimitPerDay: number | null;
+  lookupLimitPerDay: number | null;
+}
+
+/** The setup link a provisioned account was created with (the claim step's server side reads and updates it). */
+export interface ProvisionedSetupLink {
+  tokenDigest: string;
+  purpose: PersonSetupLinkPurpose;
+  claimCodeDigest: string | null;
+  claimCodeAttempts: number;
+  /** PENDING until the mail is sent; null on a link that is not a provisioned account's. */
+  mailStatus: 'PENDING' | 'SENT' | 'FAILED' | null;
+  expiresAt: Date;
+}
+
+export interface ProvisionRepository {
+  /**
+   * One transaction, serialised per address (the signup lock): the accountant must be approved (`not_approved`), the
+   * address must hold no account (`account_exists`), then everything in ProvisionCustomerInput is written or nothing
+   * is. UniqueViolation on a duplicate setup-link digest or a slug.
+   */
+  create(input: ProvisionCustomerInput): Promise<ProvisionCustomerResult>;
+  /** The operator's approval and limits, stamped together. Null for an unknown person. */
+  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date }): Promise<ProvisionApproval | null>;
+  approvalOf(userId: string): Promise<ProvisionApproval | null>;
+  /** Who created this account, and when; null when the account was not provisioned. `accountantUserId` is null once theirs is deleted. */
+  originOf(userId: string): Promise<{ accountantUserId: string | null; provisionedAt: Date } | null>;
+  /** The person's newest setup link (the provisioned one at creation). */
+  setupLinkOf(userId: string): Promise<ProvisionedSetupLink | null>;
+}
 
 export interface AccountantGrantRepository {
   /**
