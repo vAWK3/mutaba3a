@@ -88,6 +88,12 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## Accountant provisioning store (MUT-763, 2026-11-27)
+
+`server/src/repositories/__tests__/store-contract-accountant-provision.ts` runs on the memory store and on Postgres (`MUTABA3A_TEST_DATABASE_URL`): all rows created, `not_approved`, approval re-checked after withdrawal, `account_exists`, rollback on a duplicate digest, concurrent creates for one address, approval and limits storage. `auth/__tests__/store-guard-provision.test.ts` pins the `provision` guard class. Route, claim code and QA flows are MUT-764, 765 and 771.
+
+---
+
 ## Coverage thresholds and the risk files (MUT-24 §C, 2026-10-16)
 
 Measured with `npx vitest run --coverage --coverage.reportOnFailure` (v8, Node 22, TZ Asia/Jerusalem) over all 385 files under `src/`. `npm run test:coverage` fails below the floors in `vitest.config.ts`, and Web CI (`.github/workflows/web-ci.yml`) runs it on every PR and every push to main. To raise a floor, edit `COVERAGE_THRESHOLDS` after a gain. Never lower one to land a change.
