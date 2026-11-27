@@ -182,11 +182,21 @@ describe('POST /v1/billing/yearly-switch (D1, D4, R2)', () => {
     const res = await u.switch({ prorationDate: NOW.toISOString(), expectedAmountDue: 27100 });
     expect(res.status).toBe(200);
     expect(await read(res)).toEqual({ renewsOn: '2027-11-02T09:00:00.000Z', yearlyAmount: 39000, currency: 'ILS' });
-    expect(h.plan.switches).toEqual([{ subscriptionId: id, customer, itemId: `si_${id}`, yearlyPriceId: 'price_freelancer_list_yearly_ils', prorationDate: NOW }]);
+    expect(h.plan.switches).toEqual([{ subscriptionId: id, customer, itemId: `si_${id}`, yearlyPriceId: 'price_freelancer_list_yearly_ils', prorationDate: NOW, taxRates: [] }]);
     expect(h.plan.calls).toContain(`paid:${id}:fresh`);
     const rows = await audit(h, u.personalId);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.metadata).toEqual({ currency: 'ILS', amountDue: 27100 });
+  });
+
+  it('MUT-750: an Israeli item keeps its VAT rate through the switch (sent explicitly)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const { id } = await subscribed(h, u.userId);
+    h.plan.plans.set(id, { ...h.plan.plans.get(id)!, taxRateIds: ['txr_il'], automaticTax: false });
+    const res = await u.switch({ prorationDate: NOW.toISOString(), expectedAmountDue: 27100 });
+    expect(res.status).toBe(200);
+    expect(h.plan.switches[0]!.taxRates).toEqual(['txr_il']);
   });
 
   it('charges nothing when a fresh preview no longer matches what the person saw', async () => {

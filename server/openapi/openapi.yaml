@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.155.0-mut737
+  version: 1.156.0-mut750
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -12126,6 +12126,20 @@ components:
         billingAddress:
           anyOf:
             - $ref: "#/components/schemas/BillingAddress"
+            - nullable: true
+        vatRate:
+          anyOf:
+            - type: object
+              properties:
+                country:
+                  type: string
+                  enum:
+                    - IL
+                percent:
+                  type: number
+              required:
+                - country
+                - percent
             - nullable: true
       required:
         - configured

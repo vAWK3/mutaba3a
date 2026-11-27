@@ -13,7 +13,7 @@
 > - the pilot runs 3 months;
 > - feedback calls in week 2 and at the end;
 > - Stripe subscriptions created by hand in the dashboard from day one;
-> - the VAT wording: "Prices exclude VAT; VAT is added where the law requires it.";
+> - the VAT wording: "Prices exclude VAT. Israeli VAT is added for an Israeli address.";
 > - firms pay the Freelancer price until firm books v1 ships, then move to the Firm founder price (§2).
 >
 > **Decided 2026-10-31** (pricing program MUT-528, MUT-530, ADR-235): the founder prices drop to **₪21 / $6** (Freelancer) and **₪109 / $33** (Firm) a month, below the list prices ₪29 / $9 and ₪149 / $45. They were ₪39 / $10 and ₪299 / $80.
@@ -44,7 +44,7 @@ Founder prices, monthly, excluding VAT:
 - **The founder price stays locked for 12 months** from the day the account opens, whatever the list price becomes.
 - **A yearly plan costs 10× the monthly price.**
 - **The list prices** after the lock, for reference: Freelancer ₪29 / $9, Firm ₪149 / $45 a month (MUT-528). The founder price is never shown to anyone outside the pilot.
-- **VAT:** say exactly this: "Prices exclude VAT; VAT is added where the law requires it." Don't name a rate. The rate for each customer country is MUT-355 (Barmajiyat Ltd's accountant), which must be settled before the first invoice. Stripe Tax takes this over in MUT-332.
+- **VAT:** say exactly this: "Prices exclude VAT. Israeli VAT is added for an Israeli address." (MUT-750, ADR-290; the rate is `billing-countries.json` `vatRates.IL`, not named in copy.) The rate for each customer country is MUT-355 (Barmajiyat Ltd's accountant), which must be settled before the first invoice. Stripe Tax takes this over in MUT-332.
 - **Pilot length:** the pilot runs **3 months**. After that the founder price continues until its 12 months are up.
 - **Firms during the pilot:** until firm books v1 ships, the Firm tier has nothing the Freelancer tier lacks (staff invites come later, MUT-305/306). So a firm joins at the **Freelancer founder price** (₪21 / $6). When firm books v1 ships, tell the firm first, then move it to the **Firm founder price** (₪109 / $33), locked for 12 months from that day.
 

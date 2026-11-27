@@ -110,6 +110,7 @@ describe('GET /v1/billing (MUT-362)', () => {
       offer: null,
       // MUT-531: no subscription, so no switch to yearly.
       yearlySwitch: null,
+      vatRate: null,
       comeback: null,
       // MUT-565: accountant access is off in this harness.
       accountantPlan: null,

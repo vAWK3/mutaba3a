@@ -51,7 +51,8 @@ import { renewalMailRoutes } from './routes/renewal-mail.js';
 import type { OfferEntry } from './billing/offer.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
 import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
-import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js';
+import { BILLING_COUNTRIES, israelVatPercent, type BillingCountries } from './billing/checkout.js';
+import { createTaxFollowsAddress } from './billing/stripe/retax.js';
 import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, billingPlanRoutes } from './routes/billing-plan.js';
@@ -432,7 +433,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.155.0-mut737';
+export const API_VERSION = '1.156.0-mut750';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -785,10 +786,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
+  // MUT-750 (ADR-290): the tax follows an address that moves into or out of Israel (needs the plan and checkout doors).
+  const billingCountries = deps.billingCountries ?? BILLING_COUNTRIES;
+  const vatPercent = israelVatPercent(billingCountries);
+  const checkoutDoor = deps.stripe?.checkoutGateway;
+  const taxFollowsAddress =
+    deps.stripe?.planGateway && checkoutDoor
+      ? createTaxFollowsAddress({ plan: deps.stripe.planGateway, israelVatRateId: async () => (vatPercent === null ? null : checkoutDoor.israelVatRateId(vatPercent)) })
+      : null;
   const stripe = deps.stripe
     ? {
         webhookGateway: deps.stripe.webhookGateway,
-        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway } : {}), logger: deps.logger, now }),
+        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway } : {}), ...(taxFollowsAddress ? { taxFollowsAddress } : {}), logger: deps.logger, now }),
       }
     : null;
   app.route(

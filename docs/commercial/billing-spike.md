@@ -11,7 +11,7 @@ From MUT-322, MUT-323 and MUT-332 (Basel, 2026-10-19/20):
 - **The seller is Barmajiyat Ltd (UK).** One Stripe Organization holds two accounts, **Mutaba3a** and **Malafat**. Each has its own branding, statement descriptor, keys and webhooks. Mutaba3a's billing code never sees Malafat's keys or events.
 - **Pilot users are billed from day one with Stripe subscriptions made by hand in the dashboard.** Two Products, Freelancer and Firm, each priced monthly and yearly, in ILS and USD. So nothing has to migrate when the code lands (`pilot-offer.md` §5).
 - **Currency:** Israeli customers pay ILS; everyone else pays USD.
-- **VAT:** prices exclude it, and VAT "is added where the law requires it". The rate for each country is with the accountant (**MUT-355**).
+- **VAT:** "Prices exclude VAT. Israeli VAT is added for an Israeli address." (MUT-750, ADR-290: a fixed Stripe tax rate for an Israeli billing address, Stripe Tax elsewhere; other countries' rates stay with the accountant, **MUT-355**.)
 - **Founder prices:** Freelancer ₪39 / $10 and Firm ₪299 / $80 a month; a year costs 10× the monthly price; the price is locked for 12 months. Pilot firms pay the Freelancer price until firm books v1 ships, then move to the Firm founder price, locked for 12 months from that day.
 - **Malafat-fed firms pay through Malafat** as an add-on (MAL-870, billed on Malafat's own Stripe account, MAL-30). Mutaba3a must never ask them to pay a second time.
 - **A lapsed account goes read-only and keeps export.** Nothing is ever deleted for non-payment.

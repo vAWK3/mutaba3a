@@ -33509,6 +33509,11 @@ export interface components {
             } | unknown;
             plans?: components["schemas"]["BillingPlan"][];
             billingAddress?: components["schemas"]["BillingAddress"] | unknown;
+            vatRate?: {
+                /** @enum {string} */
+                country: "IL";
+                percent: number;
+            } | unknown;
         };
         BillingOffer: {
             id: string;

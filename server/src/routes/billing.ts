@@ -180,6 +180,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           // MUT-702 Part B (ADR-288): the plans on sale and the saved billing address (prefill).
           plans,
           billingAddress,
+          // MUT-750 (ADR-290): the rate the portal shows as the VAT line for an Israeli address.
+          vatRate: vatRateView(options.countries),
         },
         200,
       );
@@ -552,6 +554,12 @@ function subscriptionView(sub: BillingSubscriptionRecord & { tier: Exclude<Billi
 }
 
 /** MUT-418 (D11): `"*"` is sent as `consumerEverywhere`, so `consumer` stays a plain list for every client. */
+/** MUT-750 (ADR-290): the configured Israeli VAT, or null with none (Israel is then not sold). */
+function vatRateView(countries: BillingCountries): { country: 'IL'; percent: number } | null {
+  const percent = israelVatPercent(countries);
+  return percent === null ? null : { country: 'IL', percent };
+}
+
 function countriesView(countries: BillingCountries) {
   const everywhere = countries.consumer === EVERY_COUNTRY;
   return { consumer: everywhere ? [] : [...countries.consumer], consumerEverywhere: everywhere, customTaxId: [...countries.customTaxId] };

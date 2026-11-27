@@ -146,7 +146,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
   }
 
   async function preview(user: UserRecord, plan: PlanGateway, live: LivePlan, yearlyPriceId: string, prorationDate: Date) {
-    return viaStripe(() => plan.previewYearlySwitch({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId, prorationDate }), user, live.customer, options.logger);
+    return viaStripe(() => plan.previewYearlySwitch({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId, prorationDate, taxRates: live.taxRateIds }), user, live.customer, options.logger);
   }
 
   app.openapi(
@@ -199,7 +199,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
       const again = await preview(user, plan, live, decision.yearly.id, prorationDate);
       if (again.amountDue !== body.expectedAmountDue || again.currency !== decision.currency) throw planConflict('AMOUNT_CHANGED');
       const result = await viaStripe(
-        () => plan.switchToYearly({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId: decision.yearly.id, prorationDate }),
+        () => plan.switchToYearly({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId: decision.yearly.id, prorationDate, taxRates: live.taxRateIds }),
         user,
         live.customer,
         options.logger,

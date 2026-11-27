@@ -5,7 +5,7 @@ import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
 import type { BillingAddress, CheckoutPlanName } from '../../checkout.js';
-import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
+import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, RetaxInput, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 import type { FailedPaymentFacts } from '../../card-failed-mail.js';
 
@@ -421,6 +421,7 @@ export class FakePlanGateway implements PlanGateway {
   readonly plans = new Map<string, LivePlan>();
   readonly paid = new Map<string, number>();
   readonly switches: SwitchInput[] = [];
+  readonly retaxes: RetaxInput[] = [];
   readonly calls: string[] = [];
   amountDue = 27100;
   previewCurrency = 'ILS';
@@ -447,6 +448,7 @@ export class FakePlanGateway implements PlanGateway {
       couponIds: [],
       pause: null,
       automaticTax: true,
+      taxRateIds: [],
       managedBySchedule: false,
       ...over,
     });
@@ -560,5 +562,13 @@ export class FakePlanGateway implements PlanGateway {
     this.failing();
     this.switches.push(input);
     return this.outcome;
+  }
+
+  async retax(input: RetaxInput): Promise<void> {
+    this.calls.push(`retax:${input.subscriptionId}:${input.country}`);
+    this.failing();
+    this.retaxes.push(input);
+    const plan = this.plans.get(input.subscriptionId);
+    if (plan) this.plans.set(input.subscriptionId, { ...plan, taxRateIds: [...input.taxRates], automaticTax: input.automaticTax });
   }
 }

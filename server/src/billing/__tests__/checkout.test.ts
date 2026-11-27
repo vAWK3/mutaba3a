@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Entitlement } from '../entitlement.js';
+import { taxRatesFor } from '../checkout.js';
 import {
   BILLING_COUNTRIES,
   CHECKOUT_SESSION_TTL_SECONDS,
@@ -483,5 +484,20 @@ describe('plan Checkout (MUT-702 Part B)', () => {
       expect(open({ trial: { offeredAt: NOW, usedAt: NOW } })).toBe(false);
       expect(open({ trial: null })).toBe(false);
     });
+  });
+});
+
+describe('taxRatesFor (MUT-750, ADR-290)', () => {
+  it('an Israeli address carries the VAT rate with Stripe Tax off', () => {
+    expect(taxRatesFor('IL', 'txr_il')).toEqual({ taxRates: ['txr_il'], automaticTax: false });
+  });
+
+  it('anywhere else, or no country, goes through Stripe Tax with no fixed rate', () => {
+    expect(taxRatesFor('JO', 'txr_il')).toEqual({ taxRates: [], automaticTax: true });
+    expect(taxRatesFor(null, null)).toEqual({ taxRates: [], automaticTax: true });
+  });
+
+  it('Israel with no rate in Stripe is not sold (null)', () => {
+    expect(taxRatesFor('IL', null)).toBeNull();
   });
 });

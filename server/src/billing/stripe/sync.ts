@@ -1,9 +1,10 @@
 import type Stripe from 'stripe';
 import type { Logger } from '../../logger.js';
 import { ownedProfilesOf, profileOwnerOf } from '../../personal-profile.js';
-import type { AuditEventInput, BillingSyncSource, LedgerStore, SaveBillingAccountConflict, SaveBillingSubscriptionOutcome } from '../../repositories/ports.js';
+import type { AuditEventInput, BillingAccountRecord, BillingSyncSource, BillingTierRecord, LedgerStore, SaveBillingAccountConflict, SaveBillingSubscriptionOutcome } from '../../repositories/ports.js';
 import { StateConflict } from '../../repositories/memory.js';
-import { BUSINESS_TAX_NUMBER_KEY, TRIAL_METADATA_KEY } from '../checkout.js';
+import { BUSINESS_TAX_NUMBER_KEY, ISRAEL_VAT, TRIAL_METADATA_KEY } from '../checkout.js';
+import { IsraelVatRateMissing, type TaxFollowsAddress } from './retax.js';
 import type { CheckoutGateway } from './checkout-gateway.js';
 import { StripeGatewayError, type Fetched, type StripeGateway } from './gateway.js';
 import { customerIdOf, mirrorOf, pauseOf, stateOf, subscriptionIdOfInvoice, type MirrorError, type MirrorNote } from './mirror.js';
@@ -81,6 +82,8 @@ export interface StripeSyncDependencies {
   reconcileGateway: StripeGateway;
   /** MUT-362 review D3: the write door, to print a Checkout business tax number on the customer's invoices. */
   invoiceTaxNumbers?: Pick<CheckoutGateway, 'setInvoiceTaxNumber'>;
+  /** MUT-750 (ADR-290): re-taxes a plan subscription when its address moves into or out of Israel. Absent = never. */
+  taxFollowsAddress?: TaxFollowsAddress;
   logger: Logger;
   now: () => Date;
   /** Defaults to RECONCILE_TIME_BUDGET_MS; tests pass a small one. */
@@ -107,6 +110,10 @@ function productIdsOf(sub: Stripe.Subscription): string[] {
 }
 /** An expected state, not something for the operator: a deleted customer's subscriptions end on their own. */
 const needsOperator = (code: string) => code !== 'CUSTOMER_DELETED';
+/** MUT-750: the plans whose item carries the Israeli VAT rate (Checkout put it there); Freelancer keeps Stripe Tax (Q2). */
+const RETAXED_TIERS: ReadonlySet<BillingTierRecord> = new Set(['SOLO', 'BUSINESS', 'FIRM']);
+/** MUT-750: subscriptions that will invoice again, so their tax still matters. */
+const INVOICING_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 
 export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
   const { store, logger, now } = deps;
@@ -256,12 +263,16 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
   }
 
   /** customer.updated: country and metadata link on an account the sync already made; never creates one (D6). */
-  async function refreshCustomer(customerId: string, requestId: string | null): Promise<{ result: 'noop' | 'processed'; codes: SyncCode[] }> {
+  async function refreshCustomer(customerId: string, requestId: string | null): Promise<{ result: 'noop' | 'processed' | 'error'; codes: SyncCode[] }> {
     const existing = await store.billing.getAccount(customerId);
     if (!existing) return { result: 'noop', codes: [] };
     const { value: customer } = await deps.webhookGateway.customer(customerId);
     if ('deleted' in customer && customer.deleted) return { result: 'noop', codes: ['CUSTOMER_DELETED'] };
     const candidate = customer.metadata?.['mutaba3a_user_id'] ?? null;
+    // MUT-750: before the country is saved, so a failed re-tax leaves the crossing for Stripe's redelivery to find.
+    const country = customer.address?.country ?? null;
+    const retaxed = await taxFollows(existing, candidate, country);
+    if (retaxed.length > 0) return { result: 'error', codes: retaxed };
     const linking = await linkAudit(candidate, customerId, requestId);
     const saved = await store.billing.saveAccount({
       stripeCustomerId: customerId,
@@ -272,6 +283,32 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       linkAudit: linking.rows,
     });
     return { result: 'processed', codes: saved.conflict ? [saved.conflict] : [] };
+  }
+
+  /**
+   * MUT-750 (ADR-290): an address that crossed into or out of Israel re-taxes each of the account's plan subscriptions
+   * that still invoices (Solo, Business, Firm; the legacy Freelancer plan keeps Stripe Tax, plan Q2). Returns the codes
+   * of the ones that failed (empty when all are right).
+   */
+  async function taxFollows(existing: BillingAccountRecord, candidate: string | null, country: string | null): Promise<SyncCode[]> {
+    if (!deps.taxFollowsAddress || (existing.country === ISRAEL_VAT.country) === (country === ISRAEL_VAT.country)) return [];
+    const userId = existing.userId ?? (candidate && UUID_RE.test(candidate) ? candidate : null);
+    if (!userId) return [];
+    const subs = (await store.billing.summaryOf(userId)).subscriptions.filter((s) => s.billingAccountId === existing.id && RETAXED_TIERS.has(s.tier) && INVOICING_STATUSES.has(s.status));
+    const codes: SyncCode[] = [];
+    for (const sub of subs) {
+      try {
+        const outcome = await deps.taxFollowsAddress.retax({ subscriptionId: sub.stripeSubscriptionId, country });
+        logger.info({ subscriptionId: sub.stripeSubscriptionId, country, outcome }, 'billing.subscription_retaxed');
+      } catch (err) {
+        // A transient failure throws on (500: Stripe redelivers; the country isn't saved, so the crossing is seen again).
+        if (err instanceof IsraelVatRateMissing) codes.push('STRIPE_ISRAEL_VAT_RATE_MISSING');
+        else if (err instanceof StripeGatewayError && !err.transient) codes.push('STRIPE_RETAX_FAILED');
+        else throw err;
+        logger.warn({ subscriptionId: sub.stripeSubscriptionId, country, err }, 'subscription not re-taxed; the operator resends the event after the fix');
+      }
+    }
+    return codes;
   }
 
   /**

@@ -72,6 +72,8 @@ describe('GET /v1/billing plans (MUT-702 Part B)', () => {
     ]);
     expect(billing.billingAddress).toBeNull();
     expect(billing.currentPlan).toBe('starter');
+    // MUT-750: the Israeli VAT the picker shows, from billing-countries.json.
+    expect(billing.vatRate).toEqual({ country: 'IL', percent: 18 });
   });
 
   it('is empty with PLAN_CHECKOUT off', async () => {

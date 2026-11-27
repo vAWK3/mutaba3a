@@ -4951,3 +4951,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Wiring | `email/__tests__/review-digest.test.ts`, `index-limiters-pruned.test.ts` | the digest sweep is not scheduled with the flag; index passes the flag |
 | Terraform | `infrastructure/terraform/tests/starter_plan.tftest.hcl` | `OPEN_SIGNUP` off by default, on with Starter, refused without it |
 | QA | with the UI half | `portal-selfservice.signup-webmail-starter`, `first-run-try-solo`, `first-run-stay-starter`, `portal.operator.signups-history` |
+
+## MUT-750 slice A (server half) — Israeli VAT follows the item and the address (2026-11-27, ADR-290)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/checkout.test.ts` | `taxRatesFor` IL / elsewhere / no country / IL with no rate |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | `planOf` reads item rates; the switch sends them (and nothing when none); `retax` both directions, no proration, its key |
+| Sync | `billing/stripe/__tests__/retax.test.ts` | into/out of Israel and no-op; IL→JO and JO→IL re-tax once, same country nothing; Freelancer never; transient 500 and refused code leave the old country |
+| Route | `billing-yearly-switch.test.ts`, `billing-plan-checkout.test.ts` | an Israeli item keeps its rate through the switch; `vatRate` on `GET /v1/billing` |
+| QA | with the UI half | `portal.billing.vat-lines-israel`, `portal.billing.no-vat-abroad`, `portal-live.billing.address-moves-out` |

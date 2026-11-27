@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Israeli VAT follows every change to an Israeli plan (MUT-750 slice A, server half, ADR-290, API 1.156.0-mut750)
+
+Epic MUT-566. Plan `.claude/designs/mut-750-israeli-vat-plan.md` (approved with defaults; slice B, the tax documents, is MUT-776). Server only; the portal's price / VAT / total lines read the new `vatRate`. No migration, no new env.
+
+### Added
+- `taxRatesFor(country, israelVatRateId)` (`billing/checkout.ts`): the one tax rule for a profile plan's item, used by Checkout and every later change.
+- `PlanGateway.retax` and `LivePlan.taxRateIds`; the yearly switch (preview and switch) sends the item's tax rates explicitly.
+- `billing/stripe/retax.ts` (`createTaxFollowsAddress`): on `customer.updated`, an address that crossed into or out of Israel re-taxes each Solo/Business/Firm subscription that still invoices, from the next invoice (`proration_behavior: none`, keyed per subscription, country and minute). Done before the country is saved: a transient failure answers 500 (redelivery); a refusal is recorded as `STRIPE_RETAX_FAILED`, a missing VAT rate as `STRIPE_ISRAEL_VAT_RATE_MISSING`.
+- `GET /v1/billing` `vatRate: { country: 'IL', percent } | null` (additive).
+
+### Unchanged
+- The legacy Freelancer Checkout and its subscriptions keep Stripe Tax (plan Q2 default: today's payers wait for MUT-707). Pause ends and renewals keep the item's rates (Stripe carries them).
+- Docs: `pilot-offer.md` and `billing-spike.md` say "Prices exclude VAT. Israeli VAT is added for an Israeli address."
+
+---
+
 ## [Unreleased] - 2026-11-27 — Open sign-up: no email review, every verified sign-up opens on Starter (MUT-737 server half, ADR-289, API 1.155.0-mut737)
 
 Epic MUT-701. Plan `.claude/designs/mut-737-open-signup-plan.md` (approved with defaults). Server only; the portal (Signups page read-only, the domain chip, the first-run analytics events) and the legal-draft edit come with the UI half. Dark behind `OPEN_SIGNUP`. No migration.
