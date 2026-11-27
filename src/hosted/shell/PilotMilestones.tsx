@@ -57,7 +57,7 @@ function MilestoneCard() {
     return () => window.clearTimeout(timer);
   }, [current, dismiss]);
   return (
-    <div className="hp-milestone-region" role="status" aria-live="polite">
+    <div className="hp-milestone-region" aria-live="polite">
       {current && (
         <div key={current} className="hp-milestone" data-testid={`milestone-${current}`}>
           <Scene name={current === 'scan' ? 'milestone-first-scan' : 'milestone-first-invoice'} size={120} className="hp-milestone-art" />
