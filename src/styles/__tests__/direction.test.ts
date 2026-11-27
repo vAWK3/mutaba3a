@@ -41,6 +41,10 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/EntriesTable.tsx': { auto: 2 }, // an entry's title and category (D)
   'src/hosted/components/PinBoxes.tsx': { ltr: 1 }, // a PIN's digits run left to right in both languages (B)
   'src/hosted/pages/accountant-invite/AcceptInvitePage.tsx': { ltr: 2, auto: 1 }, // the invite's address, the password; the name (B, D)
+  // MUT-768 (accountant channel): the customer's and business's names (D), the email address (B).
+  'src/hosted/pages/client-books/AddCustomerDrawer.tsx': { auto: 3, ltr: 1 }, // the two name inputs and "Link sent to <email>" (D); the email input (B)
+  'src/hosted/pages/client-books/CustomerDrawer.tsx': { auto: 3, ltr: 2 }, // business, owner and "Link sent to <email>" (D); the email shown and the new-email input (B)
+  'src/hosted/pages/client-books/TakeCardPane.tsx': { auto: 1, ltr: 1 }, // the street and city, one shared input (D); the postal code (B)
   'src/hosted/pages/client-books/ClientBookPage.tsx': { auto: 3, ltr: 2 }, // owner and profile names; the month inputs (D, B)
   'src/hosted/pages/client-books/ClientBooksPage.tsx': { auto: 3 }, // owner and profile names (D)
   'src/hosted/pages/client-books/ClientReceiptPane.tsx': { auto: 1 }, // the expense's title (D)
@@ -64,6 +68,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 5, auto: 2 },
   // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
   'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 3 }, // MUT-662: + the cancel reason (D)
+  'src/hosted/components/ActivatingStatus.tsx': { auto: 1 }, // MUT-770: the customer's name beside Activating
+  'src/hosted/components/CodeReveal.tsx': { ltr: 1 }, // MUT-770: the claim code, LTR in both languages (codes are LTR)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
   'src/hosted/components/ManualAllocationPanel.tsx': { ltr: 2 }, // MUT-711: the invoice facts to copy (number, date, amount, VAT id) and the 9-digit number field (B)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
