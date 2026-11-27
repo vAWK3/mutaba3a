@@ -257,6 +257,8 @@ Built without Basel (approved plan, away); each takes the conservative reading w
 - **P10 (MUT-758):** the events are tagged by the `pilot_` prefix and never carry the cohort (free text; the contract allows only closed lists and counts). Timing is `hours_since_start` from `pilot.startedAt`; the 90% event names the line, not the number.
 - **P11 (MUT-758):** the server sends nothing to PostHog (ADR-090). It adds `pilot.startedAt`, `firstScanAt` and `firstInvoiceAt` to `GET /v1/billing`, so web and phone send each "first" event once, across devices. The Flutter copy of `events.json` moves with MUT-756. The PostHog insight (time to first scan and invoice) is built once events arrive.
 
+- **P12 (MUT-760):** the free pilot is a new §7 in `docs/commercial/pilot-offer.md` (English and Arabic) and §1.13 in `docs/operations/pilot-runbook.md`; the paying-pilot text is untouched. The runbook tells the operator to warn testers in the last two weeks by hand, since no reminder mail exists (TD-370).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
