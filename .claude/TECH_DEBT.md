@@ -3460,5 +3460,7 @@ When resolving debt:
 **Why deferred**: neither has a reader before MUT-743 (the rules read) and MUT-667 (foreign customers, export invoices); a clearance table adds retention, rollback-gate and dual-write work with no consumer, and the customer columns are on a mutable table, so adding them later is as cheap and as safe. **Fix**: MUT-743 adds the clearance table (INSERT-only like the other legal tables, in `RETAINED_ISSUING_DOCUMENT_TABLES`, a `ROLLBACK_HAZARDS` row and a `DEPLOYMENT.md` §6 row, a local-mode snapshot step if customers change) and derives an Israeli clearance from `allocationNumber` for old documents; MUT-667 adds the customer's country and scheme. `vatId` and `taxId` are wide now but every reader still assumes nine digits (TD-350).
 
 ### TD-352: Live jurisdiction packs have no release-QA map of their own (MUT-745 AC3)
+
+**Decision (Basel, 2026-11-27):** wait for the second country pack; the server pack-contract suite covers Israel until then.
 **Where**: `qa/features/portal/invoicing.yaml` holds every invoicing flow, Israel's own included (uniform file, allocation numbers); there is no `qa/features/portal/invoicing-il.yaml`.
 **Why deferred**: the portal specs run on a stubbed API (`FakeApi`), so no flow exercises a server pack, and moving the Israel-only features means re-tagging their specs, which forces re-recordings. **Fix**: before a second pack goes live, split the Israel-only features into `invoicing-il.yaml` (with `server/src/jurisdictions/il/**` in its paths) and give the new country its own file.

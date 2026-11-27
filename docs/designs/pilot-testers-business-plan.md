@@ -57,7 +57,7 @@ End-of-pilot rule (to confirm): when the grant expires the person falls through 
 2. Is `STARTER_PLAN` on when the first pilot ends? It decides whether testers land on Starter or read-only.
 3. Who creates the tester's account: DECIDED 2026-11-26 (Basel), the accountant creates it for their client, so the pilot tests the flow from step 0. The provisioning route is the accountant channel's create-customer, which is not built yet; the grant is issued after the account exists.
 4. 60 days exactly, or "2 calendar months" from the grant date?
-5. Do testers consent to being observed or recorded in the watched sessions, and is screen recording allowed (PostHog session replay stays off unless decided)?
+5. Do testers consent to being observed or recorded in the watched sessions, and is screen recording allowed (PostHog session replay stays off unless decided)? **Answered (Basel, 2026-11-27): one yes when the tester joins the pilot covers watching and recording every later watched session. PostHog session replay stays off; the consent and its date must be recorded per tester (follow-up ticket). Expected prices in `pilot-prices.json` confirmed.**
 
 ## Success Criteria
 - 5 to 8 testers watched doing a first scan and a first invoice, with no help, on both phone and web.
