@@ -13086,10 +13086,15 @@ components:
             - nullable: true
         vat:
           $ref: "#/components/schemas/VendorVat"
+        categoryId:
+          type: string
+          nullable: true
+          format: uuid
       required:
         - vendorId
         - currency
         - vat
+        - categoryId
     ApproveReceiptResponse:
       type: object
       properties:

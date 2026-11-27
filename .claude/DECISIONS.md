@@ -6275,6 +6275,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Consequences:** works with server reading switched off, since a typed and picked vendor or a read name is enough. MUT-308's bills can reuse the same defaults.
 
+**Amended by MUT-775 (2026-11-27, built under Basel's go-ahead, not yet reviewed; brief `.claude/designs/mut-775-vendor-fill.md`):** `vendorDefaults` also carries `categoryId`, the vendor's last category, **only for a match by registration no.** (an exact-name match gives null) and only while that category is live (not archived) on the receipt's profile. Like the rest of §2 it is worked out per GET and never written into `suggested`, so a receipt moved to another profile (MUT-503) never points at the old profile's category. The vendor name keeps MUT-254's rule (the reader fills an absent `vendorName` from the vendor, confidence 1). Clients fill the category only into an empty, untouched category field (§4). API 1.150.0-mut775.
+
 **Alternatives considered:**
 - Write vendor defaults into the reader's suggestion with `source: "vendor"` (the brief's plan). Rejected: R1.
 - Learn from every write naming the vendor. Rejected: R8, an edit to an old expense would reset the default.

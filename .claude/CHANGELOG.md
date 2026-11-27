@@ -42,6 +42,24 @@ Epic MUT-701. Plan `.claude/designs/mut-737-open-signup-plan.md` (approved with 
 ### Unchanged
 - Disposable and no-mail refusals, Turnstile, the per-IP and per-address budgets, verification by link, `SELF_SIGNUP_ENABLED`. `ACCOUNT_UNDER_REVIEW` at sign-in stays for any account not released yet. `signup_reviews` and `PENDING_REVIEW` stay (history, rollback).
 
+---
+
+## [Unreleased] - 2026-11-27 — A known vendor's registration no. offers its last category (MUT-775, server only, API 1.150.0-mut775)
+
+Brief: `.claude/designs/mut-775-vendor-fill.md` (built under Basel's 2026-11-27 go-ahead; defaults chosen conservatively). ADR-239 amended.
+
+### Added
+- `GET /v1/receipts/{id}` `vendorDefaults.categoryId`: the matched vendor's last category, only when the receipt's read registration no. names the vendor and the category is live on the receipt's profile; else null. Never written into `suggested`. Additive; no migration.
+
+### Unchanged
+- The vendor name: the reader already fills an absent `vendorName` from a registration-no. match on the receipt's own profile (MUT-254, confidence 1); a stored name is never overwritten.
+
+### Not yet (client follow-ups)
+- Portal `ReceiptReview.tsx` and the phone's receipt review must fill the category from `vendorDefaults.categoryId` into an empty, untouched category; the release-QA flow (AC4) waits for the portal half.
+
+### Files
+- `server/src/vendors/receipt-defaults.ts`, `server/src/schemas.ts`, `server/src/app.ts` (API version) and its pins, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `server/src/__tests__/routes-vendors.test.ts`, `server/src/__tests__/routes-receipt-reading.test.ts`.
+
 ## [Unreleased] - 2026-11-27 — Accountant provisioning: migration and store (MUT-763, epic MUT-762, no route, no API change)
 
 Plan: `docs/designs/accountant-channel.md` (eng review R1–R6). Store layer only; the route (MUT-764), claim code (MUT-765) and the UI come in their own tickets.
