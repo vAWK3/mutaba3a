@@ -1931,6 +1931,19 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-plan-meter[data-level="nudge"] .hp-progress > span,
 .hp-plan-meter[data-level="at_cap"] .hp-progress > span { background: var(--warning); }
 .hp-starter-active-name { font-weight: var(--weight-medium); }
+
+/* MUT-753: the Pilot panel. A paid line turns butter from 90% (design review 2B), the number with it; the plans are a
+   plain list (Business marked with the Pilot chip); Write to us is one 44 px link, last (6A). */
+.hp-plan-meter[data-attention] > span:first-child { font-weight: var(--weight-medium); color: var(--warning); }
+.hp-plan-meter[data-attention] .hp-progress > span { background: var(--warning); }
+.hp-pilot-plans { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.hp-pilot-plan { display: grid; gap: var(--space-0-5); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-pilot-plan[data-current] { border-color: var(--accent); }
+.hp-pilot-plan-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: var(--weight-medium); }
+.hp-pilot-plan-price { font-size: var(--text-label); }
+.hp-pilot-expected { color: var(--muted); }
+.hp-pilot-write { display: inline-flex; align-items: center; min-block-size: 44px; font-weight: var(--weight-medium); color: var(--accent-text); text-underline-offset: 2px; }
+.hp-pilot-ended-art { align-self: center; }
 .hp-pick-business { display: grid; gap: var(--space-3); }
 .hp-pick-business p { margin: 0; }
 .hp-pick-list { display: grid; gap: var(--space-2); }

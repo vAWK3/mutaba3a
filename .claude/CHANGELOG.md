@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.200.0-mut753, ADR-330)
+
+### Added
+- Portal: Billing's `pilot` and `pilotEnded` panels (`src/hosted/data/billingView.ts`, `BillingDrawer.tsx`): status, this month's lines, the plans with Expected prices from `pilot.plans`, one Write to us link; the last 14 days; Pilot ended with the `pilot-ended` scene. `src/hosted/data/pilot.ts`, `src/hosted/components/PilotBilling.tsx`.
+- Shared usage lines: `usageLinesOf` (`src/hosted/data/usageLines.ts`) and `PlanUsageLines` (butter from 90%, design review 2B), for MUT-754 and MUT-733 to reuse.
+- `formatLongDay` in `src/hosted/format/dates.ts` ("27 January 2027", Levantine months in Arabic).
+- Server: `pilotEndedOf` (`server/src/billing/pilot.ts`) and `pilotEnded` on `GET /v1/billing` (`BillingPilotEnded`), no migration.
+
+### Technical
+- Tests: `server/src/billing/__tests__/pilot.test.ts`, `server/src/__tests__/billing-pilot.test.ts`, `src/hosted/data/__tests__/pilot.test.ts`, `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx`. OpenAPI and `src/hosted/api/schema.d.ts` regenerated.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
 
 Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.

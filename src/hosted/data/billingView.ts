@@ -2,6 +2,7 @@ import type { Schemas } from '../api/client';
 import type { BillingEntitlement, BillingOffer, BillingOverview, BillingYearlySwitch } from '../api/client';
 import type { Language } from '../../lib/i18n/types';
 import { formatInstant, todayInZone } from '../format/dates';
+import { billingPilotEndedOf, billingPilotOf, PILOT_LAST_DAYS } from './pilot';
 
 /**
  * MUT-362 (plan §2.7, design review DR1–DR12): what the Billing drawer shows. One panel (status chip + headline, DR1),
@@ -34,6 +35,13 @@ export type BillingPanel =
   | { kind: 'ownedByOthers' }
   /** MUT-731 (ADR-284): the free Starter plan (nothing else covers the person's own profiles). */
   | { kind: 'starter' }
+  /**
+   * MUT-753: the free pilot (GET /v1/billing `pilot`). `lastDays`: the last 14 days ("N days left", "Ends <date>");
+   * `thenStarter`: Starter is on, so the end lands on it (else read-only, which the panel doesn't spell out).
+   */
+  | { kind: 'pilot'; endsAt: string; daysLeft: number; lastDays: boolean; thenStarter: boolean }
+  /** MUT-753 (ADR-330): the pilot ended lately; `onStarter`: the person landed on Starter, else read-only. */
+  | { kind: 'pilotEnded'; endedAt: string; onStarter: boolean }
   | { kind: 'none' };
 
 export interface BillingView {
@@ -81,8 +89,25 @@ export function isSellable(billing: Pick<BillingOverview, 'configured' | 'catalo
 
 export function billingViewOf(billing: BillingOverview, profiles: readonly BillingProfile[], now: Date): BillingView {
   const fromSubscription = billing.subscription ? subscriptionPanel(billing.subscription, now) : null;
-  const { panel, action } = fromSubscription ?? profilePanel(profiles, billing, now);
+  const { panel, action } = fromSubscription ?? pilotPanel(billing, now) ?? pilotEndedPanel(billing, profilePanel(profiles, billing, now));
   return { panel, action, openSoon: action === 'subscribe' && !isSellable(billing) };
+}
+
+/** MUT-753: a running pilot is the panel, with no action (no Subscribe inside the pilot: design review, NOT in scope). */
+function pilotPanel(billing: BillingOverview, now: Date): { panel: BillingPanel; action: BillingAction | null } | null {
+  const pilot = billingPilotOf(billing);
+  if (!pilot) return null;
+  const left = daysLeft(pilot.endsAt, now);
+  return { panel: { kind: 'pilot', endsAt: pilot.endsAt, daysLeft: left, lastDays: left <= PILOT_LAST_DAYS, thenStarter: billing.starter != null }, action: null };
+}
+
+/** MUT-753 (ADR-330): after the pilot, Starter (or read-only, keeping its Subscribe) says "Pilot ended" first. */
+const ENDED_OVER: ReadonlySet<BillingPanel['kind']> = new Set(['starter', 'none', 'lapsed', 'locked', 'trialEnded']);
+
+function pilotEndedPanel(billing: BillingOverview, from: { panel: BillingPanel; action: BillingAction | null }): { panel: BillingPanel; action: BillingAction | null } {
+  const ended = billingPilotEndedOf(billing);
+  if (!ended || !ENDED_OVER.has(from.panel.kind)) return from;
+  return { panel: { kind: 'pilotEnded', endedAt: ended.endedAt, onStarter: from.panel.kind === 'starter' }, action: from.action };
 }
 
 /** The subscription decides while it exists; a cancelled or abandoned one hands over to the profiles. */

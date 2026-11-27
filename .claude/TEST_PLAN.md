@@ -5051,3 +5051,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Rule | `billing/__tests__/pilot.test.ts` | `startedAt` is the first pilot grant's, revoked included, plain grants ignored |
 | Route | `__tests__/billing-pilot.test.ts` | `pilot.startedAt`, `firstScanAt` (first of several), `firstInvoiceAt` null until the first document |
 | Client | with MUT-753/755/756 | each event fires once in a production-gate test and never in dev or QA |
+
+## MUT-753 — the Pilot panel and its end state (2026-11-27, ADR-330)
+
+| Level | File | What |
+|---|---|---|
+| Rule | `server/src/billing/__tests__/pilot.test.ts` | `pilotEndedOf`: expired, revoked (ends at the revoke), latest end of several, null while running / plain / ACCOUNTANT / another's / covered by another grant / paying, the 30-day window edge |
+| Route | `server/src/__tests__/billing-pilot.test.ts` | `pilotEnded` null while the pilot runs, set after expiry and after a revoke |
+| Unit | `src/hosted/data/__tests__/pilot.test.ts` | `pilot` and `pilotEnded` panels (day 1–46, last 14 days, Starter on/off, subscription first, ended onto Starter or read-only, never over a new grant, older server); plans' currency; usage lines butter at 90% and not at 89%, over cap, no caps |
+| Drawer | `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx` | order (status, lines, plans, Write to us), Expected prices from `pilot.plans`, no Subscribe, butter at 90%, last 14 days, Pilot ended with its scene and Starter's lines, Arabic Levantine month |
+

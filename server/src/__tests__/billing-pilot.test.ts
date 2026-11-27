@@ -155,13 +155,17 @@ describe('MUT-752 GET /v1/billing pilot', () => {
     const tester = await signedIn(h);
     const soon = await read(await adminGrant(h, { ...PILOT, userId: tester.id, expiresAt: new Date(h.clock.now.getTime() + 30 * 60_000).toISOString() }));
     expect((await tester.billing()).pilot.endsAt).toBe(soon.expiresAt);
+    expect((await tester.billing()).pilotEnded).toBeNull();
     minutes(h, 30);
     expect((await tester.billing()).pilot).toBeNull();
+    // MUT-753 (ADR-330): the end state, with the end instant.
+    expect((await tester.billing()).pilotEnded).toEqual({ cohort: 'dec-2026', endedAt: soon.expiresAt });
 
     const other = await signedIn(h);
     const grant = await read(await adminGrant(h, { ...PILOT, userId: other.id }));
     expect((await h.app.request(`/admin/v1/billing/grants/${grant.id}`, { method: 'DELETE', headers: ADMIN })).status).toBe(200);
     expect((await other.billing()).pilot).toBeNull();
+    expect((await other.billing()).pilotEnded).toMatchObject({ cohort: 'dec-2026' });
   });
 
   it('an extension (revoke + new grant) shows the new end and keeps the Welcome closed', async () => {

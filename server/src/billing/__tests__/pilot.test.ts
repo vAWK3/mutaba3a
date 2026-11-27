@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import pricesFile from '../pilot-prices.json' with { type: 'json' };
-import { isPilotCohort, parsePilotPrices, PILOT_DEFAULT_DAYS, pilotExpiryOf, pilotOf, pilotPlansOf, type PilotGrantFact } from '../pilot.js';
+import { isPilotCohort, parsePilotPrices, PILOT_DEFAULT_DAYS, PILOT_ENDED_SHOWN_DAYS, pilotEndedOf, pilotExpiryOf, pilotOf, pilotPlansOf, type PilotGrantFact } from '../pilot.js';
 import type { EntitlementSource, SubscriptionFact } from '../entitlement.js';
 
 /** MUT-752 (ADR-296, plan eng review D1/D4): who is a pilot tester, until when, and the Expected prices. */
@@ -83,6 +83,45 @@ describe('pilotOf', () => {
 
   it('a pilot grant without an expiry (impossible by the CHECK) is ignored rather than shown as never ending', () => {
     expect(pilotOf({ ...covered('OPERATOR'), grants: [grant({ expiresAt: null })] }, NOW)).toBeNull();
+  });
+});
+
+describe('pilotEndedOf (MUT-753, ADR-330)', () => {
+  const DAY = 86_400_000;
+  const ended = (at: Date, over: Partial<PilotGrantFact> = {}) => grant({ expiresAt: at, ...over });
+  const ago = (days: number) => new Date(NOW.getTime() - days * DAY);
+
+  it('a pilot that expired is ended: its cohort and the end instant', () => {
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [ended(ago(2))] }, NOW)).toEqual({ cohort: 'dec-2026', endedAt: ago(2) });
+    expect(pilotEndedOf({ ...covered('NONE'), grants: [ended(NOW)] }, NOW)).toEqual({ cohort: 'dec-2026', endedAt: NOW });
+  });
+
+  it('a revoked pilot ends at the revoke, even when its expiry was later', () => {
+    expect(pilotEndedOf({ ...covered('TRIAL'), grants: [grant({ revokedAt: ago(1) })] }, NOW)).toEqual({ cohort: 'dec-2026', endedAt: ago(1) });
+  });
+
+  it('the latest end wins when there were several pilot grants', () => {
+    const first = ended(ago(20), { cohort: 'dec-2026' });
+    const extended = ended(ago(3), { cohort: 'dec-2026-ext' });
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [first, extended] }, NOW)).toEqual({ cohort: 'dec-2026-ext', endedAt: ago(3) });
+  });
+
+  it('is null while a pilot runs, for a person who never had one, and for plain or ACCOUNTANT grants', () => {
+    expect(pilotEndedOf({ ...covered('OPERATOR'), grants: [grant()] }, NOW)).toBeNull();
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [] }, NOW)).toBeNull();
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [ended(ago(1), { cohort: null })] }, NOW)).toBeNull();
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [ended(ago(1), { tier: 'ACCOUNTANT' })] }, NOW)).toBeNull();
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [ended(ago(1), { userId: ACCOUNTANT })] }, NOW)).toBeNull();
+  });
+
+  it('is null once another operator grant covers the person, or they pay', () => {
+    expect(pilotEndedOf({ ...covered('OPERATOR'), grants: [ended(ago(1))] }, NOW)).toBeNull();
+    expect(pilotEndedOf({ ...covered('STRIPE'), subscriptions: [sub()], grants: [ended(ago(1))] }, NOW)).toBeNull();
+  });
+
+  it(`is shown for ${PILOT_ENDED_SHOWN_DAYS} days after the end, then the person is simply on their plan`, () => {
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [ended(ago(PILOT_ENDED_SHOWN_DAYS))] }, NOW)).not.toBeNull();
+    expect(pilotEndedOf({ ...covered('STARTER'), grants: [ended(new Date(ago(PILOT_ENDED_SHOWN_DAYS).getTime() - 1))] }, NOW)).toBeNull();
   });
 });
 

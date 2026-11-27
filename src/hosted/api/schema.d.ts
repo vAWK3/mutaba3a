@@ -19057,7 +19057,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them. `pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, and the plans with their Expected prices and limits; null otherwise.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them. `pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, and the plans with their Expected prices and limits; null otherwise. `pilotEnded` (MUT-753): the pilot that ended (expired or revoked) in the last 30 days, while no pilot runs, no other grant covers the person and they don’t pay; null otherwise.
          */
         get: {
             parameters: {
@@ -34915,6 +34915,7 @@ export interface components {
                 canDowngradeTo: string[];
             };
             pilot?: components["schemas"]["BillingPilot"] | unknown;
+            pilotEnded?: components["schemas"]["BillingPilotEnded"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -35076,6 +35077,11 @@ export interface components {
                     scansPerMonth: number;
                 };
             }[];
+        };
+        BillingPilotEnded: {
+            cohort: string;
+            /** Format: date-time */
+            endedAt: string;
         };
         BillingRedirect: {
             /** Format: uri */

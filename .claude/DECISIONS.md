@@ -7512,3 +7512,16 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 2. "Not now" at the first-run prompt is not stored: the prompt returns next time. Turning it off from You › App is a deliberate choice, stored for that person; sign-out or another account clears it and the ID.
 3. Unchanged: opt-in before any send (the portal's SDK starts opted out), the contract guard, the cookieless counts on the landing and the welcome before any answer, release-only telemetry (ADR-236).
 **Override log**: ADR-090 rule 6 ("consent belongs to the signed-in person"), 2026-11-27, replaced by 1–2 above. Not done: a per-account server record (cross-device) and the phone app; both need their own change.
+
+## ADR-330: Billing Says "Pilot Ended" for 30 Days; the Pilot Panel Has No Action but Write to Us (MUT-753, epic MUT-751; extends ADR-296)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/pilot-testers-business-plan.md`, design review 1A, 2A, 2B and the interaction states; built without Basel on the approved plan).
+
+**Decision:**
+1. `GET /v1/billing` adds `pilotEnded { cohort, endedAt }` (API 1.200.0-mut753, additive, no migration): the person's latest pilot grant ended (expired, or revoked: a revoke is an end) at most 30 days ago, no pilot runs, no other operator grant covers them and they don't pay. Pure `pilotEndedOf` beside `pilotOf`, from the same facts and `now`. Without it the portal could not tell a pilot's end from any Starter or read-only account.
+2. The portal's Billing panel kinds `pilot` (chip Pilot, "Free until <date>", "Business · 100% off"; the last 14 days: chip "N days left", "Ends <date>", "Then free Starter" when Starter is on) and `pilotEnded` (the `pilot-ended` scene, "Pilot ended"; Starter's chip and lines, or read-only keeping Subscribe). A subscription still decides first; a pilot outranks the profile panels.
+3. The pilot panel shows, in order, status, this month's lines (documents, scans, businesses, partners per business; butter from 90%, never refused), the three plans with the server's Expected monthly price (ILS unless the saved address is outside Israel) and limits, and one "Write to us" mail link. No Subscribe, no upsell (design review NOT in scope). Dates are in words with Levantine months (`formatLongDay`).
+4. The usage lines are a shared pure reader (`usageLinesOf`, `src/hosted/data/usageLines.ts`) and component (`PlanUsageLines`), so the paid plans' meters (MUT-754, MUT-733) reuse them instead of a second copy.
+
+**Consequences:** 30 days is a guess at how long the end needs saying; after it the person is simply on their plan. The phone (MUT-756) reads the same `pilotEnded`.
+
