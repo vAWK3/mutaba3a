@@ -1,4 +1,5 @@
 import { usagePruneRoutes } from './routes/usage-prune.js';
+import { accountantSweepRoutes } from './routes/accountant-sweep.js';
 import { OPERATOR_USAGE_ROUTES, operatorUsageRoutes } from './routes/operator-usage.js';
 import { OPERATOR_PROVISIONING_ROUTES, operatorProvisioningRoutes } from './routes/operator-provisioning.js';
 import { routeKeyOf } from './usage/route-key.js';
@@ -442,7 +443,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.162.0-mut752';
+export const API_VERSION = '1.170.0-mut767';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -811,6 +812,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', operatorProvisioningRoutes(deps.store));
   // MUT-735 (ADR-281 §12): the daily usage retention job (/jobs/*, the job token), on the unguarded store.
   app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
+  // MUT-767 (ADR-300): the daily sweep of unclaimed provisioned accounts, on the unguarded store.
+  app.route('/', accountantSweepRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, enabled: deps.accountantProvisioning ?? false }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   // MUT-750 (ADR-290): the tax follows an address that moves into or out of Israel (needs the plan and checkout doors).

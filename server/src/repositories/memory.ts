@@ -1094,9 +1094,12 @@ export class MemoryLedgerStore implements LedgerStore {
       this.assertSetupDigestFree(input.setupLink.tokenDigest);
       const previousEmail = person.email;
       if (email !== person.email) Object.assign(person, { email, emailVerifiedAt: null, updatedAt: input.at });
+      const newest = [...this.setupLinks.values()].filter((l) => l.userId === person.id).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      const kept = newest ? this.provisionedLinks.get(newest.id) : undefined;
+      const code = input.claimCodeDigestFor ? { claimCodeDigest: input.claimCodeDigestFor(email), claimCodeAttempts: 0 } : { claimCodeDigest: kept?.claimCodeDigest ?? null, claimCodeAttempts: kept?.claimCodeAttempts ?? 0 };
       this.cancelOpenSetupLinks(person.id, input.at);
       const link = this.storeSetupLink(person.id, { tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt }, input.at, true);
-      this.provisionedLinks.set(link.id, { claimCodeDigest: input.claimCodeDigestFor(email), claimCodeAttempts: 0, mailStatus: 'PENDING' });
+      this.provisionedLinks.set(link.id, { ...code, mailStatus: 'PENDING' });
       this.pushEvents(input.auditFor({ organizationId: organization.id, grant: { ...grant }, previousEmail }), input.at);
       return { kind: 'issued', email, previousEmail, displayName: person.displayName, locale: person.locale, organization: { ...organization } };
     },
@@ -1121,6 +1124,36 @@ export class MemoryLedgerStore implements LedgerStore {
     countReissuesSince: async (userId, since) => {
       const createdAt = this.provisionOrigins.get(userId)?.provisionedAt.getTime() ?? -Infinity;
       return [...this.setupLinks.values()].filter((l) => l.userId === userId && l.createdAt.getTime() >= since.getTime() && l.createdAt.getTime() > createdAt).length;
+    },
+    sweepRows: async ({ limit, after }) =>
+      [...this.provisionOrigins.entries()]
+        .flatMap(([userId, origin]) => {
+          const person = this.people.get(userId);
+          return person && person.passwordHash === null && !person.closure
+            ? [{ userId, email: person.email, displayName: person.displayName, locale: person.locale, accountantUserId: origin.accountantUserId, provisionedAt: origin.provisionedAt }]
+            : [];
+        })
+        .sort((a, b) => a.provisionedAt.getTime() - b.provisionedAt.getTime() || a.userId.localeCompare(b.userId))
+        .filter((r) => !after || r.provisionedAt.getTime() > after.provisionedAt.getTime() || (r.provisionedAt.getTime() === after.provisionedAt.getTime() && r.userId > after.userId))
+        .slice(0, limit),
+    remindedStages: async (userIds) => {
+      const out = new Map<string, number[]>();
+      for (const e of this.events) {
+        if (e.action !== 'accountant.customer_reminded' || !e.entityId || !userIds.includes(e.entityId)) continue;
+        const day = (e.metadata as { day?: unknown }).day;
+        if (typeof day === 'number') out.set(e.entityId, [...(out.get(e.entityId) ?? []), day]);
+      }
+      return out;
+    },
+    expireUnclaimed: async ({ userId, provisionedBefore, at, audit }) => {
+      const person = this.people.get(userId);
+      const origin = this.provisionOrigins.get(userId);
+      if (!person || !origin || person.passwordHash !== null || person.closure || origin.provisionedAt.getTime() > provisionedBefore.getTime()) return false;
+      person.closure = { requestedAt: origin.provisionedAt, deleteAfter: at, endedSubscriptionIds: [], purgeStartedAt: null, purgeLastTriedAt: null };
+      person.updatedAt = at;
+      this.cancelOpenSetupLinks(userId, at);
+      this.pushEvents(audit, at);
+      return true;
     },
     unclaimedCustomerOf: async (accountantUserId, customerUserId) => {
       const person = this.people.get(customerUserId);

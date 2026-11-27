@@ -154,6 +154,21 @@ describe('Operator › accountant provisioning (MUT-764)', () => {
     expect(items.find((i: { userId: string }) => i.userId === second.id)).toMatchObject({ email: second.email, displayName: 'Customer 2', accountant: { userId: accountant.id, email: accountant.email }, paid: true });
     expect(items.find((i: { userId: string }) => i.userId === first.id)).toMatchObject({ paid: false });
 
+    // MUT-767: past the 60 days, a paid account still unclaimed is flagged for the operator; a newer one is not.
+    expect(items.find((i: { userId: string }) => i.userId === second.id).flagged).toBe(false);
+    const saved = h.clock.now;
+    h.clock.now = new Date(saved.getTime() - 61 * 86_400_000);
+    const old = await provisioned(h, accountant.id, 4);
+    h.clock.now = saved;
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_op_2', userId: old.id, country: 'IL', currency: 'ILS', at: h.clock.now, linkAudit: [] });
+    await h.store.billing.saveSubscription({
+      stripeCustomerId: 'cus_op_2', stripeSubscriptionId: 'sub_op_2', tier: 'FREELANCER', organizationId: null, status: 'active', currentPeriodEnd: new Date(h.clock.now.getTime() + 30 * 86_400_000),
+      cancelAtPeriodEnd: false, priceLookupKey: 'freelancer_list_monthly_ils', founderUntil: null, stripeUpdatedAt: h.clock.now, at: h.clock.now,
+      audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null },
+    });
+    const later = (await read(await get(h, LIST, op.token))).items;
+    expect(later.find((i: { userId: string }) => i.userId === old.id)).toMatchObject({ paid: true, flagged: true });
+
     // Claimed (a password set): gone from the list.
     await h.store.users.setPassword(first.id, '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', h.clock.now);
     expect((await read(await get(h, LIST, op.token))).items.map((i: { userId: string }) => i.userId)).not.toContain(first.id);
