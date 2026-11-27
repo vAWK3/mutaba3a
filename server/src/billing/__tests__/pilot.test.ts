@@ -9,7 +9,7 @@ const ME = '00000000-0000-4000-8000-000000000001';
 const ACCOUNTANT = '00000000-0000-4000-8000-0000000000aa';
 
 function grant(over: Partial<PilotGrantFact> = {}): PilotGrantFact {
-  return { userId: ME, organizationId: null, tier: 'BUSINESS', expiresAt: new Date('2027-01-27T10:00:00Z'), revokedAt: null, cohort: 'dec-2026', referredByUserId: ACCOUNTANT, ...over };
+  return { userId: ME, organizationId: null, tier: 'BUSINESS', expiresAt: new Date('2027-01-27T10:00:00Z'), revokedAt: null, cohort: 'dec-2026', referredByUserId: ACCOUNTANT, createdAt: new Date('2026-11-28T10:00:00Z'), ...over };
 }
 
 function sub(over: Partial<SubscriptionFact> = {}): SubscriptionFact {
@@ -20,7 +20,7 @@ const covered = (...sources: EntitlementSource[]) => ({ userId: ME, subscription
 
 describe('pilotOf', () => {
   it('a live pilot grant covering the person is a pilot: cohort, end, accountant', () => {
-    expect(pilotOf({ ...covered('OPERATOR'), grants: [grant()] }, NOW)).toEqual({ cohort: 'dec-2026', endsAt: new Date('2027-01-27T10:00:00Z'), referredByUserId: ACCOUNTANT });
+    expect(pilotOf({ ...covered('OPERATOR'), grants: [grant()] }, NOW)).toEqual({ cohort: 'dec-2026', startedAt: new Date('2026-11-28T10:00:00Z'), endsAt: new Date('2027-01-27T10:00:00Z'), referredByUserId: ACCOUNTANT });
   });
 
   it('an expired pilot grant is not (the same `now` the entitlement used; the end instant is already over)', () => {
@@ -45,6 +45,13 @@ describe('pilotOf', () => {
     const extended = grant({ cohort: 'dec-2026-ext', expiresAt: new Date('2027-02-27T10:00:00Z') });
     expect(pilotOf({ ...covered('OPERATOR'), grants: [extended, first] }, NOW)?.endsAt).toEqual(new Date('2027-02-27T10:00:00Z'));
     expect(pilotOf({ ...covered('OPERATOR'), grants: [first, extended] }, NOW)?.cohort).toBe('dec-2026-ext');
+  });
+
+  it('MUT-758: the start is the first pilot grant’s, revoked ones included (an extension keeps it)', () => {
+    const first = grant({ createdAt: new Date('2026-11-01T10:00:00Z'), revokedAt: new Date('2026-12-01T00:00:00Z') });
+    const extended = grant({ createdAt: new Date('2026-12-01T00:00:00Z'), expiresAt: new Date('2027-02-27T10:00:00Z') });
+    const plain = grant({ cohort: null, referredByUserId: null, createdAt: new Date('2026-01-01T00:00:00Z') });
+    expect(pilotOf({ ...covered('OPERATOR'), grants: [extended, first, plain] }, NOW)?.startedAt).toEqual(new Date('2026-11-01T10:00:00Z'));
   });
 
   it('a person who also pays (a covering subscription) is not shown a pilot', () => {

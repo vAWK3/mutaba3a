@@ -47,6 +47,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.11.0': '49edf9ea7495dabe5e05a73da23cc4a17ccfb754b1e726d5f0dbeb0e56dd1b61',
   // MUT-731: plan_cap_reached, plan_upgrade_offered (limit), plan_upgrade_chosen (from, to), starter_continue_chosen; portal only.
   '2.12.0': 'bcaf1dfb50ebfa3d396cb137c5c7d8a24e40d1b2a9a7273e6309742151fff827',
+  // MUT-758: the six pilot events (web and phone emit them; the Flutter copy follows with MUT-756).
+  '2.13.0': '8c9d0c1fa98f132565bbc809ba9dfc26c7a1bf8d3020cebd3ed55ca086b910b0',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -262,7 +264,25 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       plan_upgrade_offered: ['portal'],
       plan_upgrade_chosen: ['portal'],
       starter_continue_chosen: ['portal'],
+      // MUT-758: the pilot's panel, its first scan and invoice, and the 90% line (web and phone).
+      pilot_billing_opened: ['portal', 'ios', 'android'],
+      pilot_plans_viewed: ['portal', 'ios', 'android'],
+      pilot_contact_tapped: ['portal', 'ios', 'android'],
+      pilot_first_scan_saved: ['portal', 'ios', 'android'],
+      pilot_first_invoice_issued: ['portal', 'ios', 'android'],
+      pilot_usage_near_cap: ['portal', 'ios', 'android'],
     });
+  });
+
+  it('MUT-758: the pilot events carry only counts and a closed list, never the cohort', () => {
+    const shape = (event: string) =>
+      Object.fromEntries(Object.entries(contract.events?.[event]?.properties ?? {}).map(([name, p]) => [name, p.type === 'enum' ? p.values : p.type]));
+    expect(shape('pilot_billing_opened')).toEqual({ days_left: 'integer' });
+    expect(shape('pilot_plans_viewed')).toEqual({});
+    expect(shape('pilot_contact_tapped')).toEqual({});
+    expect(shape('pilot_first_scan_saved')).toEqual({ hours_since_start: 'integer' });
+    expect(shape('pilot_first_invoice_issued')).toEqual({ hours_since_start: 'integer' });
+    expect(shape('pilot_usage_near_cap')).toEqual({ limit: ['documents', 'scans', 'businesses', 'partners'] });
   });
 
   it('MUT-575: the accountant and share-link events carry exactly their agreed properties', () => {

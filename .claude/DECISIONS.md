@@ -7479,6 +7479,17 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 ---
 
+## ADR-298: Pilot Analytics: Six Client Events Tagged by Name, Never the Cohort; the Server Gives the Start and the Firsts (MUT-758, epic MUT-751; follows ADR-090 and ADR-236)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/pilot-testers-business-plan.md`, design 3A, eng finding 6; build decisions P10–P11).
+
+**Decision:**
+1. Contract 2.13.0 (`docs/analytics/events.json`) adds `pilot_billing_opened` (`days_left`), `pilot_plans_viewed`, `pilot_contact_tapped`, `pilot_first_scan_saved` and `pilot_first_invoice_issued` (`hours_since_start`), and `pilot_usage_near_cap` (`limit`), for portal, iOS and Android. The `pilot_` prefix is the tag. The cohort is never sent: it is free text, and the contract allows only enums, booleans, integers and currencies.
+2. The server sends no event (ADR-090). It gives clients what they need to send them once and with timing: `GET /v1/billing` `pilot.startedAt` (the first pilot grant, kept across an extension) and `pilot.firstScanAt` / `firstInvoiceAt` (the first SCAN and DOCUMENT_ISSUED usage events as the payer). A client sends a "first" event when the field was null at its last read.
+3. Release-only as every event (ADR-236), behind the person's opt-in.
+
+**Consequences:** The Flutter copy of the contract (byte-identical, with its sha256) moves with the phone story (MUT-756). Time to first scan per cohort is read in PostHog by date range, since the cohort is not on the event.
+
 ## ADR-300: Unclaimed Accounts: Reminders With the Same Code, One Digest a Day, Removal at 60 Days Through the Closure Purge, Paid Ones Kept and Flagged (MUT-767, epic MUT-762; eng R1, T6)
 
 **Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`, R1 as answered by Basel: remove if unpaid, flag if paid, 60 days, reminders to customer, accountant and operator; build decisions B17–B21).

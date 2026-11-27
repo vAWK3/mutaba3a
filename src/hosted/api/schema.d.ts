@@ -35052,9 +35052,15 @@ export interface components {
         BillingPilot: {
             cohort: string;
             /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
             endsAt: string;
             /** Format: date-time */
             welcomeSeenAt: string | null;
+            /** Format: date-time */
+            firstScanAt?: string | null;
+            /** Format: date-time */
+            firstInvoiceAt?: string | null;
             pricesExpected: boolean;
             plans: {
                 /** @enum {string} */

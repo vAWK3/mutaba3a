@@ -21,10 +21,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface PilotGrantFact extends GrantFact {
   cohort: string | null;
   referredByUserId: string | null;
+  createdAt: Date;
 }
 
 export interface Pilot {
   cohort: string;
+  /** MUT-758: the person's first pilot grant (revoked ones included), so an extension keeps the start. */
+  startedAt: Date;
   endsAt: Date;
   referredByUserId: string | null;
 }
@@ -61,7 +64,9 @@ export function pilotOf(facts: PilotFacts, now: Date): Pilot | null {
       g.userId === facts.userId && g.tier !== 'ACCOUNTANT' && g.cohort !== null && g.revokedAt === null && g.expiresAt !== null && g.expiresAt > now,
   );
   const latest = [...live].sort((a, b) => b.expiresAt.getTime() - a.expiresAt.getTime())[0];
-  return latest ? { cohort: latest.cohort, endsAt: latest.expiresAt, referredByUserId: latest.referredByUserId } : null;
+  if (!latest) return null;
+  const starts = facts.grants.filter((g) => g.userId === facts.userId && g.tier !== 'ACCOUNTANT' && g.cohort !== null).map((g) => g.createdAt.getTime());
+  return { cohort: latest.cohort, startedAt: new Date(Math.min(...starts)), endsAt: latest.expiresAt, referredByUserId: latest.referredByUserId };
 }
 
 /** A profile-plan subscription that covers now (active, trialing or past due, not stale, not paused). */

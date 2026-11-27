@@ -1,5 +1,5 @@
 {
-  "version": "2.12.0",
+  "version": "2.13.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -281,6 +281,42 @@
     "starter_continue_chosen": {
       "emitters": ["portal"],
       "description": "MUT-731: after a cancel, the person chose Continue free on Starter on the read-only banner or in Billing."
+    },
+    "pilot_billing_opened": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). Billing was opened with the Pilot panel. Once per opening.",
+      "properties": {
+        "days_left": { "type": "integer", "description": "Whole days until `pilot.endsAt`, rounded down." }
+      }
+    },
+    "pilot_plans_viewed": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). The panel's plans (Expected prices and limits) came into view. Once per opening."
+    },
+    "pilot_contact_tapped": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). The panel's Write to us link was pressed."
+    },
+    "pilot_first_scan_saved": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). A scan was saved while `pilot.firstScanAt` was null: the tester's first scan. Once per account (the next billing read has the date).",
+      "properties": {
+        "hours_since_start": { "type": "integer", "description": "Whole hours from `pilot.startedAt` to the scan." }
+      }
+    },
+    "pilot_first_invoice_issued": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). A document (any type) was issued while `pilot.firstInvoiceAt` was null: the tester's first invoice. Once per account.",
+      "properties": {
+        "hours_since_start": { "type": "integer", "description": "Whole hours from `pilot.startedAt` to the issue." }
+      }
+    },
+    "pilot_usage_near_cap": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). A usage line in the panel reached 90% of its Business limit (it turns butter; nothing is refused). Once per opening per line.",
+      "properties": {
+        "limit": { "type": "enum", "values": ["documents", "scans", "businesses", "partners"], "description": "Which line." }
+      }
     }
   }
 }

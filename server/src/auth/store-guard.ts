@@ -585,7 +585,8 @@ export const STORE_ACCESS: StoreAccess = {
     standing: 'operator',
     people: 'operator',
     byProfile: 'operator',
-    firstEventsOf: 'operator',
+    // MUT-757: the console's ticks; MUT-758: GET /v1/billing reads the person's own subject.
+    firstEventsOf: 'sessionOnly',
     routeTotals: 'operator',
     prune: 'operator',
     purgeSubject: 'operator',
