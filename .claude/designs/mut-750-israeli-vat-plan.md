@@ -117,3 +117,13 @@ ADR-288 amendment (the tax follows a country change via `retax`; tax rates on ev
 5. **An Israeli address on a USD subscription** (someone who moved): issue in USD with the Bank of Israel rate, or move them to ILS at renewal? [Default: list for the operator until MUT-667.]
 6. **Barmajiyat's profile on a paid plan**: the issuer profile needs the Tax Authority connection (paid-plan feature); grant it Firm by operator grant? [Default: yes.]
 7. May slice B be split into its own ticket (it is blocked by three outside tracks while slice A is not)? [Recommended: yes, "MUT-750b subscription tax documents".]
+
+## Build decisions (slice A, server half, 2026-11-27, built alone with the approved defaults)
+
+1. **ADR-290**, API **1.156.0-mut750**. Slice B is MUT-776, not built here.
+2. **AC3 (legacy Freelancer Checkout): unchanged, Stripe Tax as today.** Q2's default leaves today's Israeli payers until MUT-707, and the legacy door only runs while `PLAN_CHECKOUT` is off (production today); refusing IL there would stop Israeli sales, and adding 18% would re-price production. Freelancer subscriptions are never re-taxed either.
+3. **The switch sends the item's own rates** (`LivePlan.taxRateIds`, read from Stripe), not a recomputed rate: what Checkout put there stays. Nothing is sent for an item with none, so non-Israeli switches are byte-for-byte as before.
+4. **Re-tax runs before the new country is saved**, so a failure is seen again: transient Stripe errors answer 500 (Stripe redelivers), a refusal is recorded `STRIPE_RETAX_FAILED`, a missing VAT rate `STRIPE_ISRAEL_VAT_RATE_MISSING` (operator resends after the fix). An item already right is left alone.
+5. **Idempotency key** `mut750-retax-<sub>-<country>-<minute>` (the plan said `<sub>-<country>`; the minute lets IL→JO→IL within 24 h apply).
+6. **`vatRate`** is published whenever billing-countries.json sets one (not tied to `PLAN_CHECKOUT`); the portal decides when to show it.
+7. **Left for the UI half:** the price / VAT / total lines in `BillingPlanPicker` (AC4) and the QA flows.

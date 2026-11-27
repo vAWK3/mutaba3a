@@ -737,6 +737,12 @@ export const BillingOverviewSchema = z
     plans: z.array(BillingPlanSchema).optional(),
     /** MUT-702 Part B: the address saved on the person's billing account, to prefill the form; null with none. Additive since 1.146.0-mut702b. */
     billingAddress: z.union([BillingAddressSchema, z.null()]).optional(),
+    /**
+     * MUT-750 (ADR-290): the VAT added on top for an Israeli billing address (billing-countries.json `vatRates.IL`), so
+     * the plan picker shows price, VAT and total before Continue with no rate written in a client; Stripe rounds per
+     * line half-up in minor units (3900 → 702). Null when none is configured (Israel is then not sold). Additive since 1.156.0-mut750.
+     */
+    vatRate: z.union([z.object({ country: z.literal('IL'), percent: z.number() }), z.null()]).optional(),
   })
   .openapi('BillingOverview');
 

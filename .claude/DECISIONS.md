@@ -7357,3 +7357,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** `signup_reviews`, `PENDING_REVIEW`, `ACCOUNT_UNDER_REVIEW` and the digest module stay until a cleanup ticket. Turning the flag off restores the review for new sign-ups.
 
+---
+
+## ADR-290: The Israeli VAT Follows the Item Through Every Change and the Address Through Every Move (MUT-750 slice A; amends ADR-288 decision 4)
+
+**Status:** Accepted (2026-11-27; Basel approved the MUT-750 plan with every default answer).
+
+**Context:** ADR-288 puts a fixed Stripe tax rate on an Israeli plan's item at Checkout and says the tax follows a new address. With a fixed rate that is only true if something moves it, and an item update that changes the price must not lose it.
+
+**Decision:**
+1. One rule, `taxRatesFor(country, rateId)`: Israel → the Israeli VAT rate on the item with Stripe Tax off; elsewhere → no rate, Stripe Tax on; Israel with no rate → not sold.
+2. Every item update that sets a price (the yearly switch now, MUT-734's plan change next) sends the item's tax rates explicitly.
+3. `customer.updated` with an address that crossed Israel's border re-taxes each Solo/Business/Firm subscription that still invoices, from the next invoice, before the new country is saved (so a failure is retried).
+4. The legacy Freelancer plan keeps Stripe Tax until MUT-707 moves its payers (Q2). Israel means the billing address's country only (Q3).
+5. `GET /v1/billing` publishes the rate (`vatRate`), so no client writes 18.
+
+**Consequences:** Tax documents per Israeli payment are MUT-776 (slice B).

@@ -72,6 +72,7 @@ describe('PlanGateway.planOf', () => {
       couponIds: ['mtb3a_stay_monthly_50'],
       pause: { from: new Date('2026-09-21T08:53:20.000Z'), resumesAt: new Date(1_795_000_000 * 1000) },
       automaticTax: true,
+      taxRateIds: [],
       managedBySchedule: false,
     });
     expect(seen.map(route)).toEqual(['GET /v1/subscriptions/sub_1']);
@@ -363,5 +364,41 @@ describe('PlanGateway.retryPayment (MUT-533 D5)', () => {
         : { status: 200, body: { id: 'in_1', object: 'invoice', hosted_invoice_url: 'https://invoice.stripe.com/i/acct_1/in_1' } },
     );
     expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'needs-action', hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/in_1' });
+  });
+});
+
+describe('MUT-750 (ADR-290): the Israeli VAT survives every item change', () => {
+  const ilItem = { id: 'si_1', current_period_end: 1_823_000_000, price: { id: 'price_y' }, tax_rates: [{ id: 'txr_il', object: 'tax_rate', percentage: 18 }] };
+
+  it("planOf reads the item's tax rates", async () => {
+    const { gateway } = gatewayWith(() => ({ status: 200, body: subscription({ automatic_tax: { enabled: false }, items: { object: 'list', data: [{ ...ilItem, price: { id: 'price_m', lookup_key: 'solo_list_monthly_ils', currency: 'ils', unit_amount: 3900, product: 'prod_S', tax_behavior: 'exclusive' } }] } }) }));
+    expect(await gateway.planOf('sub_1')).toMatchObject({ taxRateIds: ['txr_il'], automaticTax: false });
+  });
+
+  it("the yearly switch sends the item's rates explicitly; none when it has none", async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: subscription({ items: { object: 'list', data: [ilItem] } }) }));
+    await gateway.switchToYearly({ ...SWITCH, taxRates: ['txr_il'] });
+    expect(seen[0]!.form.get('items[0][tax_rates][0]')).toBe('txr_il');
+    await gateway.switchToYearly(SWITCH);
+    expect([...seen[1]!.form.keys()].some((k) => k.includes('tax_rates'))).toBe(false);
+  });
+
+  it('retax into Israel: the rate on the item, Stripe Tax off, no proration, keyed on the country', async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: subscription() }));
+    await gateway.retax({ subscriptionId: 'sub_1', itemId: 'si_1', country: 'IL', taxRates: ['txr_il'], automaticTax: false });
+    const call = seen[0]!;
+    expect(route(call)).toBe('POST /v1/subscriptions/sub_1');
+    expect(call.form.get('items[0][id]')).toBe('si_1');
+    expect(call.form.get('items[0][tax_rates][0]')).toBe('txr_il');
+    expect(call.form.get('automatic_tax[enabled]')).toBe('false');
+    expect(call.form.get('proration_behavior')).toBe('none');
+    expect(call.headers.get('idempotency-key')).toMatch(/^mut750-retax-sub_1-IL-\d+$/);
+  });
+
+  it('retax out of Israel: the rate cleared and Stripe Tax on', async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: subscription() }));
+    await gateway.retax({ subscriptionId: 'sub_1', itemId: 'si_1', country: 'JO', taxRates: [], automaticTax: true });
+    expect(seen[0]!.form.get('items[0][tax_rates]')).toBe('');
+    expect(seen[0]!.form.get('automatic_tax[enabled]')).toBe('true');
   });
 });
