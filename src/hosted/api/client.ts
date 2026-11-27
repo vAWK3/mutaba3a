@@ -835,6 +835,8 @@ export const api = {
   setActiveBusinesses: (organizationIds: string[]) => request<Schemas['ActiveBusinesses']>('PUT', '/v1/billing/active-businesses', { body: { organizationIds } }),
   /** MUT-755 (ADR-296): the pilot Welcome was closed (Later, its action or ✕); idempotent, the first instant is kept. */
   pilotWelcomeSeen: () => request<Schemas['PilotWelcomeSeen']>('POST', '/v1/billing/pilot-welcome'),
+  /** MUT-777 (ADR-333): the tester's one yes to watched sessions; idempotent, the first yes is kept. */
+  pilotWatchConsent: () => request<Schemas['PilotWatchConsent']>('POST', '/v1/billing/pilot-watch-consent'),
   /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */
   soloTrialOffered: () => request<Schemas['SoloTrialOffer']>('POST', '/v1/billing/solo-trial/offered'),
 

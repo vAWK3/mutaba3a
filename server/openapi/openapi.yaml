@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.200.0-mut753
+  version: 1.201.0-mut777
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -12832,6 +12832,10 @@ components:
           type: string
           nullable: true
           format: date-time
+        watchConsentAt:
+          type: string
+          nullable: true
+          format: date-time
         pricesExpected:
           type: boolean
         plans:
@@ -13020,6 +13024,14 @@ components:
           format: date-time
       required:
         - welcomeSeenAt
+    PilotWatchConsent:
+      type: object
+      properties:
+        watchConsentAt:
+          type: string
+          format: date-time
+      required:
+        - watchConsentAt
     YearlySwitchPreview:
       type: object
       properties:
@@ -14792,6 +14804,10 @@ components:
                         - email
                         - displayName
                     - nullable: true
+                watchConsentAt:
+                  type: string
+                  nullable: true
+                  format: date-time
               required:
                 - cohort
                 - startedAt
@@ -15156,6 +15172,8 @@ components:
         referredByUserId:
           type: string
           format: uuid
+        watchConsent:
+          type: boolean
       required:
         - tier
         - reason
@@ -15688,6 +15706,8 @@ components:
         referredByUserId:
           type: string
           format: uuid
+        watchConsent:
+          type: boolean
       required:
         - tier
         - reason
@@ -31310,6 +31330,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PilotWelcomeSeen"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/pilot-watch-consent:
+    post:
+      tags:
+        - Billing
+      summary: The pilot tester said yes to watched sessions
+      description: "MUT-777 (ADR-333): the tester’s one yes, given when they join the pilot (the Welcome), to being watched and recorded in later watched sessions. Stored on the person with its instant; `GET /v1/billing` `pilot.watchConsentAt` and the operator’s Accounts row show it. Idempotent: the first yes is kept. No yes: the pilot works the same, unwatched. PostHog session replay stays off. Additive since 1.201.0-mut777."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PilotWatchConsent"
         "401":
           description: No valid session
           content:

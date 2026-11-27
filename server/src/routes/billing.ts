@@ -53,7 +53,7 @@ import type { Logger } from '../logger.js';
 import { ownedProfilesOf, profileTypeOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
-import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PilotWelcomeSeenSchema, PortalSessionRequestSchema, ProvisionCustomerParamSchema } from '../schemas.js';
+import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PilotWatchConsentSchema, PilotWelcomeSeenSchema, PortalSessionRequestSchema, ProvisionCustomerParamSchema } from '../schemas.js';
 
 /**
  * MUT-362 (plan §2.4, ADR-170): Settings › Billing. Signed in only, outside PORTAL_ROUTES (the signed-out portal has
@@ -65,6 +65,7 @@ import { ActivationCheckoutRequestSchema, BillingOverviewSchema, BillingRedirect
  *   POST /v1/billing/portal-session    a Stripe Customer Portal URL for the linked customer
  *   POST /v1/billing/card-retry        MUT-533 (D5): back from the card form, pay the past-due invoice on the new card
  *   POST /v1/billing/pilot-welcome     MUT-752 (ADR-296): the pilot Welcome was closed (once per person)
+ *   POST /v1/billing/pilot-watch-consent  MUT-777 (ADR-333): the tester's one yes to watched sessions
  */
 export const BILLING_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
   'GET /v1/billing',
@@ -72,6 +73,7 @@ export const BILLING_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new 
   'POST /v1/billing/portal-session',
   'POST /v1/billing/card-retry',
   'POST /v1/billing/pilot-welcome',
+  'POST /v1/billing/pilot-watch-consent',
 ]);
 
 /** Each session press can cost Stripe calls; ten a minute is far above any person's need. */
@@ -434,6 +436,31 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/billing/pilot-watch-consent',
+      tags: ['Billing'],
+      summary: 'The pilot tester said yes to watched sessions',
+      description:
+        'MUT-777 (ADR-333): the tester’s one yes, given when they join the pilot (the Welcome), to being watched and recorded in later ' +
+        'watched sessions. Stored on the person with its instant; `GET /v1/billing` `pilot.watchConsentAt` and the operator’s Accounts row show it. ' +
+        'Idempotent: the first yes is kept. No yes: the pilot works the same, unwatched. PostHog session replay stays off. Additive since 1.201.0-mut777.',
+      security: SESSION_ONLY,
+      responses: {
+        200: { description: 'Recorded', content: { 'application/json': { schema: PilotWatchConsentSchema } } },
+        401: refusedResponses[401],
+        403: refusedResponses[403],
+      },
+    }),
+    async (c) => {
+      const { user } = c.get('identity');
+      const yes = await store.billing.markPilotWatchConsent(user.id, c.get('now')());
+      if (!yes) throw new ApiError('UNAUTHENTICATED', 'No valid session');
+      return c.json({ watchConsentAt: yes.toISOString() }, 200);
+    },
+  );
+
   return app;
 }
 
@@ -529,7 +556,11 @@ async function pilotView(store: LedgerStore, userId: string, owned: Awaited<Retu
   const pilot = pilotOf(pilotFactsOf(userId, owned), now);
   if (!pilot) return null;
   // MUT-758 (ADR-298): the start and the first scan and invoice, so web and phone send "first" events once, with timing.
-  const [welcomeSeenAt, firsts] = await Promise.all([store.billing.pilotWelcomeSeenOf(userId), store.usage.firstEventsOf([userSubjectKey(userId)], ['SCAN', 'DOCUMENT_ISSUED'])]);
+  const [welcomeSeenAt, watchConsentAt, firsts] = await Promise.all([
+    store.billing.pilotWelcomeSeenOf(userId),
+    store.billing.pilotWatchConsentOf(userId),
+    store.usage.firstEventsOf([userSubjectKey(userId)], ['SCAN', 'DOCUMENT_ISSUED']),
+  ]);
   const firstOf = (kind: 'SCAN' | 'DOCUMENT_ISSUED') => firsts.find((f) => f.kind === kind)?.firstAt.toISOString() ?? null;
   return {
     cohort: pilot.cohort,
@@ -538,6 +569,8 @@ async function pilotView(store: LedgerStore, userId: string, owned: Awaited<Retu
     welcomeSeenAt: welcomeSeenAt?.toISOString() ?? null,
     firstScanAt: firstOf('SCAN'),
     firstInvoiceAt: firstOf('DOCUMENT_ISSUED'),
+    // MUT-777 (ADR-333): the tester's yes to watched sessions.
+    watchConsentAt: watchConsentAt?.toISOString() ?? null,
     pricesExpected: PILOT_PRICES_EXPECTED,
     plans: pilotPlansOf(PILOT_PRICES),
   };

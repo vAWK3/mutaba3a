@@ -245,7 +245,7 @@ export function accountActions(options: AccountActionOptions) {
     // MUT-757 (ADR-297): the first-scan and first-invoice ticks, one grouped read per page, only with the Pilot filter.
     const milestones = query.pilot ? await milestonesOf(page.items.map(({ user }) => user.id)) : null;
     return {
-      data: page.items.map(({ user, features, pilotGrants }) => {
+      data: page.items.map(({ user, features, pilotGrants, pilotWatchConsentAt }) => {
         const chip = pilotChipOf(pilotGrants);
         return {
           id: user.id,
@@ -255,7 +255,9 @@ export function accountActions(options: AccountActionOptions) {
           operator: user.operatorAt !== null,
           lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
           features,
-          pilot: chip ? { cohort: chip.cohort, startedAt: chip.startedAt.toISOString(), endsAt: chip.endsAt.toISOString(), referredBy: chip.referredBy } : null,
+          pilot: chip
+            ? { cohort: chip.cohort, startedAt: chip.startedAt.toISOString(), endsAt: chip.endsAt.toISOString(), referredBy: chip.referredBy, watchConsentAt: pilotWatchConsentAt?.toISOString() ?? null }
+            : null,
           ...(milestones ? { milestones: milestones.get(user.id) ?? { firstScanAt: null, firstInvoiceAt: null } } : {}),
         };
       }),

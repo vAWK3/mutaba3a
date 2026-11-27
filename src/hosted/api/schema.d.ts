@@ -19593,6 +19593,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/pilot-watch-consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The pilot tester said yes to watched sessions
+         * @description MUT-777 (ADR-333): the tester’s one yes, given when they join the pilot (the Welcome), to being watched and recorded in later watched sessions. Stored on the person with its instant; `GET /v1/billing` `pilot.watchConsentAt` and the operator’s Accounts row show it. Idempotent: the first yes is kept. No yes: the pilot works the same, unwatched. PostHog session replay stays off. Additive since 1.201.0-mut777.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PilotWatchConsent"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/yearly-switch": {
         parameters: {
             query?: never;
@@ -35062,6 +35119,8 @@ export interface components {
             firstScanAt?: string | null;
             /** Format: date-time */
             firstInvoiceAt?: string | null;
+            /** Format: date-time */
+            watchConsentAt?: string | null;
             pricesExpected: boolean;
             plans: {
                 /** @enum {string} */
@@ -35134,6 +35193,10 @@ export interface components {
         PilotWelcomeSeen: {
             /** Format: date-time */
             welcomeSeenAt: string;
+        };
+        PilotWatchConsent: {
+            /** Format: date-time */
+            watchConsentAt: string;
         };
         YearlySwitchPreview: {
             amountDue: number;
@@ -35808,6 +35871,8 @@ export interface components {
                     email: string;
                     displayName: string;
                 } | unknown;
+                /** Format: date-time */
+                watchConsentAt?: string | null;
             } | unknown;
             milestones?: {
                 /** Format: date-time */
@@ -35930,6 +35995,7 @@ export interface components {
             cohort?: string;
             /** Format: uuid */
             referredByUserId?: string;
+            watchConsent?: boolean;
         };
         RevokeEntitlementGrantResponse: {
             grant: components["schemas"]["EntitlementGrant"];
@@ -36114,6 +36180,7 @@ export interface components {
             cohort?: string;
             /** Format: uuid */
             referredByUserId?: string;
+            watchConsent?: boolean;
         };
         EntitlementGrantList: {
             grants: components["schemas"]["EntitlementGrant"][];

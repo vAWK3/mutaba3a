@@ -147,6 +147,7 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
   const [day, setDay] = useState(() => presetDay(GRANT_PRESET_DAYS[0], new Date()));
   const [cohort, setCohort] = useState('');
   const [accountant, setAccountant] = useState('');
+  const [watchConsent, setWatchConsent] = useState(false);
   const [errors, setErrors] = useState<{ reason?: string; day?: string; cohort?: string; accountant?: string }>({});
   const [refusal, setRefusal] = useState<string | null>(null);
 
@@ -174,7 +175,7 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
         setErrors({ accountant: t('hosted.operator.pilot.accountantUnknown') });
         return;
       }
-      const pilot = cohort.trim() ? { cohort: cohort.trim(), ...(referredByUserId ? { referredByUserId } : {}) } : {};
+      const pilot = cohort.trim() ? { cohort: cohort.trim(), ...(referredByUserId ? { referredByUserId } : {}), ...(watchConsent ? { watchConsent: true } : {}) } : {};
       const grant = await run.run(() => api.createOperatorBillingGrant(account.id, { tier, reason: reason.trim(), ...(valid.expiresAt ? { expiresAt: valid.expiresAt } : {}), ...pilot }));
       if (!grant) return;
       refreshOperatorBilling(queryClient, account.id);
@@ -316,6 +317,13 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
           />
           {errors.accountant && <p className="form-error">{errors.accountant}</p>}
         </div>
+        {/* MUT-777 (ADR-333): the tester's yes to watched sessions, given when they joined; only on a pilot. */}
+        {cohort.trim() !== '' && (
+          <label className="hp-operator-consent">
+            <input type="checkbox" checked={watchConsent} onChange={(event) => setWatchConsent(event.target.checked)} />
+            <span>{t('hosted.operator.pilot.consentLabel')}</span>
+          </label>
+        )}
         {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
         {refusal && (
           <div className="hp-banner hp-banner-error" role="alert">
