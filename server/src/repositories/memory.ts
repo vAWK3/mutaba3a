@@ -50,6 +50,7 @@ import type {
   BillingRepository,
   EmailRepository,
   BillingSubscriptionRecord,
+  BillingPlanChangeRecord,
   BillingRetentionEventRecord,
   SaveBillingAccountConflict,
   EntitlementGrantRecord,
@@ -344,8 +345,14 @@ export interface LocalSnapshot {
  */
 export class MemoryLedgerStore implements LedgerStore {
   /** MUT-731 (ADR-284): `starterPlan` is the server's STARTER_PLAN (BillingRepository.starterPlan). Absent = off. */
-  constructor(options: { starterPlan?: boolean } = {}) {
+  constructor(options: { starterPlan?: boolean; paidBusinessCaps?: boolean } = {}) {
     if (options.starterPlan) this.setStarterPlan(true);
+    if (options.paidBusinessCaps) this.setPaidBusinessCaps(true);
+  }
+
+  /** MUT-734: turns PAID_BUSINESS_CAPS on or off for this store. */
+  setPaidBusinessCaps(on: boolean): void {
+    (this.billing as { paidBusinessCaps: boolean }).paidBusinessCaps = on;
   }
 
   /** MUT-731: turns STARTER_PLAN on or off for this store (tests switch it on an existing store). */
@@ -413,6 +420,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly billingAccounts = new Map<string, BillingAccountRecord>();
   private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
   private readonly retentionEvents = new Map<string, BillingRetentionEventRecord>();
+  /** MUT-734: billing_plan_changes. */
+  private readonly planChanges = new Map<string, BillingPlanChangeRecord>();
   private readonly grants = new Map<string, EntitlementGrantRecord>();
   /**
    * MUT-433, keyed `${userId}:${feature}`. Deliberately not in snapshot()/restore() (eng review C5): the portal's
@@ -4781,6 +4790,7 @@ export class MemoryLedgerStore implements LedgerStore {
     }
     for (const [key, review] of this.reviews) if (review.userId === id) this.reviews.delete(key);
     for (const [key, event] of this.retentionEvents) if (event.userId === id) this.retentionEvents.delete(key);
+    for (const [key, change] of this.planChanges) if (change.userId === id) this.planChanges.delete(key);
     this.trialStarts.delete(id);
     this.people.delete(id);
   }
@@ -4874,6 +4884,7 @@ export class MemoryLedgerStore implements LedgerStore {
 
   readonly billing: BillingRepository = {
     starterPlan: false,
+    paidBusinessCaps: false,
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = new Set(ownerUserIds);
       const orgs = new Set(organizationIds);
@@ -5109,6 +5120,28 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!row) return;
       if ('processedAt' in outcome) Object.assign(row, { processedAt: outcome.processedAt, error: null });
       else row.error = outcome.error.slice(0, STRIPE_EVENT_ERROR_MAX);
+    },
+    planChangesOf: async (userId) =>
+      [...this.planChanges.values()]
+        .filter((c) => c.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+        .map((c) => ({ ...c })),
+    recordPlanChange: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('billing_plan_changes.userId');
+      if (input.state === 'SCHEDULED' && [...this.planChanges.values()].some((c) => c.userId === input.userId && c.state === 'SCHEDULED')) throw new StateConflict('billing_plan_change', 'SCHEDULED');
+      const { at, audit, ...fields } = input;
+      const change: BillingPlanChangeRecord = { id: randomUUID(), ...fields, createdAt: at, updatedAt: at };
+      this.planChanges.set(change.id, change);
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { ...change };
+    },
+    settlePlanChange: async (id, state, at, options = {}) => {
+      const change = this.planChanges.get(id);
+      if (!change || (change.state !== 'SCHEDULED' && change.state !== 'PENDING')) return null;
+      Object.assign(change, { state, updatedAt: at });
+      if (options.clearStarterChoice) this.starterChoices.delete(change.userId);
+      for (const event of options.audit ?? []) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { ...change };
     },
     retentionEventsOf: async (userId) =>
       [...this.retentionEvents.values()]

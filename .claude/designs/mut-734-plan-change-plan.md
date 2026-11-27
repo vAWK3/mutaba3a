@@ -155,3 +155,17 @@ New ADR "Plan changes: up now with Stripe proration, down by a provider schedule
 4. **Phone:** read-only (shows current and scheduled plan), or link out to the web where store rules allow? [Default: read-only, as Q4 on MUT-731.]
 5. **A launch-offer coupon** (MUT-525/703) on the old plan: carried to the new plan on upgrade, or dropped? [Default: dropped on upgrade; kept on a downgrade until its own end.]
 6. **Upgrade on a yearly subscription** charges a large pro-rata at once: fine, or ask for a confirmation line naming the amount? [Default: the preview already names the amount; no extra step.]
+
+## Build decisions (server half, 2026-11-27, built alone with the approved defaults)
+
+1. **ADR-291**, API **1.157.0-mut734**, migration **`20261127180000_mut734_plan_changes`** (after main's newest, `20261127150000_mut763_accountant_provisioning`; re-stamp at merge if the accountant channel adds a later one).
+2. **One table, no mirrored schedule columns.** The scheduled change lives in `billing_plan_changes` (state SCHEDULED, one per person by a partial unique index); `GET /v1/billing scheduledChange` reads it, and the sync moves it to APPLIED when the subscription's tier reaches the target (or, for Starter, when it ends). The three `billing_subscriptions` columns of §3 were not added: they would duplicate that row and need the schedule expanded on every sync. The nightly reconcile still catches a missed boundary (it syncs the same way).
+3. **The Stripe calls live on `PlanGateway`** (beside the yearly switch they copy), not on `BillingProvider`: the route already reaches the plan door there; moving them behind the provider port waits for a second provider.
+4. **A declined upgrade answers 409 CONFLICT `PAYMENT_FAILED`** (the yearly switch's answer), not 402: 402 is the lapse gate's. The change is recorded FAILED.
+5. **A cancelling subscription is refused `CANCELLING`** (keep the plan first); not in the plan's list, the conservative reading.
+6. **To Starter** cancels with Stripe feedback `other` and the comment "Moved to Starter (MUT-734)".
+7. **Preview never needs the pick**: it answers `mustChoose` and the owned businesses; only the confirm refuses 422 `ACTIVE_BUSINESSES_REQUIRED`.
+8. **`PAID_BUSINESS_CAPS`** is a store switch like `STARTER_PLAN`; the cap pass now keeps one cap per owner (it shared one across owners, harmless while only Starter was capped).
+9. **Mail idempotency** `plan-change:<user>:<plan>:<effectiveAt>` (the plan said per change id; the row is written in the same request, so either is once per change).
+10. **Left for the UI half:** the Change-plan pane, the cancel flow's "Move to Starter instead", the scheduled line with Undo, the pending "Waiting for the payment" line, the operator's Plan history list, analytics events, i18n, COMPONENT_REGISTRY, and the QA flows. The phone shows `scheduledChange` only (MUT-706).
+

@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Change plan: up now, down at the period end, to Starter (MUT-734 server half, ADR-291, API 1.157.0-mut734)
+
+Epic MUT-701. Plan `.claude/designs/mut-734-plan-change-plan.md` (approved with defaults). Server only; the portal's Change-plan pane, the cancel flow's "Move to Starter instead", the scheduled line with Undo and the operator's Plan history list come with the UI half. Behind `PLAN_CHECKOUT` (plan changes) and `PAID_BUSINESS_CAPS` (the paid plans' business counts), both off.
+
+### Added
+- Migration `20261127180000_mut734_plan_changes` (additive: one table `billing_plan_changes`, CHECKs on kind/state/tiers, a partial unique index for one SCHEDULED per person, ON DELETE CASCADE; in the closure purge list). **Merging it restarts the shared dev API.**
+- `billing/plan-change.ts`: `planChangeOf` (upgrade / downgrade / to_starter, or a refusal: NOT_SUBSCRIBED, SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING, LEGACY_PLAN, ACTIVE_BUSINESSES_REQUIRED), `planChangeOptionsOf`, the views.
+- `POST /v1/billing/plan-change/preview`, `POST /v1/billing/plan-change` (200 applied / 202 pending / 200 scheduled), `DELETE /v1/billing/plan-change` (undo). Up: Stripe's proration at the previewed date (≤15 min), `always_invoice` + `pending_if_incomplete`, the item's tax rates kept (ADR-290). Down: a Stripe subscription schedule (two phases, then released). To Starter: cancel at the period end + `starterChosenAt` now. Kept businesses stored at scheduling. Audited `billing.plan_change_*`; mail `plan-change-scheduled` (ar, en).
+- `PlanGateway.changePlan`, `scheduleDowngrade`, `releaseSchedule`; `LivePlan.scheduleId`.
+- The sync settles PENDING/SCHEDULED changes to APPLIED when the subscription's tier is the target's (a move to Starter when it ends).
+- `GET /v1/billing`: `scheduledChange`, `pendingChange`, `planChange { canUpgradeTo, canDowngradeTo }` (additive); `GET /v1/operator/accounts/{id}` `planHistory`.
+- `PAID_BUSINESS_CAPS` (Terraform `paid_business_caps`, default off): Solo 1 / Business 3 / Firm 6 businesses active (the rest read-only until picked) and `POST /v1/profiles` past the count is 409 PLAN_LIMIT businesses. The business-cap pass now keeps one cap per owner.
+
+### Unchanged
+- The interval is kept (Q1); the legacy Freelancer and founder plans are refused LEGACY_PLAN until MUT-707 (Q3); the phone shows only (Q4).
+
+---
+
 ## [Unreleased] - 2026-11-27 — Israeli VAT follows every change to an Israeli plan (MUT-750 slice A, server half, ADR-290, API 1.156.0-mut750)
 
 Epic MUT-566. Plan `.claude/designs/mut-750-israeli-vat-plan.md` (approved with defaults; slice B, the tax documents, is MUT-776). Server only; the portal's price / VAT / total lines read the new `vatRate`. No migration, no new env.

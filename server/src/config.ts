@@ -172,6 +172,12 @@ const envSchema = z.object({
    */
   PLAN_CHECKOUT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-734 (ADR-291; MUT-704 AC1/AC6): Solo, Business and Firm enforce their business count, as Starter does: past it
+   * the person picks which stay active (the rest read-only) and creating another is 409 PLAN_LIMIT businesses. Only
+   * exactly "true" turns it on; off = only Starter's count is enforced (today). On with the pricing release (plan Q2).
+   */
+  PAID_BUSINESS_CAPS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).

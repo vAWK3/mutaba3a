@@ -131,6 +131,13 @@ export const HARD_CAP_PLANS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PL
  */
 export const ENFORCED_BUSINESS_CAPS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN]);
 
+/** MUT-734 (ADR-291): with PAID_BUSINESS_CAPS on, the paid plans' business counts are enforced too (legacy Freelancer never). */
+const ENFORCED_WITH_PAID_CAPS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN, 'solo', 'business', 'firm']);
+
+export function enforcedBusinessCapsOf(paidBusinessCaps: boolean): ReadonlySet<string> {
+  return paidBusinessCaps ? ENFORCED_WITH_PAID_CAPS : ENFORCED_BUSINESS_CAPS;
+}
+
 /**
  * MUT-702 Part B (ADR-288): each plan's list prices by lookup key, `{plan}_list_{monthly|yearly}_{ils|usd}`. The amounts
  * live in the payment provider's catalog, written only by the catalog script (scripts/stripe-plans.ts).

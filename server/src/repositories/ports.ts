@@ -2708,6 +2708,41 @@ export interface PastDueCandidate {
 /** MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
 export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH' | 'COMEBACK_OFFERED';
 
+/** MUT-734 (ADR-291): what a plan change does. STARTER is a target only, never a stored subscription tier. */
+export type BillingPlanChangeKindRecord = 'UPGRADE' | 'DOWNGRADE' | 'TO_STARTER';
+/** APPLIED: in force; PENDING: an upgrade waiting for the bank; SCHEDULED: waits for the period end; UNDONE; FAILED. */
+export type BillingPlanChangeStateRecord = 'APPLIED' | 'PENDING' | 'SCHEDULED' | 'UNDONE' | 'FAILED';
+
+/** MUT-734 (ADR-291): one plan change a person asked for, the operator's plan history and the scheduled change. */
+export interface BillingPlanChangeRecord {
+  id: string;
+  userId: string;
+  stripeSubscriptionId: string;
+  fromTier: string;
+  toTier: string;
+  kind: BillingPlanChangeKindRecord;
+  state: BillingPlanChangeStateRecord;
+  effectiveAt: Date;
+  amountMinor: number | null;
+  currency: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RecordPlanChangeInput {
+  userId: string;
+  stripeSubscriptionId: string;
+  fromTier: string;
+  toTier: string;
+  kind: BillingPlanChangeKindRecord;
+  state: BillingPlanChangeStateRecord;
+  effectiveAt: Date;
+  amountMinor: number | null;
+  currency: string | null;
+  at: Date;
+  audit: AuditEventInput[];
+}
+
 export interface BillingRetentionEventRecord {
   id: string;
   userId: string;
@@ -2743,6 +2778,11 @@ export interface BillingRepository {
    * (billing/coverage.ts reads it here, so every reader of an entitlement, routes and jobs alike, agrees). Not a call.
    */
   readonly starterPlan: boolean;
+  /**
+   * MUT-734 (ADR-291, MUT-704 AC1/AC6): the server's PAID_BUSINESS_CAPS. On, Solo, Business and Firm keep their plan's
+   * business count active (the rest read-only until picked) and new businesses past it are refused, as Starter's are.
+   */
+  readonly paidBusinessCaps: boolean;
   /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
   factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
   /** MUT-731: every business profile the owners created (their built-in personal profile left out), with Malafat's state. */
@@ -2831,6 +2871,18 @@ export interface BillingRepository {
   releaseRetentionEvent(id: string): Promise<boolean>;
   /** MUT-532 (D7): a pause undone or resumed early, a cancel taken back. Null when unknown. */
   endRetentionEventEarly(id: string, at: Date): Promise<BillingRetentionEventRecord | null>;
+  /** MUT-734 (ADR-291): the person's plan changes, newest first (the operator's plan history, the scheduled change). */
+  planChangesOf(userId: string): Promise<BillingPlanChangeRecord[]>;
+  /**
+   * MUT-734: records a change with its audit in one transaction. StateConflict('billing_plan_change', 'SCHEDULED') when
+   * the person already has a SCHEDULED change (undo it first); ForeignKeyViolation on an unknown user.
+   */
+  recordPlanChange(input: RecordPlanChangeInput): Promise<BillingPlanChangeRecord>;
+  /**
+   * MUT-734: moves a change to `state` (only from SCHEDULED or PENDING; null otherwise, or when unknown). `clearStarterChoice`
+   * (undoing a move to Starter) also clears the person's `starterChosenAt`, in the same transaction.
+   */
+  settlePlanChange(id: string, state: BillingPlanChangeStateRecord, at: Date, options?: { clearStarterChoice?: boolean; audit?: AuditEventInput[] }): Promise<BillingPlanChangeRecord | null>;
   /** MUT-360: records a webhook event; `alreadyProcessed` only once `finishStripeEvent` stored a processedAt. */
   beginStripeEvent(input: { id: string; type: string; at: Date }): Promise<{ alreadyProcessed: boolean }>;
   /** An error leaves processedAt null, so a redelivery is handled again. */

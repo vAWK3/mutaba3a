@@ -64,6 +64,10 @@ export const BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> =
   'POST /v1/billing/cancellation',
   'DELETE /v1/billing/cancellation',
   'POST /v1/billing/stay-offer',
+  // MUT-734 (routes/billing-plan-change.ts): changing between plans.
+  'POST /v1/billing/plan-change/preview',
+  'POST /v1/billing/plan-change',
+  'DELETE /v1/billing/plan-change',
 ]);
 
 export interface BillingPlanRouteOptions {

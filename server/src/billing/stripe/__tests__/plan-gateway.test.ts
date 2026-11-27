@@ -73,6 +73,7 @@ describe('PlanGateway.planOf', () => {
       pause: { from: new Date('2026-09-21T08:53:20.000Z'), resumesAt: new Date(1_795_000_000 * 1000) },
       automaticTax: true,
       taxRateIds: [],
+      scheduleId: null,
       managedBySchedule: false,
     });
     expect(seen.map(route)).toEqual(['GET /v1/subscriptions/sub_1']);
@@ -400,5 +401,47 @@ describe('MUT-750 (ADR-290): the Israeli VAT survives every item change', () => 
     await gateway.retax({ subscriptionId: 'sub_1', itemId: 'si_1', country: 'JO', taxRates: [], automaticTax: true });
     expect(seen[0]!.form.get('items[0][tax_rates]')).toBe('');
     expect(seen[0]!.form.get('automatic_tax[enabled]')).toBe('true');
+  });
+});
+
+describe('MUT-734 (ADR-291): plan changes through Stripe', () => {
+  it('an upgrade moves the item at the proration date, charged now, keeping its tax rates, keyed', async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: subscription() }));
+    expect(await gateway.changePlan({ ...SWITCH, yearlyPriceId: 'price_business_m', taxRates: ['txr_il'], plan: 'business' })).toMatchObject({ outcome: 'switched' });
+    const call = seen[0]!;
+    expect(route(call)).toBe('POST /v1/subscriptions/sub_1');
+    expect(call.form.get('items[0][price]')).toBe('price_business_m');
+    expect(call.form.get('items[0][tax_rates][0]')).toBe('txr_il');
+    expect(call.form.get('proration_behavior')).toBe('always_invoice');
+    expect(call.form.get('payment_behavior')).toBe('pending_if_incomplete');
+    expect(call.form.get('metadata[mutaba3a_plan]')).toBe('business');
+    expect(call.headers.get('idempotency-key')).toBe(`mut734-up-sub_1-price_business_m-${PRORATION.getTime() / 1000}`);
+  });
+
+  it('a downgrade schedules two phases: the current price to the period end, then the lower one, released after', async () => {
+    const END = new Date('2026-12-15T00:00:00Z');
+    const { gateway, seen } = gatewayWith((request) =>
+      request.path === '/v1/subscription_schedules'
+        ? { status: 200, body: { id: 'sub_sched_1', object: 'subscription_schedule', phases: [{ start_date: 1_790_000_000, end_date: 1_792_000_000 }] } }
+        : { status: 200, body: { id: 'sub_sched_1', object: 'subscription_schedule', phases: [] } },
+    );
+    expect(await gateway.scheduleDowngrade({ subscriptionId: 'sub_1', currentPriceId: 'price_business_m', targetPriceId: 'price_solo_m', interval: 'month', periodEnd: END, plan: 'solo', taxRates: [] })).toEqual({ scheduleId: 'sub_sched_1' });
+    expect(seen.map(route)).toEqual(['POST /v1/subscription_schedules', 'POST /v1/subscription_schedules/sub_sched_1']);
+    expect(seen[0]!.form.get('from_subscription')).toBe('sub_1');
+    const phases = seen[1]!.form;
+    expect(phases.get('end_behavior')).toBe('release');
+    expect(phases.get('phases[0][items][0][price]')).toBe('price_business_m');
+    expect(phases.get('phases[0][start_date]')).toBe('1790000000');
+    expect(phases.get('phases[0][end_date]')).toBe(String(END.getTime() / 1000));
+    expect(phases.get('phases[1][items][0][price]')).toBe('price_solo_m');
+    expect(phases.get('phases[1][duration][interval]')).toBe('month');
+    expect(phases.get('phases[1][metadata][mutaba3a_plan]')).toBe('solo');
+    expect([...phases.keys()].some((k) => k.includes('tax_rates'))).toBe(false);
+  });
+
+  it('undo releases the schedule', async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: { id: 'sub_sched_1', object: 'subscription_schedule' } }));
+    await gateway.releaseSchedule('sub_sched_1');
+    expect(route(seen[0]!)).toBe('POST /v1/subscription_schedules/sub_sched_1/release');
   });
 });

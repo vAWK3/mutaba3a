@@ -743,6 +743,15 @@ export const BillingOverviewSchema = z
      * line half-up in minor units (3900 → 702). Null when none is configured (Israel is then not sold). Additive since 1.156.0-mut750.
      */
     vatRate: z.union([z.object({ country: z.literal('IL'), percent: z.number() }), z.null()]).optional(),
+    /**
+     * MUT-734 (ADR-291): a downgrade or move to Starter waiting for the period end (Undo: DELETE /v1/billing/plan-change),
+     * else null. Additive since 1.157.0-mut734.
+     */
+    scheduledChange: z.union([z.object({ plan: z.string(), at: z.string().datetime(), kind: z.enum(['UPGRADE', 'DOWNGRADE', 'TO_STARTER']) }), z.null()]).optional(),
+    /** MUT-734: an upgrade waiting for the bank's approval (3-D Secure), else null. Additive since 1.157.0-mut734. */
+    pendingChange: z.union([z.object({ plan: z.string(), since: z.string().datetime() }), z.null()]).optional(),
+    /** MUT-734: where the person may move from the plan they pay for (both empty when no change is possible now). Additive since 1.157.0-mut734. */
+    planChange: z.object({ canUpgradeTo: z.array(z.string()), canDowngradeTo: z.array(z.string()) }).optional(),
   })
   .openapi('BillingOverview');
 
@@ -2060,6 +2069,20 @@ export const OperatorAccountSchema = UserSummarySchema.extend({
    * made another way. Additive since 1.155.0-mut737.
    */
   signupDomain: z.object({ domainClass: z.string().nullable(), reasons: z.array(z.string()) }).nullable(),
+  /** MUT-734 (ADR-291): the person's plan changes, newest first. Additive since 1.157.0-mut734. */
+  planHistory: z.array(
+    z.object({
+      id: z.string().uuid(),
+      kind: z.enum(['UPGRADE', 'DOWNGRADE', 'TO_STARTER']),
+      state: z.enum(['APPLIED', 'PENDING', 'SCHEDULED', 'UNDONE', 'FAILED']),
+      fromPlan: z.string(),
+      toPlan: z.string(),
+      effectiveAt: z.string().datetime(),
+      amountMinor: z.number().int().nullable(),
+      currency: z.string().nullable(),
+      createdAt: z.string().datetime(),
+    }),
+  ),
 }).openapi('OperatorAccount');
 
 export const OperatorAccountViewSchema = z.object({ account: OperatorAccountSchema, stepUpUntil: z.string().datetime().nullable() }).openapi('OperatorAccountView');

@@ -19807,6 +19807,315 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/plan-change/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a plan change (MUT-734)
+         * @description Up a rank: Stripe’s proration charged now, tax included, at `prorationAt`. Down (or to Starter): from the paid period’s end, no refund; past the target’s business count the person picks which businesses stay active (`mustChoose`). The interval is kept. Additive since 1.157.0-mut734.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PlanChangePreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description The preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PlanChangePreview"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PLAN_CHECKOUT_OFF, NOT_SUBSCRIBED (use Checkout), SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING (undo it first), LEGACY_PLAN (Freelancer and founder plans move with MUT-707), PRICES_NOT_SET, PREVIEW_EXPIRED (preview again), AMOUNT_CHANGED (nothing charged), PAYMENT_FAILED (the plan stays as it was), or NOTHING_SCHEDULED (undo) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED; `details.reason` ACTIVE_BUSINESSES_REQUIRED with `cap` and `businesses` (the person must pick which stay active) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/plan-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change plan (MUT-734)
+         * @description Up: moves the subscription to the higher plan at the preview’s `prorationAt` (at most 15 minutes old), charging Stripe’s proration at once; Stripe previews again first and an amount other than `expectedAmountDue` charges nothing. A payment the bank wants approved answers 202 `pending` with Stripe’s page; one that fails leaves the plan as it was. Down: a Stripe subscription schedule switches to the lower plan at the period end. To Starter: cancel at the period end and Starter chosen now (no read-only gap). Past the target’s business count, `activeBusinessIds` is required. Every change is recorded (`billing_plan_changes`) and audited `billing.plan_change_*`; a scheduled one is mailed. Additive since 1.157.0-mut734.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PlanChangeRequest"];
+                };
+            };
+            responses: {
+                /** @description Applied, or scheduled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PlanChangeResult"];
+                    };
+                };
+                /** @description Pending: the bank wants the person to approve the charge on `hostedInvoiceUrl` */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PlanChangeResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PLAN_CHECKOUT_OFF, NOT_SUBSCRIBED (use Checkout), SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING (undo it first), LEGACY_PLAN (Freelancer and founder plans move with MUT-707), PRICES_NOT_SET, PREVIEW_EXPIRED (preview again), AMOUNT_CHANGED (nothing charged), PAYMENT_FAILED (the plan stays as it was), or NOTHING_SCHEDULED (undo) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED; `details.reason` ACTIVE_BUSINESSES_REQUIRED with `cap` and `businesses` (the person must pick which stay active) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Undo a scheduled plan change (MUT-734)
+         * @description Before its day: a scheduled downgrade’s Stripe schedule is released (the current plan renews); a move to Starter takes the cancel back and clears the Starter choice. 409 NOTHING_SCHEDULED otherwise. Additive since 1.157.0-mut734.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Undone */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            change: components["schemas"]["PlanChange"];
+                        };
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PLAN_CHECKOUT_OFF, NOT_SUBSCRIBED (use Checkout), SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING (undo it first), LEGACY_PLAN (Freelancer and founder plans move with MUT-707), PRICES_NOT_SET, PREVIEW_EXPIRED (preview again), AMOUNT_CHANGED (nothing charged), PAYMENT_FAILED (the plan stays as it was), or NOTHING_SCHEDULED (undo) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED; `details.reason` ACTIVE_BUSINESSES_REQUIRED with `cap` and `businesses` (the person must pick which stay active) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/starter": {
         parameters: {
             query?: never;
@@ -33514,6 +33823,22 @@ export interface components {
                 country: "IL";
                 percent: number;
             } | unknown;
+            scheduledChange?: {
+                plan: string;
+                /** Format: date-time */
+                at: string;
+                /** @enum {string} */
+                kind: "UPGRADE" | "DOWNGRADE" | "TO_STARTER";
+            } | unknown;
+            pendingChange?: {
+                plan: string;
+                /** Format: date-time */
+                since: string;
+            } | unknown;
+            planChange?: {
+                canUpgradeTo: string[];
+                canDowngradeTo: string[];
+            };
         };
         BillingOffer: {
             id: string;
@@ -33762,6 +34087,75 @@ export interface components {
         StayOfferRequest: {
             /** @enum {string} */
             reason: "too_expensive" | "unused" | "missing_features" | "switched_service" | "too_complex" | "low_quality" | "customer_service" | "other";
+        };
+        PlanChangePreview: {
+            /** @enum {string} */
+            kind: "upgrade";
+            plan: components["schemas"]["PlanChangeTarget"];
+            amountDue: number;
+            currency: string;
+            /** Format: date-time */
+            prorationAt: string;
+            limits: {
+                businesses: number;
+                partners: number;
+                documentsPerMonth: number;
+                scansPerMonth: number;
+            };
+        } | {
+            /** @enum {string} */
+            kind: "downgrade" | "to_starter";
+            plan: components["schemas"]["PlanChangeTarget"];
+            /** Format: date-time */
+            effectiveAt: string;
+            limits: {
+                businesses: number;
+                partners: number;
+                documentsPerMonth: number;
+                scansPerMonth: number;
+            };
+            cap: number;
+            businesses: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            }[];
+            mustChoose: boolean;
+        };
+        /** @enum {string} */
+        PlanChangeTarget: "solo" | "business" | "firm" | "starter";
+        PlanChangePreviewRequest: {
+            plan: components["schemas"]["PlanChangeTarget"];
+        };
+        PlanChangeResult: {
+            /** @enum {string} */
+            state: "applied" | "pending" | "scheduled";
+            change: components["schemas"]["PlanChange"];
+            /** Format: uri */
+            hostedInvoiceUrl: string | null;
+        };
+        PlanChange: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "UPGRADE" | "DOWNGRADE" | "TO_STARTER";
+            /** @enum {string} */
+            state: "APPLIED" | "PENDING" | "SCHEDULED" | "UNDONE" | "FAILED";
+            fromPlan: string;
+            toPlan: string;
+            /** Format: date-time */
+            effectiveAt: string;
+            amountMinor: number | null;
+            currency: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PlanChangeRequest: {
+            plan: components["schemas"]["PlanChangeTarget"];
+            /** Format: date-time */
+            prorationAt?: string;
+            expectedAmountDue?: number;
+            activeBusinessIds?: string[];
         };
         StarterChoice: {
             /** Format: date-time */
@@ -34308,6 +34702,22 @@ export interface components {
                 domainClass: string | null;
                 reasons: string[];
             } | null;
+            planHistory: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                kind: "UPGRADE" | "DOWNGRADE" | "TO_STARTER";
+                /** @enum {string} */
+                state: "APPLIED" | "PENDING" | "SCHEDULED" | "UNDONE" | "FAILED";
+                fromPlan: string;
+                toPlan: string;
+                /** Format: date-time */
+                effectiveAt: string;
+                amountMinor: number | null;
+                currency: string | null;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
         };
         BillingEntitlement: {
             /** @enum {string} */

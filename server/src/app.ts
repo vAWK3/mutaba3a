@@ -56,6 +56,7 @@ import { createTaxFollowsAddress } from './billing/stripe/retax.js';
 import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, billingPlanRoutes } from './routes/billing-plan.js';
+import { billingPlanChangeRoutes } from './routes/billing-plan-change.js';
 import { BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, billingStarterRoutes } from './routes/billing-starter.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { agentAuditFor } from './oauth/audit.js';
@@ -433,7 +434,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.156.0-mut750';
+export const API_VERSION = '1.157.0-mut734';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -742,6 +743,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       limiter: billingLimiter,
       logger: deps.logger,
       ...(deps.offers ? { offers: deps.offers } : {}),
+    }),
+  );
+  // MUT-734 (ADR-291): changing between plans, behind PLAN_CHECKOUT, sharing the billing limiter.
+  app.route(
+    '/',
+    billingPlanChangeRoutes(store, {
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      plan: deps.stripe?.planGateway ?? null,
+      planSales: deps.planSales ?? false,
+      limiter: billingLimiter,
+      logger: deps.logger,
+      mailer,
+      settings: sessions,
     }),
   );
   // MUT-731 (ADR-284): the person's Starter choices (continue free, the active business, the trial step shown).

@@ -7373,3 +7373,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. `GET /v1/billing` publishes the rate (`vatRate`), so no client writes 18.
 
 **Consequences:** Tax documents per Israeli payment are MUT-776 (slice B).
+
+---
+
+## ADR-291: Plan Changes: Up Now With Stripe's Proration, Down by a Provider Schedule at the Period End, to Starter by Cancel + Starter Chosen (MUT-734; fills ADR-275 d2's `changeTimingOf`; amends ADR-284 row 7)
+
+**Status:** Accepted (2026-11-27; Basel approved the MUT-734 plan with every default answer).
+
+**Decision:**
+1. `changeTimingOf` decides: up a rank is charged now (Stripe's proration at the previewed date, `always_invoice`, `pending_if_incomplete`, the item's tax rates kept); the tier changes when Stripe confirms (the mirror). A failed card changes nothing.
+2. Down to a lower paid plan is a Stripe subscription schedule: the current price to the period end, then the lower price, released after one cycle. No refund.
+3. To Starter is cancel at the period end and `starterChosenAt` now, so the end lands on Starter with no read-only gap (ADR-284 row 7's exception).
+4. Going below the person's business count needs their pick (no default, Basel's MUT-731 Q5), stored at scheduling; with `PAID_BUSINESS_CAPS` the paid plans enforce their counts as Starter does.
+5. Every change is a `billing_plan_changes` row (one SCHEDULED per person); the sync moves PENDING/SCHEDULED to APPLIED; undo releases the schedule or takes the cancel and the Starter choice back.
+6. Interval kept (Q1); legacy Freelancer and founder plans refused until MUT-707 (Q3); the phone shows only (Q4); a launch coupon is dropped on upgrade (Stripe's item change) and kept on a downgrade (Q5).
+
+**Consequences:** The scheduled state lives in our table, not in mirrored subscription columns (build decision 2). Card-declined upgrades answer 409 PAYMENT_FAILED as the yearly switch does.

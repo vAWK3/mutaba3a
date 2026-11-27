@@ -462,6 +462,8 @@ export const STORE_ACCESS: StoreAccess = {
   billing: {
     // MUT-731 (ADR-284): the server's STARTER_PLAN, a value, not a call (the guard never sees it called).
     starterPlan: 'read',
+    // MUT-734: the server's PAID_BUSINESS_CAPS, a value like starterPlan.
+    paidBusinessCaps: 'read',
     factsFor: 'sessionOnly',
     // MUT-731: the owner's businesses for the Starter business cap, read beside factsFor (coverage.ts).
     ownedBusinessesOf: 'sessionOnly',
@@ -477,6 +479,10 @@ export const STORE_ACCESS: StoreAccess = {
     claimRetentionEvent: 'sessionOnly',
     releaseRetentionEvent: 'sessionOnly',
     endRetentionEventEarly: 'sessionOnly',
+    // MUT-734: the person's own plan change; the route passes the session's user (the sync settles them unguarded).
+    planChangesOf: 'sessionOnly',
+    recordPlanChange: 'sessionOnly',
+    settlePlanChange: 'sessionOnly',
     setTrialStart: 'operator',
     // MUT-419: the daily trial-mail run (the job and the operator), on the unguarded store.
     trialMailCandidates: 'operator',

@@ -64,6 +64,32 @@ export interface PlanGateway {
    * (no proration). Keyed on the subscription, the new country and the minute: a redelivery makes one change.
    */
   retax(input: RetaxInput): Promise<void>;
+  /**
+   * MUT-734 (ADR-291): an upgrade, as the yearly switch: the item moves to `priceId` at the previewed proration date,
+   * charged now (`always_invoice`), and a payment that didn't go through leaves the plan as it was
+   * (`pending_if_incomplete`). The item's tax rates go with it (ADR-290); `mutaba3a_plan` names the new plan.
+   */
+  changePlan(input: SwitchInput & { plan: string }): Promise<SwitchResult>;
+  /**
+   * MUT-734: a downgrade at the paid period's end: a subscription schedule from the subscription, phase 1 the current
+   * price to the period end, phase 2 the lower plan's price for one cycle, then released (the subscription carries on
+   * at it). Keyed on the subscription and the target price.
+   */
+  scheduleDowngrade(input: ScheduleDowngradeInput): Promise<{ scheduleId: string }>;
+  /** MUT-734: undoes a scheduled downgrade: releases the schedule, keeping the current price. */
+  releaseSchedule(scheduleId: string): Promise<void>;
+}
+
+export interface ScheduleDowngradeInput {
+  subscriptionId: string;
+  currentPriceId: string;
+  targetPriceId: string;
+  /** The current price's interval: the schedule's second phase runs one of it. */
+  interval: 'month' | 'year';
+  /** The paid period's end: where the lower price starts. */
+  periodEnd: Date;
+  plan: string;
+  taxRates: string[];
 }
 
 export interface RetaxInput {
@@ -115,6 +141,8 @@ export interface LivePlan {
   taxRateIds: string[];
   /** A founder price runs on a subscription schedule, which refuses direct cancel changes (the probe). */
   managedBySchedule: boolean;
+  /** MUT-734: that schedule's id (to release a scheduled downgrade); null with none. */
+  scheduleId: string | null;
 }
 
 export interface SwitchInput {
@@ -205,6 +233,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
         automaticTax: sub.automatic_tax?.enabled === true,
         taxRateIds: (item.tax_rates ?? []).map((rate) => (typeof rate === 'string' ? rate : rate.id)),
         managedBySchedule: sub.schedule !== null && sub.schedule !== undefined,
+        scheduleId: typeof sub.schedule === 'string' ? sub.schedule : (sub.schedule?.id ?? null),
       };
     },
     async paidInvoiceCount(subscriptionId, { fresh = false } = {}) {
@@ -247,6 +276,47 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
       if (!sub.pending_update) return { outcome: 'switched', currentPeriodEnd: periodEndOf(sub) };
       const invoice = sub.latest_invoice;
       return unpaidOutcome(typeof invoice === 'string' ? invoice : (invoice?.id ?? null));
+    },
+    async changePlan(input) {
+      const sub = await wrapped(() =>
+        stripe.subscriptions.update(
+          input.subscriptionId,
+          {
+            items: [{ id: input.itemId, price: input.yearlyPriceId, ...taxRatesOf(input) }],
+            proration_behavior: 'always_invoice',
+            proration_date: seconds(input.prorationDate),
+            payment_behavior: 'pending_if_incomplete',
+            metadata: { mutaba3a_plan: input.plan },
+          },
+          { idempotencyKey: `mut734-up-${input.subscriptionId}-${input.yearlyPriceId}-${seconds(input.prorationDate)}` },
+        ),
+      );
+      if (!sub.pending_update) return { outcome: 'switched', currentPeriodEnd: periodEndOf(sub) };
+      const invoice = sub.latest_invoice;
+      return unpaidOutcome(typeof invoice === 'string' ? invoice : (invoice?.id ?? null));
+    },
+    async scheduleDowngrade(input) {
+      const key = `mut734-down-${input.subscriptionId}-${input.targetPriceId}`;
+      const created = await wrapped(() => stripe.subscriptionSchedules.create({ from_subscription: input.subscriptionId }, { idempotencyKey: `${key}-create` }));
+      const first = created.phases[0];
+      const taxes = input.taxRates.length > 0 ? { tax_rates: input.taxRates } : {};
+      await wrapped(() =>
+        stripe.subscriptionSchedules.update(
+          created.id,
+          {
+            end_behavior: 'release',
+            phases: [
+              { items: [{ price: input.currentPriceId, quantity: 1, ...taxes }], ...(first ? { start_date: first.start_date } : {}), end_date: seconds(input.periodEnd), proration_behavior: 'none' },
+              { items: [{ price: input.targetPriceId, quantity: 1, ...taxes }], duration: { interval: input.interval, interval_count: 1 }, proration_behavior: 'none', metadata: { mutaba3a_plan: input.plan } },
+            ],
+          },
+          { idempotencyKey: `${key}-phases` },
+        ),
+      );
+      return { scheduleId: created.id };
+    },
+    async releaseSchedule(scheduleId) {
+      await wrapped(() => stripe.subscriptionSchedules.release(scheduleId, {}, { idempotencyKey: `mut734-release-${scheduleId}-${minuteOf(options.now())}` }));
     },
     async retax({ subscriptionId, itemId, country, taxRates, automaticTax }) {
       await wrapped(() =>

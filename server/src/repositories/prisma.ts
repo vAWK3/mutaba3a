@@ -213,6 +213,9 @@ import type {
   PageCursor,
   AcceptAccountantResult,
   PeriodPackRepository,
+  BillingPlanChangeRecord,
+  BillingPlanChangeKindRecord,
+  BillingPlanChangeStateRecord,
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
@@ -255,12 +258,13 @@ export class PrismaLedgerStore implements LedgerStore {
   /** MUT-731 (ADR-284): `starterPlan` is the server's STARTER_PLAN (BillingRepository.starterPlan). Absent = off. */
   constructor(
     private readonly prisma: PrismaClient,
-    options: { starterPlan?: boolean } = {},
+    options: { starterPlan?: boolean; paidBusinessCaps?: boolean } = {},
   ) {
     (this.billing as { starterPlan: boolean }).starterPlan = options.starterPlan === true;
+    (this.billing as { paidBusinessCaps: boolean }).paidBusinessCaps = options.paidBusinessCaps === true;
   }
 
-  static connect(databaseUrl: string, options: { starterPlan?: boolean } = {}): PrismaLedgerStore {
+  static connect(databaseUrl: string, options: { starterPlan?: boolean; paidBusinessCaps?: boolean } = {}): PrismaLedgerStore {
     // ADR-091 (MUT-148): a minimal error never prints the query input into a log line or an error report.
     return new PrismaLedgerStore(new PrismaClient({ datasources: { db: { url: databaseUrl } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat }), options);
   }
@@ -3849,6 +3853,7 @@ export class PrismaLedgerStore implements LedgerStore {
   readonly billing: BillingRepository = {
     // MUT-731: set by the constructor (field initializers run before it).
     starterPlan: false,
+    paidBusinessCaps: false,
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = [...ownerUserIds];
       const orgs = [...organizationIds];
@@ -4137,6 +4142,30 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     pruneStripeEvents: async (before) => (await this.prisma.stripeEvent.deleteMany({ where: { receivedAt: { lt: before } } })).count,
     retentionEventsOf: async (userId) => this.prisma.billingRetentionEvent.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    planChangesOf: async (userId) => (await this.prisma.billingPlanChange.findMany({ where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })).map(toPlanChange),
+    recordPlanChange: async (input) => {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const { at, audit, ...fields } = input;
+          const row = await tx.billingPlanChange.create({ data: { ...fields, createdAt: at, updatedAt: at } });
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return toPlanChange(row);
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) throw new StateConflict('billing_plan_change', 'SCHEDULED');
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') throw new ForeignKeyViolation('billing_plan_changes.userId');
+        throw err;
+      }
+    },
+    settlePlanChange: (id, state, at, options = {}) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.billingPlanChange.updateMany({ where: { id, state: { in: ['SCHEDULED', 'PENDING'] } }, data: { state, updatedAt: at } });
+        if (count === 0) return null;
+        const row = await tx.billingPlanChange.findUniqueOrThrow({ where: { id } });
+        if (options.clearStarterChoice) await tx.user.updateMany({ where: { id: row.userId }, data: { starterChosenAt: null } });
+        if (options.audit && options.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(options.audit, at) });
+        return toPlanChange(row);
+      }),
     claimRetentionEvent: async (input) => {
       const { at, noPauseSince, ...fields } = input;
       try {
@@ -4828,6 +4857,11 @@ function toOAuthCode(row: Prisma.OAuthCodeGetPayload<object>): OAuthCodeRecord {
 
 function toOAuthToken(row: Prisma.OAuthTokenGetPayload<object>): OAuthTokenRecord {
   return { id: row.id, grantId: row.grantId, kind: row.kind, createdAt: row.createdAt, expiresAt: row.expiresAt, rotatedAt: row.rotatedAt, successorId: row.successorId };
+}
+
+/** MUT-734: a billing_plan_changes row as the port shapes it (kind and state are varchar with CHECKs). */
+function toPlanChange(row: { id: string; userId: string; stripeSubscriptionId: string; fromTier: string; toTier: string; kind: string; state: string; effectiveAt: Date; amountMinor: number | null; currency: string | null; createdAt: Date; updatedAt: Date }): BillingPlanChangeRecord {
+  return { ...row, kind: row.kind as BillingPlanChangeKindRecord, state: row.state as BillingPlanChangeStateRecord };
 }
 
 function auditRows(events: AuditEventInput[], at: Date): Prisma.AuditEventCreateManyInput[] {

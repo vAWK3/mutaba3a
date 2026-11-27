@@ -4,6 +4,7 @@ import { sessionDigest } from '../../auth/sessions.js';
 import { normalizeEmail } from '../../auth/users.js';
 import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../../billing/coverage.js';
 import type { Entitlement } from '../../billing/entitlement.js';
+import { changeView } from '../../billing/plan-change.js';
 import { ApiError } from '../../errors.js';
 import { FEATURES } from '../../features.js';
 import { decodeOperatorCursor, encodeOperatorCursor, OPERATOR_LIST_DEFAULT_LIMIT, operatorQueryOf } from '../account-list.js';
@@ -201,6 +202,8 @@ export function accountActions(options: AccountActionOptions) {
     ]);
     const personalProfile = members.find(({ organization }) => organization.personalOwnerUserId === user.id)?.organization ?? null;
     const signupDomain = personalProfile ? await signupDomainOf(store, personalProfile.id, user.id) : null;
+    // MUT-734 (ADR-291): the person's plan changes, newest first (upgrades, scheduled, undone, applied).
+    const planHistory = (await store.billing.planChangesOf(user.id)).map(changeView);
     // One membership read for both the rows and their billing, so every row has its entitlement.
     const entitlements = members.length > 0 ? await entitlementsFor(store, members, at) : new Map<string, Entitlement>();
     const profiles = members.map(({ organization, membership }) => ({
@@ -226,6 +229,7 @@ export function accountActions(options: AccountActionOptions) {
       availableFeatures: [...FEATURES],
       profiles,
       signupDomain,
+      planHistory,
     };
   }
 
