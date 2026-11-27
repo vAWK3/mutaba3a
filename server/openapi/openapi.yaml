@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.148.0-mut742
+  version: 1.149.0-mut743
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -10267,6 +10267,166 @@ components:
               - key
       required:
         - styles
+    IssuingRules:
+      type: object
+      properties:
+        country:
+          type: string
+        live:
+          type: boolean
+          description: 'False when invoicing is not available for this country yet (it is not on INVOICING_JURISDICTIONS or has no pack): `rules` is null and clients show "not available yet".'
+        rulesVersion:
+          type: string
+          nullable: true
+          description: The jurisdiction pack’s version; null when not live.
+        rules:
+          type: object
+          nullable: true
+          properties:
+            currency:
+              type: object
+              properties:
+                base:
+                  type: string
+                issuing:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - base
+                - issuing
+              description: The currency documents are issued in and what an amount is shown in.
+            languages:
+              type: object
+              properties:
+                available:
+                  type: array
+                  items:
+                    type: string
+                default:
+                  type: string
+              required:
+                - available
+                - default
+              description: Document languages offered (a subset of he, ar, en) and the one a new business starts with.
+            taxId:
+              type: object
+              properties:
+                scheme:
+                  type: string
+                pattern:
+                  type: string
+                maxLength:
+                  type: integer
+              required:
+                - scheme
+                - pattern
+                - maxLength
+              description: "How a typed tax number is masked: the regular expression (source) and the longest length. The server’s check is the authority (422 VAT_ID_INVALID)."
+            vat:
+              type: object
+              properties:
+                perLineExemption:
+                  type: boolean
+              required:
+                - perLineExemption
+              description: Whether one line of a document may be marked VAT-exempt.
+            documentTypes:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    $ref: "#/components/schemas/IssuedDocType"
+                  vatBearing:
+                    type: boolean
+                  takesPayment:
+                    type: boolean
+                  hasDueDate:
+                    type: boolean
+                  needsCustomer:
+                    type: boolean
+                required:
+                  - type
+                  - vatBearing
+                  - takesPayment
+                  - hasDueDate
+                  - needsCustomer
+              description: Each document type and what its form asks of the person.
+            dealerTypes:
+              type: array
+              items:
+                type: object
+                properties:
+                  value:
+                    $ref: "#/components/schemas/DealerType"
+                  labelKey:
+                    type: string
+                    description: "The key the client looks its label up by (the copy stays in the client’s own translations): `<country>.<value>`."
+                  issues:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IssuedDocType"
+                    description: The document types this business type may issue, in the order shown.
+                  exemptFromVat:
+                    type: boolean
+                  defaultType:
+                    $ref: "#/components/schemas/IssuedDocType"
+                  entryTypes:
+                    type: object
+                    properties:
+                      owed:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/IssuedDocType"
+                      received:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/IssuedDocType"
+                    required:
+                      - owed
+                      - received
+                    description: "What an entry already recorded may become: an Owed one, a Received one."
+                required:
+                  - value
+                  - labelKey
+                  - issues
+                  - exemptFromVat
+                  - defaultType
+                  - entryTypes
+              description: The business types offered, in the order shown (a subset of the closed DealerType list).
+            clearance:
+              type: object
+              nullable: true
+              properties:
+                kind:
+                  type: string
+              required:
+                - kind
+              description: "The tax authority’s pre-issue clearance (Israel: IL_ALLOCATION); null where the country has none."
+          required:
+            - currency
+            - languages
+            - taxId
+            - vat
+            - documentTypes
+            - dealerTypes
+            - clearance
+      required:
+        - country
+        - live
+        - rulesVersion
+        - rules
+      description: "MUT-743 (ADR-287): what the clients show and ask for in the invoicing setup and the issue drawer, from the issuer’s jurisdiction pack. Since 1.149.0-mut743."
+    IssuedDocType:
+      type: string
+      enum:
+        - TAX_INVOICE
+        - TAX_INVOICE_RECEIPT
+        - CREDIT_NOTE
+        - RECEIPT
+        - PAYMENT_REQUEST
+      description: "305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know."
     IssuingSettings:
       type: object
       properties:
@@ -10292,15 +10452,6 @@ components:
         - start
         - next
         - hasDocuments
-    IssuedDocType:
-      type: string
-      enum:
-        - TAX_INVOICE
-        - TAX_INVOICE_RECEIPT
-        - CREDIT_NOTE
-        - RECEIPT
-        - PAYMENT_REQUEST
-      description: "305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know."
     StartingNumberRequest:
       type: object
       properties:
@@ -27125,6 +27276,62 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/rules:
+    get:
+      tags:
+        - Issuing
+      summary: What the invoicing screens show and ask for, for the profile’s country
+      description: 'MUT-743 (ADR-287): the business types, document types (and what each form asks), currency, document languages, tax-ID mask, per-line VAT exemption and clearance of the issuer’s jurisdiction pack, so the portal and the phone stop hard-coding Israel. `country` (optional) asks about a country before any details are saved; absent, it is the issuer details’ country, else the default. A country that is not live answers `live: false` with `rules: null` (clients show "not available yet"). A 404 means invoicing is off or does not apply to this profile, never "no rules". Display data only: the server keeps refusing what the pack refuses. Cacheable for five minutes. Since 1.149.0-mut743.'
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: "MUT-743: ISO 3166-1 alpha-2. Absent: the issuer details’ country, or the default country before they are saved. Lets the setup ask about a country before anything is saved."
+          required: false
+          description: "MUT-743: ISO 3166-1 alpha-2. Absent: the issuer details’ country, or the default country before they are saved. Lets the setup ask about a country before anything is saved."
+          name: country
+          in: query
+      responses:
+        "200":
+          description: The rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingRules"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
           content:
             application/json:
               schema:

@@ -44,6 +44,7 @@ const ALLOWED_GETS = [
   // MUT-646: the setup and the logo.
   'GET /v1/issuer/logo',
   'GET /v1/issuing/setup',
+  'GET /v1/issuing/rules',
   // MUT-647: invoices issued elsewhere, and their files.
   'GET /v1/issuing/external-invoices',
   'GET /v1/issuing/external-invoices/{externalInvoiceId}/file',
