@@ -236,12 +236,12 @@ const OPERATOR_OPERATIONS = [
   'POST /v1/operator/firm-requests/{organizationId}/decline',
   // MUT-593: the per-firm Malafat switch.
   'POST /v1/operator/organizations/{organizationId}/malafat-delegation',
-  // MUT-735: Operator › Usage.
   // MUT-764: approving an accountant to create customers, and the accounts not yet claimed.
   'GET /v1/operator/accounts/{userId}/accountant-provisioning',
   'PUT /v1/operator/accounts/{userId}/accountant-provisioning',
   'DELETE /v1/operator/accounts/{userId}/accountant-provisioning',
   'GET /v1/operator/provisioned-accounts',
+  // MUT-735: Operator › Usage.
   'GET /v1/operator/usage/overview',
   'GET /v1/operator/usage/people',
   'GET /v1/operator/accounts/{userId}/usage',

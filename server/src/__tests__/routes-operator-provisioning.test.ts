@@ -105,8 +105,9 @@ describe('Operator › accountant provisioning (MUT-764)', () => {
     const h = harness();
     const op = await operator(h);
     const accountant = await person(h);
-    expect((await get(h, approvalPath(accountant.id), op.token)).status).toBe(200);
-    const res = await write(h, 'PUT', approvalPath(accountant.id), op.token, {});
+    // A password session has no step-up (a passkey sign-in counts as one).
+    expect((await get(h, approvalPath(accountant.id), op.passwordToken)).status).toBe(200);
+    const res = await write(h, 'PUT', approvalPath(accountant.id), op.passwordToken, {});
     expect(res.status).toBe(403);
     expect((await read(res)).error.code).toBe('RECENT_SIGN_IN_REQUIRED');
     expect((await h.store.provision.approvalOf(accountant.id))?.enabled).toBe(false);

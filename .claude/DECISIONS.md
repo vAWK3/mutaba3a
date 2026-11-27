@@ -7390,3 +7390,23 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 6. Interval kept (Q1); legacy Freelancer and founder plans refused until MUT-707 (Q3); the phone shows only (Q4); a launch coupon is dropped on upgrade (Stripe's item change) and kept on a downgrade (Q5).
 
 **Consequences:** The scheduled state lives in our table, not in mirrored subscription columns (build decision 2). Card-declined upgrades answer 409 PAYMENT_FAILED as the yearly switch does.
+
+---
+
+## ADR-292: An Operator-Approved Accountant Creates a Customer's Account; His Access Stays the ADR-245 Read Grant (MUT-763..767, epic MUT-762; narrows ADR-037 and ADR-088)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`, APPROVED with the CEO scope amendment D12 and eng decisions R1–R6).
+
+**Context:** the design-partner accountant onboards his customers himself. ADR-037 and ADR-088 say nobody creates an account into which someone else signs in except the operator, through a setup link. The accountant channel needs an accountant to make the customer's account and books, with the customer claiming it later.
+
+**Decision:**
+1. `POST /v1/accountant/customers` (dark behind `ACCOUNTANT_PROVISIONING`, 404 while off) lets an accountant the operator approved (`users.accountantProvisioningEnabledAt`, operator console) create, in one transaction, a passwordless account, its personal profile, an owned BUSINESS profile and an ACTIVE ADR-245 read grant for himself. He never writes in the customer's books (D12).
+2. The setup link is mailed to the customer only and is in no response (ADR-088 §1 kept). The 6-digit claim code is in the first answer only; an Idempotency-Key replay returns the stored state without it.
+3. Limits per approved accountant per UTC day, counted from rows (no in-memory counter): 50 creations (`users.provisionedByUserId`), 100 attempts on an address that already has an account (`accountant.customer_lookup_existing` audit rows); the operator can set both per accountant (1–1000; null = default).
+4. An address that already has an account creates nothing; the approved accountant is told so (`{ status: "exists" }`, R2: a disclosed existence answer, limited and audited) and asks the customer to share through the ADR-245 owner invite.
+5. Disposable and relay addresses are refused as for an accountant invite; the ADR-178 webmail review does not apply (the account is not a self-service signup; ACCT-2).
+6. Approve, withdraw and the unclaimed list live in the operator console (`/v1/operator/accounts/{id}/accountant-provisioning`, `/v1/operator/provisioned-accounts`), behind the operator gate and its passkey step-up, audited on the accountant's own profile. They work while the flag is off so the operator can approve ahead of the switch.
+
+**Override log:** ADR-037 ("only the operator provisions") and ADR-088 ("accounts are made by the operator or a self-service signup") are narrowed, not replaced: an approved accountant is a third provisioner, for a passwordless account that the customer claims through the same setup page. ADR-245 and ADR-251 are unchanged (read-only grant; ACCOUNTANT_PLAN stays off, MUT-747).
+
+**Consequences:** "Unclaimed" is derived (`passwordHash IS NULL AND provisionedAt IS NOT NULL`). Claim code, reissue and change of address are MUT-765; the activation Checkout MUT-766; the 60-day sweep and reminders MUT-767.
