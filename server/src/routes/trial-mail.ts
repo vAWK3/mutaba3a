@@ -35,6 +35,8 @@ export interface TrialMailRouteOptions {
   /** MUT-525 (D8): where the launch offer is read from (cached); absent, the mails carry no offer line. */
   checkout?: CheckoutGateway | null;
   offers?: readonly OfferEntry[];
+  /** MUT-703 (PLAN_CHECKOUT): the offer line is the plans' launch offer. Absent = off (the legacy one). */
+  planSales?: boolean;
 }
 
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -49,7 +51,7 @@ export function trialMailRoutes(options: TrialMailRouteOptions): OpenAPIHono<App
     if (!dryRun && options.refuseLoopbackLinks && LOOPBACK.test(origin)) {
       throw new ApiError('LINK_ORIGIN_LOOPBACK', 'These mails would link to a local address; set PORTAL_ORIGIN or call the service by its public URL', { origin });
     }
-    const offer = await trialMailOffer(options.checkout ?? null, options.offers ?? OFFERS, now, options.logger);
+    const offer = await trialMailOffer(options.checkout ?? null, options.offers ?? OFFERS, now, options.logger, options.planSales ?? false);
     const runOptions: TrialMailRunOptions = { store: options.store, mailer: options.mailer, logger: options.logger, now, gateOn: options.gateOn, links: trialMailLinks(origin), dryRun, offer };
     return runTrialMail(runOptions);
   };

@@ -1,13 +1,14 @@
 import type { Logger } from '../logger.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { LedgerStore } from '../repositories/ports.js';
-import { ALL_GA_LOOKUP_KEYS, catalogFrom } from './checkout.js';
-import { comebackOfferOf, type ComebackFacts, type ComebackOffer } from './comeback.js';
+import { ALL_GA_LOOKUP_KEYS, catalogFrom, planCatalogsFrom } from './checkout.js';
+import { comebackOfferOf, percentComebackOfferOf, type ComebackFacts, type ComebackOffer } from './comeback.js';
+import { ALL_PLAN_LOOKUP_KEYS, type PlanName } from './plans.js';
 import type { CheckoutGateway } from './stripe/checkout-gateway.js';
 import { StripeGatewayError } from './stripe/gateway.js';
 import { entitlementsFor, memberProfilesForBilling } from './coverage.js';
 import { profilePlanSubscriptions } from './entitlement.js';
-import { comebackEntryOf, OFFERS, type OfferEntry } from './offer.js';
+import { comebackEntryFor, comebackIdsOf, LEGACY_OFFER_PLAN, OFFERS, type OfferEntry } from './offer.js';
 
 /** What the come-back facts read: the person's billing rows, their profiles and those profiles' coverage. */
 export type ComebackStore = Pick<LedgerStore, 'billing' | 'memberships' | 'organizations' | 'integrations'>;
@@ -37,18 +38,29 @@ export async function comebackFactsOf(
     const source = entitlements.get(p.organization.id)?.source;
     return source === 'MALAFAT' || source === 'OPERATOR';
   });
-  const comeback = comebackEntryOf(offers);
-  return { subscriptions, events, covered, ownsProfile: own.length > 0, comebackOfferIds: new Set(comeback ? [comeback.id] : []) };
+  // MUT-703 (§3.1): every come-back entry's id, legacy and plans alike: one come-back per person, ever.
+  return { subscriptions, events, covered, ownsProfile: own.length > 0, comebackOfferIds: comebackIdsOf(offers) };
 }
 
 /**
  * MUT-534 (D8): the running come-back offer, from the coupon (cached) and the catalog. Any Stripe failure, a missing
- * permission included, is no offer, warned: a promotion never stops anything else (ADR-237 D5).
+ * permission included, is no offer, warned: a promotion never stops anything else (ADR-237 D5). MUT-703: with `plan`,
+ * the plans' percent come-back on that plan; without, the legacy Freelancer one.
  */
-export async function comebackOfferOrNothing(checkout: CheckoutGateway, offers: readonly OfferEntry[], logger: Pick<Logger, 'warn'>, options: { fresh?: boolean } = {}): Promise<ComebackOffer | null> {
-  const entry = comebackEntryOf(offers);
+export async function comebackOfferOrNothing(checkout: CheckoutGateway, offers: readonly OfferEntry[], logger: Pick<Logger, 'warn'>, options: { fresh?: boolean; plan?: PlanName | null } = {}): Promise<ComebackOffer | null> {
+  const plan = options.plan ?? null;
+  const entry = comebackEntryFor(offers, plan ?? LEGACY_OFFER_PLAN);
   if (!entry) return null;
   try {
+    if ('couponId' in entry) {
+      if (!plan) return null;
+      const [plans, coupon] = await Promise.all([checkout.pricesByLookupKey(ALL_PLAN_LOOKUP_KEYS).then(planCatalogsFrom), checkout.couponById(entry.couponId, { fresh: options.fresh ?? false })]);
+      const offer = percentComebackOfferOf(entry, coupon, { legacy: { ILS: null, USD: null }, plans }, plan);
+      if (!offer) logger.warn({ couponId: entry.couponId, plan }, 'the plans’ come-back coupon is missing or not shaped as a percent off once on the plans’ products; no come-back offer');
+      return offer;
+    }
+    // An amount-off entry is priced on the legacy catalog only.
+    if (plan) return null;
     const catalog = catalogFrom(await checkout.pricesByLookupKey(ALL_GA_LOOKUP_KEYS));
     const read = (id: string) => checkout.couponById(id, { fresh: options.fresh ?? false });
     const [ils, usd] = await Promise.all([read(entry.couponIds.ILS), read(entry.couponIds.USD)]);

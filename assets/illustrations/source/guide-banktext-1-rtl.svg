@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<g transform="matrix(-1 0 0 1 160 0)">
+<g transform="translate(20 32)"><rect x="28" y="2" width="64" height="92" rx="10" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M53.0 9h14" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path id="bubble" d="M46 20H76A10 10 0 0 1 86 30V56A10 10 0 0 1 76 66H58L46 75V66A10 10 0 0 1 36 56V30A10 10 0 0 1 46 20Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 32h30M44 41h20" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 53h18" fill="none" stroke="#795DBA" stroke-width="6" stroke-linecap="round"/><circle id="nuqta" cx="72" cy="53" r="4.5" fill="#E89960"/></g>
+</g>
+</svg>

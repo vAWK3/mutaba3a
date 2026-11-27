@@ -70,6 +70,7 @@ describe('PlanGateway.planOf', () => {
       billingCycleAnchor: new Date(1_784_000_000 * 1000),
       price: { id: 'price_m', currency: 'ils', productId: 'prod_F', unitAmount: 2900, taxBehavior: 'exclusive' },
       couponIds: ['mtb3a_stay_monthly_50'],
+      discountIds: ['di_1'],
       pause: { from: new Date('2026-09-21T08:53:20.000Z'), resumesAt: new Date(1_795_000_000 * 1000) },
       automaticTax: true,
       taxRateIds: [],
@@ -437,6 +438,32 @@ describe('MUT-734 (ADR-291): plan changes through Stripe', () => {
     expect(phases.get('phases[1][duration][interval]')).toBe('month');
     expect(phases.get('phases[1][metadata][mutaba3a_plan]')).toBe('solo');
     expect([...phases.keys()].some((k) => k.includes('tax_rates'))).toBe(false);
+  });
+
+  it('MUT-703 (§13 Q7, spike S1b): an upgrade that drops the running discount says so in the preview and the update alike', async () => {
+    const { gateway, seen } = gatewayWith((request) =>
+      request.path === '/v1/invoices/create_preview' ? { status: 200, body: { object: 'invoice', amount_due: 3333, currency: 'ils', lines: list([]) } } : { status: 200, body: subscription() },
+    );
+    await gateway.previewYearlySwitch({ ...SWITCH, yearlyPriceId: 'price_business_m', dropDiscounts: true });
+    await gateway.changePlan({ ...SWITCH, yearlyPriceId: 'price_business_m', plan: 'business', dropDiscounts: true });
+    expect(seen.map((s) => s.form.get('discounts'))).toEqual(['', '']);
+    // Without a discount to drop, neither call names discounts (the switch to yearly never does, D4).
+    await gateway.previewYearlySwitch(SWITCH);
+    await gateway.changePlan({ ...SWITCH, plan: 'business' });
+    expect(seen.slice(2).map((s) => [...s.form.keys()].some((k) => k.startsWith('discounts')))).toEqual([false, false]);
+  });
+
+  it('MUT-703 (spike S2): a downgrade carries the running discount into both phases, so it runs to its own end', async () => {
+    const END = new Date('2026-12-15T00:00:00Z');
+    const { gateway, seen } = gatewayWith((request) =>
+      request.path === '/v1/subscription_schedules'
+        ? { status: 200, body: { id: 'sub_sched_1', object: 'subscription_schedule', phases: [{ start_date: 1_790_000_000, end_date: 1_792_000_000 }] } }
+        : { status: 200, body: { id: 'sub_sched_1', object: 'subscription_schedule', phases: [] } },
+    );
+    await gateway.scheduleDowngrade({ subscriptionId: 'sub_1', currentPriceId: 'price_business_m', targetPriceId: 'price_solo_m', interval: 'month', periodEnd: END, plan: 'solo', taxRates: [], discountIds: ['di_1'] });
+    const phases = seen[1]!.form;
+    expect(phases.get('phases[0][discounts][0][discount]')).toBe('di_1');
+    expect(phases.get('phases[1][discounts][0][discount]')).toBe('di_1');
   });
 
   it('undo releases the schedule', async () => {

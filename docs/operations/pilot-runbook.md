@@ -448,7 +448,7 @@ npm run billing:grant -- --url "$URL" --email <tester> --tier BUSINESS --reason 
 ```
 
 - `--cohort`: lowercase letters, digits, `.`, `-`, `_` (e.g. `dec-2026`). No names: it goes to analytics.
-- `--watch-consent` (MUT-777, API 1.201.0, migration `20261127230000_mut777_pilot_watch_consent`): only when the tester
+- `--watch-consent` (MUT-777, API 1.214.0, migration `20261127230000_mut777_pilot_watch_consent`): only when the tester
   said yes, when they joined, to being watched and recorded in watched sessions. It stores the yes with today's date.
   The tester can also say yes themselves in the Welcome. Never add it without their yes.
 - No `--expires`: 60 days from now. Give one (`--expires 2027-01-31T21:59:59Z`) to end on a set day.
