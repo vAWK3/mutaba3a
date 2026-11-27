@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-11-28 — Art for the guides, Get started and the help centre, from Claude Design (epic MUT-672, MUT-690; assets only, no behaviour change)
+
+Brief `.claude/designs/guides-and-help/claude-design-brief-guides-and-help.md`; mockups beside it. Nothing renders the new art yet: the guide viewer (MUT-674), Get started (MUT-676/677) and the help shell (MUT-692) use it when they are built.
+
+### Added
+- 29 scenes in `assets/illustrations/source/` (58 drawings with the `-rtl` twins; the two neutral help scenes have none): `guide-{tax,claude,scan,banktext,accountant}-{hero,1..n}`, `getstarted-done`, `help-cluster-{allocation,documents,receipts}`, `help-explainer-{allocation,documents,receipts}`, `help-not-found`. Generated into `src/components/illustrations/generated/` (`npm run illustrations:generate`), so `SCENE_NAMES` lists them.
+- 3 icons in `assets/icons/source/`: `guide`, `get-started`, `support` (generated: `GuideIcon`, `GetStartedIcon`, `SupportIcon`).
+- Motion specs, key frames, stills and GIF/MP4 references for `getstarted-done`, `step-done`, `progress-fill`, `card-hide`, `website-entrance`, `prompt-in-out`, `prompt-to-guide` and `guide-step-change` in `docs/design/motion/2026-11-27-guides/` (the delivery's README is there too).
+
+### Fixed
+- The check marks in `activating-rtl` and `claimed-spot-rtl` (and the activating RTL key frame and still) no longer mirror, from Claude Design's correction of the 2026-11-27 plans, hand-over and pilot set.
+
+### Technical
+- Audited before import: every scene passes `sceneFromSvg` (three colours, sizes, dialect), every step scene keeps its subject inside the central 120×96, no `-rtl` is a plain copy, and the files carry no script or external reference.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-703 server half: offers on Solo, Business and Firm (API 1.210.0-mut703, ADR-340)
 
 Plan `.claude/designs/mut-703-offers-plan.md` (Basel approved all 12 §13 defaults). No migration, no new env. The portal's lines are the billing lane's (§11 hooks).
