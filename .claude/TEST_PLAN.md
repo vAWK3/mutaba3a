@@ -5051,3 +5051,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Rule | `billing/__tests__/pilot.test.ts` | `startedAt` is the first pilot grant's, revoked included, plain grants ignored |
 | Route | `__tests__/billing-pilot.test.ts` | `pilot.startedAt`, `firstScanAt` (first of several), `firstInvoiceAt` null until the first document |
 | Client | with MUT-753/755/756 | each event fires once in a production-gate test and never in dev or QA |
+
+## MUT-705 — plan picker, plan-aware billing, cap prompts and usage (portal, 2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/data/__tests__/planUsage.test.ts` | `nextPlanOf` along the ladder and off it; `sellablePlanOf`; `recommendedPlanOf` 0/1/2/4/9 businesses and none on offer; `planUsageOf` on a paid plan (gift, `graceUntil`) and null on Freelancer/Malafat |
+| Portal | `src/hosted/components/__tests__/BillingDrawer.mut705.test.tsx` | Subscribe opens on Business for two businesses and on `?billingPlan=firm` (Staff: coming soon); headline "Business, renews"; meters butter at 90% with Upgrade to Firm, none on scans; Firm with the gift (no upgrade, "No limit until"); read-only businesses, checklist 3 of 3 → 2 of 3, disabled past the cap, Save sends the pick; New profile on Solo names Business and its price; Home's line on Solo at 46/50 |
+| QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.plan-recommended`, `paid-billing` (en + ar at 375 px), `paid-read-only`, `paid-cap-prompts` |

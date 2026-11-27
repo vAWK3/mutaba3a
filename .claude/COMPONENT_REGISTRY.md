@@ -2613,3 +2613,13 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `server/src/jurisdictions/il/index.ts` | `IL_PACK` | the registry |
 | `server/src/jurisdictions/il/documents.ts` | `IL_DOCUMENT_TYPES`, `IL_DOC_TYPE_CODES` | the uniform file, tests |
 | `server/src/issuing/issuer-pack.ts` | `issuerPackOf(store, organizationId)` | documents-due and customers routes, cancel |
+
+## MUT-705 — the three-plan picker and plan-aware billing (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/planUsage.ts` | `planUsageOf`, `PlanUsage`, `LIMITED_PLANS`, `nextPlanOf`, `sellablePlanOf`, `recommendedPlanOf`, `meterWarns` | Billing drawer, `PlanMeters`, `UsageNotice`, `PlanLimitNotice`, New profile |
+| `src/hosted/components/PlanMeters.tsx` | `PlanMeters` (a paid plan's meter rows, usage-meter motion) | Billing drawer (MUT-733/754 reuse it) |
+| `src/hosted/components/BusinessChecklist.tsx` | `BusinessChecklist` (checkboxes + N of N), `PickActiveBusinesses` (save pane), `ReadOnlyBusinesses` (Billing section) | Billing drawer; MUT-734's downgrade preview |
+| `src/hosted/components/PlanLimitNotice.tsx` | `PlanLimitNotice` (any plan, next plan + price), `UpgradeTo({ plan })`, `UpgradeToSolo` | as MUT-731, plus `PlanMeters`, Home's paid line |
+| `src/hosted/shell/AccountDrawers.tsx` | `openUpgrade(plan)` (`?billing=true&step=subscribe&billingPlan=`) | `UpgradeTo` |

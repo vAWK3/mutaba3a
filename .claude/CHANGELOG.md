@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-705: the three-plan picker, plan-aware billing, cap prompts and usage (portal)
+
+Why: Billing named one plan ("Freelancer") and only Starter had meters or cap prompts. Now every surface reads the person's own plan from `GET /v1/billing` / `/v1/me` (server halves MUT-702, 731, 733, 734 already on main).
+
+### Added
+- Subscribe opens on the plan an Upgrade asked for (`?billingPlan=`, `useAccountDrawers().openUpgrade(plan)`), else on the smallest plan whose business count covers the businesses owned (`recommendedPlanOf`, from `usage.businesses.used`). Firm's line ends "Staff: coming soon".
+- `PlanMeters` (wireframe mut-733 A, shared with MUT-733/754): a paid plan's documents and scans this month, a thin bar each, butter from 90% with "Upgrade to <next plan>" (never on Firm, never while the gift runs), "Limit reached", "No limit until <date>" (`graceUntil`). Motion per `docs/design/motion/2026-11-27/usage-meter`: fill grows from inline-start (600 ms spring), tone follows 250 ms later (350 ms) only when crossing 90%; reduced motion shows the final pose.
+- `BusinessChecklist` / `PickActiveBusinesses` / `ReadOnlyBusinesses` (wireframe mut-734 "keep" A, shared with MUT-734): checkboxes with an "N of N" counter; Billing lists a paid plan's read-only businesses with the reason ("Business includes 3 businesses") and "Choose which businesses stay active".
+- Home's quiet usage line on Solo/Business/Firm from 80%, with Upgrade to the next plan from 90%.
+- FakeApi `paid` seed (`qa/support/portalApi.ts`): a Solo/Business/Firm subscriber's billing, /v1/me plan, entitlements and the server's PLAN_LIMIT refusals (gift-aware for MUT-733).
+
+### Changed
+- `hosted.billing.headline.active` is "{plan}, renews {date}" (`hosted.plan.name.freelancer`: Freelancer / الخطة السابقة for legacy payers).
+- `PlanLimitNotice`: a paid plan's refusal names the plan and its count ("Solo includes 1 business", "Limit reached: 50 of 50 documents"), the next plan and its price, and `UpgradeTo` it (`UpgradeToSolo` is now `UpgradeTo plan="solo"`). A subscriber's Upgrade opens Billing (MUT-734's Change plan), never a second Checkout. New profile shows the paid plan's business count before the person types.
+- `planUsage.ts`: `planUsageOf` (any limited plan, `graceUntil`, `giftAvailable`), `nextPlanOf`, `sellablePlanOf`, `recommendedPlanOf`, `meterWarns`; `starterUsageOf` reads through it.
+- MUT-703 seams (offers plan §11): `PlanRow` takes `offerNote`; the Subscribe step's opening interval is decided once in `openingIntervalOf(billing, plan)`.
+- Analytics contract: `plan_upgrade_chosen` from/to every plan; `plan_cap_reached` gains `plan`; `billing_checkout_started.plan` lists solo/business/firm (the drawer already sent them).
+
+### Technical
+- Tests: `components/__tests__/BillingDrawer.mut705.test.tsx`, `data/__tests__/planUsage.test.ts`; `StarterPlan.test.tsx`'s no-plan case is now legacy Freelancer. QA: `portal.plans.plan-recommended`, `paid-billing`, `paid-read-only`, `paid-cap-prompts`.
+- Files: `src/hosted/components/{BillingDrawer,BillingPlanPicker,PlanLimitNotice,PlanMeters,BusinessChecklist,UsageNotice,ProfileCreateDrawer}.tsx`, `src/hosted/data/{planUsage,filters}.ts`, `src/hosted/shell/AccountDrawers.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{ar,en}.json`, `docs/analytics/events.json`, `qa/support/portalApi.ts`.
+
 ## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
 
 Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.
