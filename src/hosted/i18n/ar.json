@@ -2544,6 +2544,30 @@
         "exportWithPasskey": "تصدير CSV بمفتاح المرور",
         "personLevel": "ليس على ملف",
         "profileThisMonth": "هذا الشهر: {documents} مستندات، {scans} مسح"
+      },
+      "pilot": {
+        "filter": "تجريبي",
+        "empty": "لا يوجد مختبِرون في التجربة بعد",
+        "ended": "انتهت",
+        "daysLeft": {
+          "zero": "لم يبقَ أيام",
+          "one": "بقي يوم واحد",
+          "two": "بقي يومان",
+          "few": "بقيت {count} أيام",
+          "many": "بقي {count} يومًا",
+          "other": "بقي {count} يوم"
+        },
+        "ends": "تجريبي · تنتهي في {date}",
+        "accountant": "المحاسب: {name}",
+        "scan": "مسح",
+        "invoice": "فاتورة",
+        "cohort": "مجموعة التجربة",
+        "cohortInvalid": "أحرف لاتينية صغيرة وأرقام ونقاط وشرطات فقط.",
+        "accountantEmail": "بريد المحاسب المُحيل",
+        "accountantNeedsCohort": "أضف مجموعة التجربة أولًا.",
+        "accountantUnknown": "لا يوجد حساب بهذا البريد.",
+        "accountantRefused": "لا يمكن أن يكون هذا الحساب هو المحاسب.",
+        "defaultEnd": "تنتهي بعد 60 يومًا"
       }
     },
     "welcome": {

@@ -243,6 +243,7 @@ export type SignupReviewVerb = 'approve' | 'decline' | 'resend';
 /** MUT-461: the operator console's accounts (/v1/operator/accounts). */
 /** MUT-527: the list of every account (no `email`); the exact-email answer stays for other callers, unused here. */
 export type OperatorAccountList = Schemas['OperatorAccountList'];
+export type OperatorAccountSearch = Schemas['OperatorAccountSearch'];
 export type OperatorAccountListItem = Schemas['OperatorAccountListItem'];
 export type OperatorAccount = Schemas['OperatorAccount'];
 export type OperatorAccountView = Schemas['OperatorAccountView'];
@@ -685,8 +686,11 @@ export const api = {
     request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),
   /** MUT-461: an account by its exact email; no match is `account: null` (never a 404). */
   /** MUT-527: one page of every account, newest sign-in first; `q` is any part of the email or name. */
-  operatorAccounts: (page: { q: string; cursor: string | null }, signal?: AbortSignal) =>
-    request<OperatorAccountList>('GET', '/v1/operator/accounts', { query: { q: page.q, cursor: page.cursor, limit: OPERATOR_ACCOUNTS_PAGE }, signal }),
+  /** MUT-757: `pilot` keeps the accounts that ever held a pilot grant, each with its first-scan / first-invoice ticks. */
+  operatorAccounts: (page: { q: string; cursor: string | null; pilot?: boolean }, signal?: AbortSignal) =>
+    request<OperatorAccountList>('GET', '/v1/operator/accounts', { query: { q: page.q, cursor: page.cursor, limit: OPERATOR_ACCOUNTS_PAGE, pilot: page.pilot ? '1' : undefined }, signal }),
+  /** MUT-757: the grant form's accountant, by exact email (MUT-461's search); no match is `account: null`. */
+  operatorAccountByEmail: (email: string, signal?: AbortSignal) => request<OperatorAccountSearch>('GET', '/v1/operator/accounts', { query: { email }, signal }),
   /** MUT-461: one account as the operator sees it; 404 details.reason ACCOUNT_NOT_FOUND when it's gone. */
   operatorAccount: (userId: string, signal?: AbortSignal) => request<OperatorAccountView>('GET', `/v1/operator/accounts/${encodeURIComponent(userId)}`, { signal }),
   /** MUT-461: disable or enable an account; the answer says what the disable ended. 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
