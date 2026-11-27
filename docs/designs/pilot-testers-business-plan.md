@@ -55,7 +55,7 @@ End-of-pilot rule (to confirm): when the grant expires the person falls through 
 ## Open Questions
 1. Prices: do final Solo, Business and Firm prices exist in time, or does the panel say "open soon" at launch? Depends on MUT-700.
 2. Is `STARTER_PLAN` on when the first pilot ends? It decides whether testers land on Starter or read-only.
-3. Who creates the tester's account: the accountant on their behalf (accountant-channel delegated onboarding) or the operator? The grant is issued after the account exists.
+3. Who creates the tester's account: DECIDED 2026-11-26 (Basel), the accountant creates it for their client, so the pilot tests the flow from step 0. The provisioning route is the accountant channel's create-customer, which is not built yet; the grant is issued after the account exists.
 4. 60 days exactly, or "2 calendar months" from the grant date?
 5. Do testers consent to being observed or recorded in the watched sessions, and is screen recording allowed (PostHog session replay stays off unless decided)?
 
@@ -113,7 +113,7 @@ Only what the person must know to proceed: a status, a date, a number, a label, 
 ### Journey
 | Step | Tester does | Feels | Specified |
 |---|---|---|---|
-| 1 | Gets the account | trusts the accountant | open: who creates it |
+| 1 | Gets the account | trusts the accountant | decided: the accountant creates it (create-customer, not built) |
 | 2 | First sign-in | curious, wary | Welcome: "Scan a receipt", "Issue an invoice", "Tell us what is unclear" |
 | 3-4 | First scan, first invoice | "will this work" | the watched sessions, no UI; PostHog records timing |
 | 5 | Opens Billing | "what do I owe" | Pilot panel |
@@ -158,7 +158,7 @@ Decisions made: 7. NOT in scope: 5 items. Mockup: one interactive HTML board (in
 
 ### Unresolved Decisions
 - Confirm the Expected prices: Solo ₪39, Business ₪89, Firm ₪249 (MUT-701, excluding VAT per MUT-750).
-- Who creates the tester's account: the accountant or the operator (open question 3 above).
+- Who creates the tester's account: decided, the accountant (open question 3 above). Needs the accountant channel's create-customer.
 - Whether the web has a real "Scan a receipt" action for Welcome step 1 (verify; if not, the web step starts with "Issue an invoice").
 
 ## Eng Review (plan-eng-review, 2026-11-26)
@@ -235,7 +235,7 @@ Epic: [MUT-751](https://barmajiyat.atlassian.net/browse/MUT-751)
 | [MUT-760](https://barmajiyat.atlassian.net/browse/MUT-760) | Docs: pilot offer and runbook | S4 |
 | [MUT-761](https://barmajiyat.atlassian.net/browse/MUT-761) | Replace "Expected" with final prices (blocked by MUT-700, MUT-750) | T9 |
 
-Order: MUT-752 first; MUT-753, 755, 756 and 757 need it; MUT-754, 758, 759 and 760 can start earlier. The blocked-by links are not set in Jira.
+Order: MUT-752 first; MUT-753, 755, 756 and 757 need it; MUT-754, 758, 759 and 760 can start earlier. Blocked-by links set in Jira on 2026-11-26: MUT-752 blocks 753, 755, 756, 757; MUT-700 and MUT-750 block 761.
 
 Expected prices for the prices file, from MUT-701 (excluding VAT per MUT-750): Solo ₪39, Business ₪89, Firm ₪249. Basel to confirm.
 
@@ -254,5 +254,5 @@ Expected prices for the prices file, from MUT-701 (excluding VAT per MUT-750): S
 
 **UNRESOLVED DECISIONS:**
 - Confirm the Expected prices: Solo ₪39, Business ₪89, Firm ₪249 (MUT-701, excluding VAT per MUT-750).
-- Who creates the tester's account: the accountant or the operator.
+- Who creates the tester's account: decided 2026-11-26, the accountant. Needs the accountant channel's create-customer.
 - Whether the web has a real "Scan a receipt" action for Welcome step 1.
