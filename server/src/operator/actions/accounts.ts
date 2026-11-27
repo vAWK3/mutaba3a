@@ -7,7 +7,8 @@ import type { Entitlement } from '../../billing/entitlement.js';
 import { changeView } from '../../billing/plan-change.js';
 import { ApiError } from '../../errors.js';
 import { FEATURES } from '../../features.js';
-import { decodeOperatorCursor, encodeOperatorCursor, OPERATOR_LIST_DEFAULT_LIMIT, operatorQueryOf } from '../account-list.js';
+import { decodeOperatorCursor, encodeOperatorCursor, OPERATOR_LIST_DEFAULT_LIMIT, operatorQueryOf, pilotChipOf } from '../account-list.js';
+import { userSubjectKey } from '../../usage/subject.js';
 import type { Logger } from '../../logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from '../../observability/reporter.js';
 import { profileOwnerOf } from '../../personal-profile.js';
@@ -234,24 +235,49 @@ export function accountActions(options: AccountActionOptions) {
   }
 
   /** MUT-527: one page of every account, as the console lists them. */
-  async function list(query: { q?: string | undefined; limit?: number | undefined; cursor?: string | undefined }) {
+  async function list(query: { q?: string | undefined; limit?: number | undefined; cursor?: string | undefined; pilot?: boolean | undefined }) {
     const page = await store.users.listForOperator({
       q: operatorQueryOf(query.q),
       limit: query.limit ?? OPERATOR_LIST_DEFAULT_LIMIT,
       cursor: query.cursor ? decodeOperatorCursor(query.cursor) : null,
+      pilot: query.pilot === true,
     });
+    // MUT-757 (ADR-297): the first-scan and first-invoice ticks, one grouped read per page, only with the Pilot filter.
+    const milestones = query.pilot ? await milestonesOf(page.items.map(({ user }) => user.id)) : null;
     return {
-      data: page.items.map(({ user, features }) => ({
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        status: user.status,
-        operator: user.operatorAt !== null,
-        lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
-        features,
-      })),
+      data: page.items.map(({ user, features, pilotGrants }) => {
+        const chip = pilotChipOf(pilotGrants);
+        return {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          status: user.status,
+          operator: user.operatorAt !== null,
+          lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
+          features,
+          pilot: chip ? { cohort: chip.cohort, startedAt: chip.startedAt.toISOString(), endsAt: chip.endsAt.toISOString(), referredBy: chip.referredBy } : null,
+          ...(milestones ? { milestones: milestones.get(user.id) ?? { firstScanAt: null, firstInvoiceAt: null } } : {}),
+        };
+      }),
       nextCursor: page.nextCursor ? encodeOperatorCursor(page.nextCursor) : null,
     };
+  }
+
+  /**
+   * MUT-757: when each person first scanned and first issued a document as the payer (their own subject), from the usage
+   * events (ADR-281; kept 13 months, longer than any pilot). Any issued document counts as the first invoice: an exempt
+   * dealer issues receipts, never tax invoices.
+   */
+  async function milestonesOf(userIds: readonly string[]): Promise<Map<string, { firstScanAt: string | null; firstInvoiceAt: string | null }>> {
+    type Ticks = { userId: string; firstScanAt: string | null; firstInvoiceAt: string | null };
+    const byUser = new Map<string, Ticks>(userIds.map((id) => [userSubjectKey(id), { userId: id, firstScanAt: null, firstInvoiceAt: null }]));
+    for (const f of await store.usage.firstEventsOf([...byUser.keys()], ['SCAN', 'DOCUMENT_ISSUED'])) {
+      const row = byUser.get(f.subjectKey);
+      if (!row) continue;
+      if (f.kind === 'SCAN') row.firstScanAt = f.firstAt.toISOString();
+      else row.firstInvoiceAt = f.firstAt.toISOString();
+    }
+    return new Map([...byUser.values()].map(({ userId, ...ticks }) => [userId, ticks] as const));
   }
 
   return { findByEmail, mustGet, memberOrganizations, audit, setStatus, revokeSessions, issueSetupLink, view, list };

@@ -1919,7 +1919,7 @@ export interface UserRepository {
    * created, then id descending; each with the features that are on (sorted). `q`, when given, keeps the accounts whose
    * email or display name contains it, ignoring case; `%` and `_` are plain text. `nextCursor` is null on the last page.
    */
-  listForOperator(input: { q: string | null; limit: number; cursor: OperatorAccountCursor | null }): Promise<{ items: OperatorAccountListItem[]; nextCursor: OperatorAccountCursor | null }>;
+  listForOperator(input: { q: string | null; limit: number; cursor: OperatorAccountCursor | null; pilot?: boolean | undefined }): Promise<{ items: OperatorAccountListItem[]; nextCursor: OperatorAccountCursor | null }>;
 }
 
 /** MUT-527: where the operator's account list continues: the last row's sort key. */
@@ -1932,6 +1932,17 @@ export interface OperatorAccountCursor {
 export interface OperatorAccountListItem {
   user: UserRecord;
   features: string[];
+  /** MUT-757: the person's pilot grants (a cohort, not ACCOUNTANT), revoked and ended ones included; empty for most. */
+  pilotGrants: OperatorPilotGrant[];
+}
+
+/** MUT-757 (ADR-297): one pilot grant as the operator's account list reads it, with the referring accountant. */
+export interface OperatorPilotGrant {
+  cohort: string;
+  createdAt: Date;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  referredBy: { id: string; email: string; displayName: string } | null;
 }
 
 /** MUT-324 (ADR-102): one person's acceptance of one terms version, tied to the exact text by its sha256. */
@@ -5545,6 +5556,11 @@ export interface UsageRepository {
   people(query: UsagePeopleQuery): Promise<UsagePeoplePage>;
   /** A payer's events per profile, month and kind, over these months. */
   byProfile(subjectKey: string, months: readonly IsoMonth[]): Promise<UsageProfileRow[]>;
+  /**
+   * MUT-757 (ADR-297): when each payer's first event of each kind happened (within retention), for many payers in one
+   * grouped read. Payers or kinds with no event are absent.
+   */
+  firstEventsOf(subjectKeys: readonly string[], kinds: readonly UsageKind[]): Promise<Array<{ subjectKey: string; kind: UsageKind; firstAt: Date }>>;
   /** Adds the aggregates in one statement (counts and bucket columns add up). */
   addRouteUsage(deltas: readonly RouteUsageDelta[]): Promise<void>;
   /** Every route's totals over [from, to] (Jerusalem days, both inclusive). */

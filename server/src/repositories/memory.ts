@@ -764,14 +764,20 @@ export class MemoryLedgerStore implements LedgerStore {
           for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (!latest || a.version > latest.version)) latest = a;
           return { userId: u.id, email: u.email, status: u.status, latestVersion: latest?.version ?? null, latestClientRelease: latest?.clientRelease ?? null };
         }),
-    listForOperator: async ({ q, limit, cursor }) => {
+    listForOperator: async ({ q, limit, cursor, pilot }) => {
+      const pilotGrantsOf = (userId: string) => [...this.grants.values()].filter((g) => g.userId === userId && g.cohort !== null && g.tier !== 'ACCOUNTANT');
       const rows = [...this.people.values()]
-        .filter((u) => matchesOperatorQuery(u, q) && (!cursor || isAfterOperatorCursor(u, cursor)))
+        .filter((u) => matchesOperatorQuery(u, q) && (!cursor || isAfterOperatorCursor(u, cursor)) && (!pilot || pilotGrantsOf(u.id).length > 0))
         .sort(compareForOperatorList);
       const page = rows.slice(0, limit);
+      const referrer = (id: string | null) => {
+        const person = id ? this.people.get(id) : undefined;
+        return person ? { id: person.id, email: person.email, displayName: person.displayName } : null;
+      };
       const items = page.map((u) => ({
         user: { ...u },
         features: [...this.featureGrants.values()].filter((g) => g.userId === u.id && g.revokedAt === null && isFeature(g.feature)).map((g) => g.feature).sort(),
+        pilotGrants: pilotGrantsOf(u.id).map((g) => ({ cohort: g.cohort!, createdAt: g.createdAt, expiresAt: g.expiresAt, revokedAt: g.revokedAt, referredBy: referrer(g.referredByUserId) })),
       }));
       const last = page.at(-1);
       return { items, nextCursor: rows.length > limit && last ? { lastSignInAt: last.lastSignInAt, createdAt: last.createdAt, id: last.id } : null };

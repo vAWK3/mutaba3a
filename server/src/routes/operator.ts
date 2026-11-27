@@ -271,7 +271,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
     }),
     async (c) => {
       const query = c.req.valid('query');
-      if (query.email === undefined) return c.json({ ...(await accounts.list(query)), stepUpUntil: stepUpUntilOf(c) }, 200);
+      if (query.email === undefined) return c.json({ ...(await accounts.list({ ...query, pilot: query.pilot !== undefined })), stepUpUntil: stepUpUntilOf(c) }, 200);
       const user = await accounts.findByEmail(query.email);
       const account = user ? { id: user.id, email: user.email, displayName: user.displayName, status: user.status } : null;
       return c.json({ account, stepUpUntil: stepUpUntilOf(c) }, 200);

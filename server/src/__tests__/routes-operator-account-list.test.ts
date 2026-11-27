@@ -46,6 +46,7 @@ describe('MUT-527 the account list', () => {
       operator: false,
       lastSignInAt: h.clock.now.toISOString(),
       features: ['invoicing'],
+      pilot: null,
     });
     expect(body.data[1]).toMatchObject({ id: op.id, operator: true });
     expect(body.data[3]).toMatchObject({ lastSignInAt: null, features: [] });

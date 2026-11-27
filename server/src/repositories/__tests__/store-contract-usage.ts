@@ -159,6 +159,24 @@ export function describeLedgerStoreUsageContract(name: string, makeStore: () => 
       expect((await store.usage.standing(month)).find((s) => s.plan === 'solo')).toEqual({ plan: 'solo', payers: 5, near: 2, capped: 1, over: 1 });
     });
 
+    it('MUT-757: firstEventsOf gives each payer’s first event per kind, for many payers at once', async () => {
+      const store = await makeStore();
+      const [early, late] = [ownMonth(), ownMonth()].sort() as [string, string];
+      const [a, b, quiet] = [subject(), subject(), subject()];
+      await record(store, late, a, 1, { kind: 'SCAN', detail: 'LIBRARY' });
+      await record(store, early, a, 1, { kind: 'SCAN', detail: 'EXPENSE' });
+      await record(store, late, a, 2);
+      await record(store, early, b, 1, { kind: 'MAIL_SENT', detail: null });
+      const rows = await store.usage.firstEventsOf([a, b, quiet], ['SCAN', 'DOCUMENT_ISSUED']);
+      expect(rows.sort((x, y) => `${x.subjectKey}${x.kind}`.localeCompare(`${y.subjectKey}${y.kind}`))).toEqual(
+        [
+          { subjectKey: a, kind: 'DOCUMENT_ISSUED', firstAt: new Date(`${late}-15T10:00:00Z`) },
+          { subjectKey: a, kind: 'SCAN', firstAt: new Date(`${early}-15T10:00:00Z`) },
+        ].sort((x, y) => `${x.subjectKey}${x.kind}`.localeCompare(`${y.subjectKey}${y.kind}`)),
+      );
+      expect(await store.usage.firstEventsOf([], ['SCAN'])).toEqual([]);
+    });
+
     it('byProfile counts a payer’s events per profile, month and kind', async () => {
       const store = await makeStore();
       const [a, b] = [ownMonth(), ownMonth()];
