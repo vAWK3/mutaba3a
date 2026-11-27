@@ -1,5 +1,5 @@
 import { requestUsage } from '../usage/request.js';
-import { nextPlanFor, planLimitError } from '../billing/plan-limit.js';
+import { giftDetail, nextPlanFor, planLimitError } from '../billing/plan-limit.js';
 import { resetsOn, usageMonthOf } from '../usage/month.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
@@ -408,7 +408,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         case 'plan_limit': {
           // MUT-731 (ADR-284): Starter's 3 documents a month are used up; nothing was issued and the key is released.
           const plan = input.usage!.plan;
-          throw planLimitError({ limit: 'documents', plan, nextPlan: nextPlanFor(plan), canUpgrade: tax.canUpgrade ?? false, used: result.used, cap: result.cap, resetsOn: resetsOn(usageMonthOf(now)) });
+          throw planLimitError({ limit: 'documents', plan, nextPlan: nextPlanFor(plan), canUpgrade: tax.canUpgrade ?? false, used: result.used, cap: result.cap, resetsOn: resetsOn(usageMonthOf(now)), ...giftDetail(input.usage) });
         }
         case 'issued':
           if (result.created) await audit(c, 'issued_document.issued', 'issued_document', result.document.id, { docType: result.document.docType, number: result.document.number, ...versionStamp(pack) });

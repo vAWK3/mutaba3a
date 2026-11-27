@@ -60,7 +60,7 @@ const reporter = createSentryReporter({
   release: apiRelease(serverPackageVersion(), config.SERVICE_VERSION),
 });
 // MUT-731 (ADR-284): STARTER_PLAN is the store's, so every entitlement reader (routes and jobs) resolves the same way.
-const store = PrismaLedgerStore.connect(config.DATABASE_URL, { starterPlan: config.STARTER_PLAN, paidBusinessCaps: config.PAID_BUSINESS_CAPS });
+const store = PrismaLedgerStore.connect(config.DATABASE_URL, { starterPlan: config.STARTER_PLAN, paidBusinessCaps: config.PAID_BUSINESS_CAPS, paidHardCaps: config.PAID_HARD_CAPS });
 const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);

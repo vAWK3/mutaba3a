@@ -21,5 +21,5 @@ export function issueUsageEvents(stamp: UsageStamp, input: Pick<IssueDocumentInp
  */
 export function documentCapOf(stamp: UsageStamp, input: Pick<IssueDocumentInput, 'docType' | 'appliesToDocumentId'>): number | null {
   if (input.docType === 'RECEIPT' && input.appliesToDocumentId) return null;
-  return hardCapOf(stamp.plan, 'DOCUMENTS');
+  return hardCapOf(stamp.plan, 'DOCUMENTS', stamp.caps);
 }

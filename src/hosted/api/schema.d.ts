@@ -20116,6 +20116,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/over-cap-gift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the once-ever over-cap gift for a monthly meter (MUT-733)
+         * @description Only after a 409 PLAN_LIMIT that said `gift: "available"`: the meter must be at its cap this month on a Solo or Business plan with PAID_HARD_CAPS on (409 GIFT_NOT_AVAILABLE otherwise). Once per account, ever, for one meter (409 GIFT_USED after; a repeat for the same meter in the same month answers 200). Audited `billing.over_cap_gift`. Additive since 1.158.0-mut733.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OverCapGiftRequest"];
+                };
+            };
+            responses: {
+                /** @description The meter has no cap until `until` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OverCapGift"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such business among the caller’s */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description GIFT_USED, or GIFT_NOT_AVAILABLE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/starter": {
         parameters: {
             query?: never;
@@ -33926,7 +34005,7 @@ export interface components {
                 level: "ok" | "near" | "nudge" | "at_cap";
                 /**
                  * Format: date-time
-                 * @description Reserved for MUT-733 (the over-cap gift); never sent yet.
+                 * @description MUT-733: the over-cap gift lifts this meter’s cap until this instant (the 1st of the next Jerusalem month); absent otherwise. `limit` stays the plan’s.
                  */
                 graceUntil?: string | null;
             }[];
@@ -33940,6 +34019,9 @@ export interface components {
             partners: {
                 /** @description Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731). */
                 limit: number | null;
+            };
+            gift?: {
+                available: boolean;
             };
         };
         BillingPlan: {
@@ -34156,6 +34238,18 @@ export interface components {
             prorationAt?: string;
             expectedAmountDue?: number;
             activeBusinessIds?: string[];
+        };
+        OverCapGift: {
+            /** @enum {string} */
+            meter: "documents" | "scans";
+            /** Format: date-time */
+            until: string;
+        };
+        OverCapGiftRequest: {
+            /** @enum {string} */
+            meter: "documents" | "scans";
+            /** Format: uuid */
+            organizationId?: string;
         };
         StarterChoice: {
             /** Format: date-time */

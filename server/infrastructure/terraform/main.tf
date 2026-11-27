@@ -803,6 +803,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-733 (ADR-292): Solo and Business monthly caps refuse after the one-time gift; off = counted, never refused.
+        dynamic "env" {
+          for_each = var.paid_hard_caps ? { PAID_HARD_CAPS = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-737 (ADR-289): open sign-up (every verified sign-up opens on Starter, no review); needs starter_plan.
         dynamic "env" {
           for_each = var.open_signup ? { OPEN_SIGNUP = "true" } : {}

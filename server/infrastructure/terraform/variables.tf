@@ -567,6 +567,12 @@ variable "paid_business_caps" {
   default     = false
 }
 
+variable "paid_hard_caps" {
+  description = "MUT-733 (ADR-292): sets PAID_HARD_CAPS=true: Solo and Business monthly meters (documents, scans) refuse at the cap after a one-time gift per account; Firm stays soft. false (default) = counted, never refused. On only after plan_checkout, MUT-734's plan change and the phone build that shows the gift."
+  type        = bool
+  default     = false
+}
+
 variable "open_signup" {
   description = "MUT-737 (ADR-289): sets OPEN_SIGNUP=true: every verified self-service sign-up the domain screen lets through opens ACTIVE on Starter, with no operator review and no review digest. Needs starter_plan (the server refuses to boot otherwise). Before turning it on: npm --prefix server run signups:release -- --apply. false (default) = webmail and unverified domains wait for review."
   type        = bool

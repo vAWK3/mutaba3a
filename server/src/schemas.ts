@@ -624,11 +624,13 @@ export const BillingUsageSchema = z
         used: z.number().int().nonnegative(),
         limit: UsageLimitSchema,
         level: z.enum(['ok', 'near', 'nudge', 'at_cap']).openapi({ description: 'near from 80% of the limit, nudge from 90%, at_cap at it; ok with no limit.' }),
-        graceUntil: z.string().datetime().nullable().optional().openapi({ description: 'Reserved for MUT-733 (the over-cap gift); never sent yet.' }),
+        graceUntil: z.string().datetime().nullable().optional().openapi({ description: 'MUT-733: the over-cap gift lifts this meter’s cap until this instant (the 1st of the next Jerusalem month); absent otherwise. `limit` stays the plan’s.' }),
       }),
     ),
     businesses: z.object({ used: z.number().int().nonnegative(), limit: UsageLimitSchema }).openapi({ description: 'Business profiles the person created (the personal one never counts).' }),
     partners: z.object({ limit: UsageLimitSchema }).openapi({ description: 'Partners allowed on each business profile.' }),
+    /** MUT-733 (ADR-292): the once-ever over-cap gift can still be taken (PAID_HARD_CAPS on, Solo or Business). Additive since 1.158.0-mut733. */
+    gift: z.object({ available: z.boolean() }).optional(),
   })
   .openapi('BillingUsage');
 

@@ -57,6 +57,7 @@ import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, billingPlanRoutes } from './routes/billing-plan.js';
 import { billingPlanChangeRoutes } from './routes/billing-plan-change.js';
+import { BILLING_GIFT_ROUTES, billingGiftRoutes } from './routes/billing-gift.js';
 import { BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, billingStarterRoutes } from './routes/billing-starter.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { agentAuditFor } from './oauth/audit.js';
@@ -347,7 +348,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_GIFT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -434,7 +435,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.157.0-mut734';
+export const API_VERSION = '1.158.0-mut733';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -758,6 +759,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       settings: sessions,
     }),
   );
+  // MUT-733 (ADR-292): the once-ever over-cap gift.
+  app.route('/', billingGiftRoutes(store));
   // MUT-731 (ADR-284): the person's Starter choices (continue free, the active business, the trial step shown).
   app.route('/', billingStarterRoutes(store));
   // MUT-441: the server's reader, on the unguarded store (a job, and the uploader's grant, act for no principal).

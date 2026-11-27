@@ -4985,3 +4985,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Terraform | `starter_plan.tftest.hcl` | `PAID_BUSINESS_CAPS` off by default, on when set |
 | test:db | (CI) | the migration; cascade on closure (purge list entry) |
 | QA | with the UI half | `portal-live.billing.upgrade-solo-business`, `downgrade-business-solo`, `to-starter`, `undo-downgrade`, `portal.billing.change-plan-pane` |
+
+## MUT-733 (server half) — paid hard caps and the gift (2026-11-27, ADR-292)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `usage/__tests__/gift.test.ts` | covers/available across meters, months, plans; `giftUntil` in winter and summer; `hardCapOf` with the rule |
+| Route | `__tests__/paid-caps-gift.test.ts` | Solo 50/50 refused with `gift: available`, the gift taken, the same invoice and more go through, `graceUntil` and `gift.available` on usage, idempotent retry, GIFT_USED on the other meter; next month hard; GIFT_NOT_AVAILABLE early, on Firm (soft) and flag off; an upgrade lifts the cap |
+| Config, Terraform | `config.test.ts`, `starter_plan.tftest.hcl` | `PAID_HARD_CAPS` off by default |
+| Not yet | | scans' gift path and a partner taking the owner's gift (the same rule and route; worth a test with the UI half); `test:db` concurrent accept |
+| QA | with the UI half | `portal.paid-cap-gift`, `paid-cap-hard-next-month`, `paid-cap-other-meter`, `paid-usage-nudge`, `paid-cap-upgrade-lifts` |

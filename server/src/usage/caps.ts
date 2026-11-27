@@ -1,5 +1,16 @@
-import { HARD_CAP_PLANS, PLAN_LIMITS, type FreePlanName, type PlanName } from '../billing/plans.js';
+import { HARD_CAP_PLANS, PAID_HARD_CAP_PLANS, PLAN_LIMITS, type FreePlanName, type PlanName } from '../billing/plans.js';
 import type { UsageMeter, UsagePlan } from './kinds.js';
+
+/**
+ * MUT-733 (ADR-292): what a stamp carries about the paid caps: PAID_HARD_CAPS, and the meter the over-cap gift lifts
+ * this month (null: none). Absent = only Starter is hard-capped (as before).
+ */
+export interface CapRule {
+  paidHardCaps: boolean;
+  giftMeter: UsageMeter | null;
+  /** The gift can still be offered (a refusal says `gift: 'available'`). */
+  giftAvailable: boolean;
+}
 
 /**
  * MUT-735 (ADR-281): a plan's monthly cap per meter, and how close a count is to it. Pure. MUT-731 (ADR-284): Starter's
@@ -21,8 +32,11 @@ export function capOf(plan: UsagePlan, meter: UsageMeter): number | null {
  * MUT-731 (ADR-284): the cap a write passes to the counter's conditional upsert: the plan's cap where the plan refuses
  * at it (HARD_CAP_PLANS: Starter), else null (counted, never refused; MUT-733 adds the paid plans).
  */
-export function hardCapOf(plan: UsagePlan, meter: UsageMeter): number | null {
-  return HARD_CAP_PLANS.has(plan) ? capOf(plan, meter) : null;
+export function hardCapOf(plan: UsagePlan, meter: UsageMeter, rule?: CapRule | null): number | null {
+  if (HARD_CAP_PLANS.has(plan)) return capOf(plan, meter);
+  // MUT-733: Solo and Business with PAID_HARD_CAPS on, except the meter the gift lifts this month.
+  if (rule?.paidHardCaps && PAID_HARD_CAP_PLANS.has(plan) && rule.giftMeter !== meter) return capOf(plan, meter);
+  return null;
 }
 
 /** Basel (2026-11-25): usage lines show 80% (near) and 90% (nudge) before the cap itself. */

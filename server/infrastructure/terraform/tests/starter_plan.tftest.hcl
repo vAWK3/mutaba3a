@@ -108,3 +108,26 @@ run "paid_business_caps_on" {
   }
 }
 
+# MUT-733 (ADR-292): the paid hard caps ship off.
+run "paid_hard_caps_off_by_default" {
+  command = apply
+
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "PAID_HARD_CAPS"]) == 0
+    error_message = "With paid_hard_caps off the service gets no PAID_HARD_CAPS."
+  }
+}
+
+run "paid_hard_caps_on" {
+  command = apply
+
+  variables {
+    paid_hard_caps = true
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "PAID_HARD_CAPS"] == ["true"]
+    error_message = "With paid_hard_caps on the service gets PAID_HARD_CAPS=true."
+  }
+}
+

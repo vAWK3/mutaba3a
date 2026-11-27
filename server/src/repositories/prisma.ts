@@ -258,13 +258,14 @@ export class PrismaLedgerStore implements LedgerStore {
   /** MUT-731 (ADR-284): `starterPlan` is the server's STARTER_PLAN (BillingRepository.starterPlan). Absent = off. */
   constructor(
     private readonly prisma: PrismaClient,
-    options: { starterPlan?: boolean; paidBusinessCaps?: boolean } = {},
+    options: { starterPlan?: boolean; paidBusinessCaps?: boolean; paidHardCaps?: boolean } = {},
   ) {
     (this.billing as { starterPlan: boolean }).starterPlan = options.starterPlan === true;
     (this.billing as { paidBusinessCaps: boolean }).paidBusinessCaps = options.paidBusinessCaps === true;
+    (this.billing as { paidHardCaps: boolean }).paidHardCaps = options.paidHardCaps === true;
   }
 
-  static connect(databaseUrl: string, options: { starterPlan?: boolean; paidBusinessCaps?: boolean } = {}): PrismaLedgerStore {
+  static connect(databaseUrl: string, options: { starterPlan?: boolean; paidBusinessCaps?: boolean; paidHardCaps?: boolean } = {}): PrismaLedgerStore {
     // ADR-091 (MUT-148): a minimal error never prints the query input into a log line or an error report.
     return new PrismaLedgerStore(new PrismaClient({ datasources: { db: { url: databaseUrl } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat }), options);
   }
@@ -3595,7 +3596,7 @@ export class PrismaLedgerStore implements LedgerStore {
         await this.prisma.$transaction(async (tx) => {
           const { count } = await tx.expenseReceipt.updateMany(flip);
           // MUT-731 (ADR-284): Starter's 12 scans a month; at the cap UsageCapReached rolls the flip back.
-          if (count === 1) await recordUsageTx(tx, usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS'));
+          if (count === 1) await recordUsageTx(tx, usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS', usage.caps));
         });
       } else {
         await this.prisma.expenseReceipt.updateMany(flip);
@@ -3825,7 +3826,7 @@ export class PrismaLedgerStore implements LedgerStore {
           if ((await countReadyOnExpense(tx, params.organizationId, params.expenseId)) >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
           const receipt = await tx.expenseReceipt.update({ where: { id: params.receiptId }, data: { status: 'READY', completedAt: at } });
           // MUT-735 (ADR-281): the scan counts with the flip, under the same locks.
-          if (params.usage) await recordUsageTx(tx, usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: params.receiptId, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS'));
+          if (params.usage) await recordUsageTx(tx, usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: params.receiptId, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS', params.usage.caps));
           return { kind: 'completed' as const, receipt: toExpenseReceipt(receipt) };
         },
         RECEIPT_TX_OPTIONS,
@@ -3854,6 +3855,21 @@ export class PrismaLedgerStore implements LedgerStore {
     // MUT-731: set by the constructor (field initializers run before it).
     starterPlan: false,
     paidBusinessCaps: false,
+    paidHardCaps: false,
+    overCapGiftOf: async (userId) => {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { overCapGiftUsedAt: true, overCapGiftMeter: true, overCapGiftMonth: true } });
+      if (!row) return null;
+      const meter = row.overCapGiftMeter === 'DOCUMENTS' || row.overCapGiftMeter === 'SCANS' ? row.overCapGiftMeter : null;
+      return { usedAt: row.overCapGiftUsedAt, meter, month: row.overCapGiftMonth };
+    },
+    claimOverCapGift: ({ userId, meter, month, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        // One gift per account, ever: the conditional update decides between two tabs.
+        const { count } = await tx.user.updateMany({ where: { id: userId, overCapGiftUsedAt: null }, data: { overCapGiftUsedAt: at, overCapGiftMeter: meter, overCapGiftMonth: month } });
+        if (count === 0) return false;
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = [...ownerUserIds];
       const orgs = [...organizationIds];

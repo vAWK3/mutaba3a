@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Paid plans' monthly caps: one gift, then hard (MUT-733 server half, ADR-292, API 1.158.0-mut733)
+
+Epic MUT-701. Plan `.claude/designs/mut-733-over-cap-gift-plan.md` (approved with defaults). Server only; the gift message on the portal and phone, the usage lines and the analytics come with the UI half (and MUT-706). Dark behind `PAID_HARD_CAPS`. No migration (the gift columns exist since MUT-735).
+
+### Added
+- `PAID_HARD_CAPS` (Terraform `paid_hard_caps`, default off): Solo and Business documents and scans refuse at the cap with 409 PLAN_LIMIT; Firm stays soft (Q2); legacy Freelancer, Malafat and owner-less firms are never capped (Q4).
+- `PLAN_LIMIT` `details.gift: 'available'` on the first refusal of an account whose gift is unused.
+- `POST /v1/billing/over-cap-gift { meter, organizationId? }` → `{ meter, until }`: once per account, ever, for the meter at its cap (conditional update; a retry for the same meter and month answers 200); a partner takes the owner's (Q3). 409 `GIFT_USED` / `GIFT_NOT_AVAILABLE`. Audited `billing.over_cap_gift`.
+- `GET /v1/billing.usage`: `meters[].graceUntil` for the gifted meter in its month; `gift: { available }`.
+- `usage/gift.ts` (pure); `hardCapOf(plan, meter, rule)`; the usage stamp carries the cap rule (one read of the payer's gift, only with the flag on a Solo/Business payer); `store.billing.overCapGiftOf` / `claimOverCapGift`.
+
+### Unchanged
+- Starter's caps; a receipt for a payment on an issued document is never refused; Issue all passes the refusal's details (now with `gift`).
+
+---
+
 ## [Unreleased] - 2026-11-27 — Change plan: up now, down at the period end, to Starter (MUT-734 server half, ADR-291, API 1.157.0-mut734)
 
 Epic MUT-701. Plan `.claude/designs/mut-734-plan-change-plan.md` (approved with defaults). Server only; the portal's Change-plan pane, the cancel flow's "Move to Starter instead", the scheduled line with Undo and the operator's Plan history list come with the UI half. Behind `PLAN_CHECKOUT` (plan changes) and `PAID_BUSINESS_CAPS` (the paid plans' business counts), both off.

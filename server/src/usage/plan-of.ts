@@ -1,9 +1,11 @@
 import { entitlementsFor } from '../billing/coverage.js';
-import { currentPlanOf } from '../billing/plans.js';
+import { currentPlanOf, PAID_HARD_CAP_PLANS } from '../billing/plans.js';
 import { ownedProfilesOf, profileOwnerOf } from '../personal-profile.js';
 import type { LedgerStore, Organization, UsageStamp } from '../repositories/ports.js';
 import { doorOf, type DoorPrincipal, type UsagePlan } from './kinds.js';
-import { subjectKeyOf } from './subject.js';
+import { subjectKeyOf, userIdOfSubject } from './subject.js';
+import { giftAvailable, giftCovers, NO_GIFT } from './gift.js';
+import { usageMonthOf } from './month.js';
 
 type PlanStore = Pick<LedgerStore, 'billing' | 'memberships' | 'organizations' | 'integrations'>;
 
@@ -52,5 +54,22 @@ export async function usageStampFor(
   const door = doorOf(action.principal);
   const byMalafat = door === 'MALAFAT' || action.writerOfRecord === 'MALAFAT';
   const plan = byMalafat ? 'malafat' : await payerPlanOf(store, action.organization, now);
-  return { subjectKey: subjectKeyOf(action.organization), plan, door, actorUserId: action.actorUserId };
+  const subjectKey = subjectKeyOf(action.organization);
+  const caps = await capRuleOf(store, subjectKey, plan, now);
+  return { subjectKey, plan, door, actorUserId: action.actorUserId, ...(caps ? { caps } : {}) };
+}
+
+/**
+ * MUT-733 (ADR-292): with PAID_HARD_CAPS on and a Solo or Business payer, the gift's state from the payer's own row
+ * (one read): the meter it lifts this month, and whether it can still be offered. Null otherwise (Starter's caps need no
+ * rule; an owner-less firm, `org:`, is never capped, Q4).
+ */
+async function capRuleOf(store: PlanStore, subjectKey: string, plan: UsagePlan, now: Date): Promise<UsageStamp['caps'] | null> {
+  if (!store.billing.paidHardCaps || !PAID_HARD_CAP_PLANS.has(plan)) return null;
+  const payer = userIdOfSubject(subjectKey);
+  if (!payer) return null;
+  const gift = (await store.billing.overCapGiftOf(payer)) ?? NO_GIFT;
+  const month = usageMonthOf(now);
+  const giftMeter = gift.meter && giftCovers(gift, gift.meter, month) ? gift.meter : null;
+  return { paidHardCaps: true, giftMeter, giftAvailable: giftAvailable(gift, plan, true) };
 }
