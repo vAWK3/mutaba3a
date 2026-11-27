@@ -28,7 +28,8 @@ function expected(access: MethodAccess, principal: 'apiKey' | 'session', writer:
   if (access === 'read' || access === 'control') return 'allowed';
   if (access === 'operator') return 'PRINCIPAL_NOT_ACCEPTED:null';
   // MUT-66: a signed-in person's own resource; no profile and no matrix domain apply.
-  if (access === 'sessionOnly') return principal === 'session' ? 'allowed' : 'PRINCIPAL_NOT_ACCEPTED:null';
+  // MUT-763: creating a customer's account is a signed-in session's call too; the store re-checks the operator's approval.
+  if (access === 'sessionOnly' || access === 'provision') return principal === 'session' ? 'allowed' : 'PRINCIPAL_NOT_ACCEPTED:null';
   if ('read' in access) return row(access.read)[principal] === 'none' ? 'PRINCIPAL_NOT_ACCEPTED:null' : 'allowed';
   const r = row(access.write);
   // MUT-65: the three profile-dependent domains are read-write for a session on a personal profile (writer === null), read-only on a Malafat-fed one — a wrapper over the matrix, not a matrix edit.
@@ -204,6 +205,10 @@ describe('STORE_ACCESS', () => {
       'passkeys.findByCredentialId',
       'passkeys.pruneChallenges',
       'passkeys.recordUse',
+      // MUT-763: the operator's approval of an accountant, the origin of a provisioned account and its setup link (create and approvalOf are class `provision`).
+      'provision.originOf',
+      'provision.setApproval',
+      'provision.setupLinkOf',
       // MUT-461: the operator's account view counts a person's live sessions.
       'sessions.countLiveForUser',
       // MUT-314: the period download's stream checks, on the base store, that the minting session still works.

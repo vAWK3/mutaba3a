@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Accountant provisioning: migration and store (MUT-763, epic MUT-762, no route, no API change)
+
+Plan: `docs/designs/accountant-channel.md` (eng review R1–R6). Store layer only; the route (MUT-764), claim code (MUT-765) and the UI come in their own tickets.
+
+### Added
+- Migration `20261127150000_mut763_accountant_provisioning` (additive): `users.provisionedByUserId` (FK, SET NULL), `provisionedAt`, `accountantProvisioningEnabledAt`, `provisionCreateLimitPerDay`, `provisionLookupLimitPerDay`; `account_setup_tokens.claimCodeDigest`, `claimCodeAttempts`, `mailStatus`; indexes on `users(provisionedByUserId, provisionedAt)`, a partial index on unclaimed provisioned users, and `audit_events(actorId, action, createdAt)`; CHECKs for the provision pair, the limits and the claim columns. No `UPDATE`, no backfill.
+- `store.provision` (`LedgerStore`, memory twin and Prisma): `create` is one transaction (approval re-read `FOR SHARE`, address lock, passwordless user, SETUP-purpose link with claim digest, BUSINESS profile, ACTIVE read grant for the accountant, audit rows); `approvalOf`, `setApproval`, `originOf`, `setupLinkOf`.
+- Guard class `provision` in `STORE_ACCESS`: signed-in session only; `setApproval`, `originOf`, `setupLinkOf` stay `operator`.
+- Tests: `store-contract-accountant-provision.ts` (memory and Postgres), `store-guard-provision.test.ts`.
+- Unclaimed is derived (`passwordHash IS NULL AND provisionedAt IS NOT NULL`); no state column.
+
+---
+
 ## [Unreleased] - 2026-11-27 — A rules read: what the invoicing screens show comes from the issuer's pack (MUT-743 server piece, ADR-287, API 1.149.0-mut743)
 
 Epic MUT-738. First of three pieces (server, then the portal, then the phone in the Flutter repo); this one changes no screen. Plan `.claude/designs/MUT-743-rules-read.md` (eng-reviewed). No migration.
