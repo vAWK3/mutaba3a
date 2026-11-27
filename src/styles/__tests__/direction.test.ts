@@ -93,7 +93,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/connect/ConsentPage.tsx': { ltr: 1, auto: 2 }, // the redirect host; the client's name
   'src/hosted/pages/operator/OperatorAccountsPage.tsx': { ltr: 1, auto: 2 }, // MUT-527: each row's address; the search field (an address or a name) and each row's name
   'src/hosted/pages/operator/OperatorAccountPage.tsx': { ltr: 1, auto: 2 }, // MUT-461: the account's address; its name and each profile's name
-  'src/hosted/pages/operator/OperatorBillingSection.tsx': { ltr: 1, auto: 2 }, // MUT-462: the drawer's address; a grant's reason and the reason field
+  'src/hosted/pages/operator/OperatorBillingSection.tsx': { ltr: 3, auto: 2 }, // MUT-462: the drawer's address; a grant's reason and the reason field. MUT-757: the cohort (a slug) and the accountant's email
   'src/hosted/pages/operator/OperatorFirmsPage.tsx': { ltr: 2, auto: 2 }, // MUT-462: the asker's and each member's address; the profile's and a member's name
   'src/hosted/pages/operator/OperatorSignupsPage.tsx': { ltr: 4 }, // MUT-460: the signup's email (row and kept row), its domain, an unknown reason code
   'src/hosted/pages/operator/OperatorUsagePage.tsx': { ltr: 5, auto: 1 }, // MUT-735: counts (event count, used / limit, used with no cap), the person's email and the route template; the person's name
