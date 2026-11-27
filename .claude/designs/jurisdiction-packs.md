@@ -1,6 +1,6 @@
 # Jurisdiction packs: invoicing rules by the issuer's country (DRAFT, 2026-11-26)
 
-**Status:** Draft for Basel's approval. Nothing built. Epic and tickets are filed in Jira (see the end). Written from a read of the code and tickets on 2026-11-26 (main 41d8ea9a).
+**Status:** APPROVED by Basel 2026-11-27 (MUT-739). MUT-740 to MUT-743 are built on it. Epic and tickets are filed in Jira (see the end). Written from a read of the code and tickets on 2026-11-26 (main 41d8ea9a).
 
 ## 1. Problem
 

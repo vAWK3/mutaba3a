@@ -7294,7 +7294,7 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 ## ADR-287: Invoicing Rules Live in Jurisdiction Packs Chosen by the Issuer's Country; Israel Is the First Pack (Epic MUT-738; amends ADR-260 decisions 3, 6 and 7)
 
-**Status:** Proposed (2026-11-26; design brief `.claude/designs/jurisdiction-packs.md`, approval is MUT-739). Israel is finished before any second country (Basel, 2026-11-26); this ADR makes Israel the first pack, not a second country.
+**Status:** Accepted (Basel, 2026-11-27; proposed 2026-11-26; design brief `.claude/designs/jurisdiction-packs.md`, approval is MUT-739). Israel is finished before any second country (Basel, 2026-11-26); this ADR makes Israel the first pack, not a second country.
 
 **Context:**
 - Issuing (epic MUT-566, ADR-260) is Israel-only, and Israel is built into every layer: ILS-only currency (`ISSUING_CURRENCIES`), the Israeli VAT table (`issuing/vat-rate.ts`), the Tax Authority's document codes (`DOC_TYPE_CODES`), Israeli legal forms (`DealerType`), 9-digit ID columns, the allocation number as a column of `issued_documents`, gap-free numbering, Instruction 18B signing, the uniform file, 7-year retention, `Asia/Jerusalem`.
