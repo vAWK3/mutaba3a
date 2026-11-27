@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Plan Wireframes Index</title>
+<style>
+:root { --bg: oklch(0.975 0.014 80); --surface: oklch(0.993 0.008 80); --line: oklch(0.92 0.015 300); --ink: oklch(0.33 0.05 300); --ink2: oklch(0.442 0.043 298.7); --link: oklch(0.401 0.114 294.5); --rec-bg: oklch(0.9 0.06 165); --rec: oklch(0.387 0.076 170.2); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: oklch(0.24 0.035 300); --surface: oklch(0.29 0.04 300); --line: oklch(0.4 0.04 300); --ink: oklch(0.95 0.015 80); --ink2: oklch(0.78 0.03 300); --link: oklch(0.88 0.08 295); --rec-bg: oklch(0.38 0.07 165); --rec: oklch(0.88 0.08 165); } }
+:root[data-theme="dark"] { --bg: oklch(0.24 0.035 300); --surface: oklch(0.29 0.04 300); --line: oklch(0.4 0.04 300); --ink: oklch(0.95 0.015 80); --ink2: oklch(0.78 0.03 300); --link: oklch(0.88 0.08 295); --rec-bg: oklch(0.38 0.07 165); --rec: oklch(0.88 0.08 165); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 1.75rem; margin: 0 0 4px; }
+.sub { color: var(--ink2); font-size: .8125rem; margin: 0 0 24px; }
+ul { list-style: none; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+li { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+li:last-child { border-bottom: 0; }
+a { color: var(--link); font-weight: 600; text-decoration: none; font-size: 1.0625rem; }
+a:hover { text-decoration: underline; }
+p { margin: 4px 0 0; color: var(--ink2); font-size: .875rem; }
+.rec { display: inline-block; margin-top: 6px; font-size: .75rem; background: var(--rec-bg); color: var(--rec); padding: 2px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Wireframes, 27 Nov 2026</h1>
+<p class="sub">Each file: Arabic RTL first (English toggle), light / dark / auto, three variants A/B/C per screen with their trade-off, state buttons, web portal and Flutter phone side by side. ★ marks the recommended variant.</p>
+<ul>
+<li><a href="mut-750a.html">MUT-750a · VAT lines before Checkout</a><p>Price, VAT 18% and total for an Israeli address on the Subscribe step (portal only; the phone never sells).</p><span class="rec">Recommended: A, three lines under the address</span></li>
+<li><a href="mut-734.html">MUT-734 · Change plan</a><p>Change-plan pane (upgrade with pro-rata, downgrade at period end, to Starter, pending, declined), scheduled change with Undo and the phone's read-only line, businesses that stay active, cancel offering Starter.</p><span class="rec">Recommended: pane B (two panes) · scheduled A (one line) · keep A (checklist) · cancel A (in-place footer)</span></li>
+<li><a href="mut-733.html">MUT-733 · Monthly caps and the gift</a><p>Usage lines at 79/80/90%, at the cap, during the gift, Firm, pilot (shared with MUT-754); the Issue drawer and phone issue screen with the gift and hard-cap notices.</p><span class="rec">Recommended: meters A (row + bar) · point of use A (banner slot / half sheet)</span></li>
+<li><a href="mut-706.html">MUT-706 · Plans on the phone</a><p>Plan names for every tier with the scheduled line, paid usage lines, the gift and business-limit sheets, picking active businesses.</p><span class="rec">Recommended: A on all four screens</span></li>
+<li><a href="mut-737.html">MUT-737 · Signups history</a><p>The operator Signups page as read-only history, no Approve / Decline.</p><span class="rec">Recommended: A, a filter on Accounts</span></li>
+<li><a href="mut-774.html">MUT-774 · Client balances and the ledger card</a><p>Each client's balance per currency on the portal clients list (and phone list), and the phone client ledger card mirroring the portal LedgerCard.</p><span class="rec">Recommended: list A (stacked balance column) · ledger A (month sections)</span></li>
+</ul>
+</main>
+</body>
+</html>
