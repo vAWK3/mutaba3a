@@ -33780,6 +33780,8 @@ export interface components {
             vendorId: string;
             currency: components["schemas"]["Currency"] & unknown;
             vat: components["schemas"]["VendorVat"];
+            /** Format: uuid */
+            categoryId: string | null;
         } | null;
         ApproveReceiptResponse: {
             expense: components["schemas"]["Expense"];

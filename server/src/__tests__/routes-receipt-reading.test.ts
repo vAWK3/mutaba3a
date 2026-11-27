@@ -320,6 +320,62 @@ describe('the read (claim, lease, end states)', () => {
     expect((await stored(h, orgId, done.id)).suggested?.vendorName).toEqual({ value: 'Shufersal Ltd', source: 'vendor', confidence: 1 });
   });
 
+  describe('MUT-775: a known vendor’s registration no. fills the vendor and its last category', () => {
+    /** A vendor saved the way a person saves one: an expense naming it, its registration no. and a category. */
+    async function savedVendor(h: Harness, as: Record<string, string>, name: string) {
+      const travel = await read(await h.app.request('/v1/expense-categories', json({ name: 'Travel' }, { ...as, ...idem() })));
+      const res = await h.app.request('/v1/expenses', json({ occurredOn: '2026-10-20', amount: '12.00', currency: 'ILS', vendor: name, vendorDetails: { registrationNo: REG_VALID_COMPANY }, categoryId: travel.id }, { ...as, ...idem() }));
+      expect(res.status).toBe(201);
+      return travel.id as string;
+    }
+    const review = async (h: Harness, as: Record<string, string>, id: string) => read(await h.app.request(`/v1/receipts/${id}`, { headers: as }));
+
+    it('AC1: the review opens with the vendor’s name, confident, and its last category', async () => {
+      const { h, as } = await setup({ dispatcher: 'recording' });
+      const travel = await savedVendor(h, as, 'Shufersal Ltd');
+      const done = await upload(h, as);
+      expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'done' });
+      const got = await review(h, as, done.id);
+      expect(got.suggested.vendorName).toEqual({ value: 'Shufersal Ltd', source: 'vendor', confidence: 1 });
+      expect(got.vendorDefaults).toMatchObject({ vendorId: expect.any(String), categoryId: travel });
+    });
+
+    it('AC2: no saved vendor has the number: the vendor stays as read and there are no defaults', async () => {
+      const { h, as } = await setup({ dispatcher: 'recording' });
+      const done = await upload(h, as);
+      await job(h, { receiptId: done.id });
+      const got = await review(h, as, done.id);
+      expect(got.suggested.vendorName.source).toBe('ocr');
+      expect(got.vendorDefaults).toBeNull();
+    });
+
+    it('D4: a vendor name already on the receipt is never overwritten; the category is still offered as a default', async () => {
+      const { h, orgId, as } = await setup({ dispatcher: 'recording' });
+      const travel = await savedVendor(h, as, 'Shufersal Ltd');
+      const done = await upload(h, as);
+      const theirs: ReceiptSuggestion = { readerVersion: 'phone-1', vendorName: { value: 'My corner shop', source: 'ocr', confidence: 0.9 } };
+      const r = await stored(h, orgId, done.id);
+      await h.store.expenseReceipts.setSuggested(orgId, done.id, r.version, theirs);
+      await job(h, { receiptId: done.id });
+      const got = await review(h, as, done.id);
+      expect(got.suggested.vendorName).toEqual(theirs.vendorName);
+      expect(got.vendorDefaults).toMatchObject({ categoryId: travel });
+    });
+
+    it('AC3: a vendor saved on another profile never fills a receipt on this one', async () => {
+      const { h, as, userId } = await setup({ dispatcher: 'recording' });
+      const b = (await read(await h.app.request('/admin/v1/organizations', json({ name: `Studio ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)))).id as string;
+      await h.app.request(`/admin/v1/users/${userId}/memberships`, json({ organizationId: b }, admin));
+      await savedVendor(h, as, 'Shufersal Ltd');
+      const done = await upload(h, as);
+      expect((await h.app.request(`/v1/receipts/${done.id}/move`, json({ profileId: b }, { ...as, ...idem() }))).status).toBe(200);
+      expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'done' });
+      const got = await review(h, { ...as, 'x-mutaba3a-profile': b }, done.id);
+      expect(got.suggested.vendorName.source).toBe('ocr');
+      expect(got.vendorDefaults).toBeNull();
+    });
+  });
+
   it('OCR unreadable: FAILED with its reason, 200, no retry', async () => {
     const { h, orgId, as } = await setup({ dispatcher: 'recording' });
     const done = await upload(h, as);
