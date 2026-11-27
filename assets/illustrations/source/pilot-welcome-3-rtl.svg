@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 96" width="120" height="96">
+<g transform="matrix(-1 0 0 1 120 0)">
+<rect x="30" y="10" width="50" height="72" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 23h18M40 34h30M40 45h25M40 68h10M58 68h12" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="seal" cx="82" cy="68" r="13" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="nuqta" cx="82" cy="68" r="5.50" fill="#E89960"/>
+<path id="motion" d="M100 52l6-6M102 64h8" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

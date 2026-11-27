@@ -53,6 +53,20 @@ describe('mail looks (MUT-468)', () => {
   });
 });
 
+describe('the 2026-11-27 mail headers (Claude Design)', () => {
+  it.each([
+    ['plan-change-scheduled', 'mail-header-trial-plan-change-scheduled-2x.png', 'mail-header-trial-plan-change-scheduled-rtl-2x.png'],
+    ['customer-setup', 'mail-header-hello-customer-setup-2x.png', 'mail-header-hello-customer-setup-rtl-2x.png'],
+    ['customer-setup-cancelled', 'mail-header-safety-customer-setup-cancelled-2x.png', 'mail-header-safety-customer-setup-cancelled-2x.png'],
+    ['accountant-unclaimed-digest', 'mail-header-hello-accountant-unclaimed-digest-2x.png', 'mail-header-hello-accountant-unclaimed-digest-2x.png'],
+  ] as const)('%s uses its own header, the -rtl drawing in Arabic where the art has direction', (id, en, ar) => {
+    expect(artFor(LOOK[id], 'en').header.file).toBe(en);
+    expect(artFor(LOOK[id], 'ar').header.file).toBe(ar);
+    expect(ART_FILES).toContain(en);
+    expect(ART_FILES).toContain(ar);
+  });
+});
+
 describe('mail art is transparent and clean (MUT-484)', () => {
   it('serves a version other than v1', () => {
     expect(MAIL_ART_PATH).not.toBe('/mail/v1/');

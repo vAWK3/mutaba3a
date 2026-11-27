@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 400" width="375" height="400">
+<rect width="375" height="400" fill="#FCF6ED"/>
+<rect x="24.0" y="28.0" width="140.0" height="12" rx="6.0" fill="#E6E2ED"/>
+<rect x="24.0" y="56.0" width="300.0" height="8" rx="4.0" fill="#E6E2ED"/>
+<rect x="24.0" y="74.0" width="240.0" height="8" rx="4.0" fill="#E6E2ED"/>
+<rect width="375" height="400" fill="#392F4B" opacity="0.267"/>
+<g transform="translate(0 17.28)">
+<path d="M0 400V96a28 28 0 0 1 28-28h319a28 28 0 0 1 28 28v400z" fill="#FFFCF7"/>
+<rect x="167.0" y="80.0" width="40.0" height="5" rx="2.5" fill="#E6E2ED"/>
+<rect x="24.0" y="108.0" width="180.0" height="14" rx="7.0" fill="#392F4B"/>
+<rect x="24.0" y="134.0" width="250.0" height="8" rx="4.0" fill="#E6E2ED"/>
+<g opacity="0.141"><rect x="16" y="178.02" width="343" height="62" rx="18" fill="#F4F2FB"/><svg x="26" y="182.0236605951536" width="68" height="54" viewBox="0 0 120 96">
+<rect x="36" y="14" width="64" height="58" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M36 29h64" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="22" y="24" width="64" height="60" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22 39h64" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38 19v10M70 19v10" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="47.7" cy="51" r="2.5" fill="#795DBA"/>
+<circle cx="60.3" cy="51" r="2.5" fill="#795DBA"/>
+<circle cx="73.0" cy="51" r="2.5" fill="#795DBA"/>
+<circle cx="35.0" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="47.7" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="60.3" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="73.0" cy="63" r="2.5" fill="#795DBA"/>
+<circle cx="35.0" cy="75" r="2.5" fill="#795DBA"/>
+<circle cx="47.7" cy="75" r="2.5" fill="#795DBA"/>
+<circle cx="60.3" cy="75" r="2.5" fill="#795DBA"/>
+<circle cx="73.0" cy="75" r="2.5" fill="#795DBA"/>
+<circle id="nuqta" cx="35.0" cy="51" r="0.00" fill="#E89960"/>
+<g id="sparkles"><path d="M104 40v8M100 44h8" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="56" r="2.5" fill="#795DBA"/></g>
+</svg><rect x="108.0" y="196.0" width="150.0" height="9" rx="4.5" fill="#392F4B"/><rect x="108.0" y="214.0" width="200.0" height="8" rx="4.0" fill="#E6E2ED"/></g>
+<g opacity="0.000"><rect x="16" y="252.00" width="343" height="62" rx="18" fill="#F4F2FB"/><svg x="26" y="256" width="68" height="54" viewBox="0 0 120 96">
+<path id="frame" d="M26 24v-8a6 6 0 0 1 6-6h8M80 10h8a6 6 0 0 1 6 6v8M94 72v8a6 6 0 0 1-6 6h-8M40 86h-8a6 6 0 0 1-6-6v-8" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M42 20h36v52l-3.00-4l-3.00 4l-3.00-4l-3.00 4l-3.00-4l-3.00 4l-3.00-4l-3.00 4l-3.00-4l-3.00 4l-3.00-4l-3.00 4z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M51 32h18M51 42h10.8M51 52h15.3" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="scan" d="M32 58h50" fill="none" stroke="#E89960" stroke-width="3" stroke-linecap="round"/>
+<circle id="nuqta" cx="88" cy="58" r="0.00" fill="#E89960"/>
+</svg><rect x="108.0" y="270.0" width="150.0" height="9" rx="4.5" fill="#392F4B"/><rect x="108.0" y="288.0" width="200.0" height="8" rx="4.0" fill="#E6E2ED"/></g>
+<g opacity="0.000"><rect x="16" y="324.00" width="343" height="62" rx="18" fill="#F4F2FB"/><svg x="26" y="328" width="68" height="54" viewBox="0 0 120 96">
+<rect x="30" y="10" width="50" height="72" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 23h18M40 34h30M40 45h25M40 68h10M58 68h12" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="seal" cx="82" cy="68" r="13" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="nuqta" cx="82" cy="68" r="0.00" fill="#E89960"/>
+<path id="motion" d="M100 52l6-6M102 64h8" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg><rect x="108.0" y="342.0" width="150.0" height="9" rx="4.5" fill="#392F4B"/><rect x="108.0" y="360.0" width="200.0" height="8" rx="4.0" fill="#E6E2ED"/></g>
+</g>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="ground" d="M24 140h112" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="limit" d="M26 62h108" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7" opacity="0.550"/>
+<path id="pot" d="M60 116h40l-4 24h-32z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="stem" d="M80 106Q75 72.00 80 38.00" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M80 90q-18-2-22-14q16-2 22 14z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(80.00 90.00) scale(1.0000) translate(-80.00 -90.00)"/>
+<path d="M80 76q18-2 22-14q-16-2-22 14z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(80.00 76.00) scale(1.0000) translate(-80.00 -76.00)"/>
+<path d="M80 52q-13-1-16-11q12-1 16 11z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(80.00 52.00) scale(1.0000) translate(-80.00 -52.00)"/>
+<rect id="pot-rim" x="54" y="106" width="52" height="12" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="bow"><path d="M80 112l-11-7v14zM80 112l11-7v14z" fill="#E89960" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80" cy="112" r="3.5" fill="#795DBA"/></g>
+<circle id="nuqta" cx="80" cy="29.95" r="9.00" fill="#E89960"/>
+<g id="confetti"><rect x="27.04" y="26.00" width="8" height="8" rx="2" fill="#E89960" transform="rotate(20 31.04 30.00) translate(31.04 30.00) scale(1.000) translate(-31.04 -30.00)"/>
+<rect x="122.80" y="13.00" width="8" height="8" rx="2" fill="#795DBA" transform="rotate(-25 126.80 17.00) translate(126.80 17.00) scale(1.000) translate(-126.80 -17.00)"/>
+<circle cx="134.56" cy="52.32" r="4.00" fill="#E89960"/>
+<circle cx="28.08" cy="63.04" r="3.00" fill="#795DBA"/>
+<circle cx="57.60" cy="9.84" r="3.00" fill="#795DBA"/>
+<circle cx="103.32" cy="4.56" r="3.00" fill="#F4F2FB" stroke="#795DBA" stroke-width="2"/></g>
+</svg>

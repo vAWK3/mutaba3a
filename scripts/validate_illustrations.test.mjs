@@ -16,6 +16,27 @@ test('expectedFilenames: paired moment expects personal + firm variants', () => 
   ]);
 });
 
+test('expectedFilenames: a moment with direction also expects its -rtl drawing', () => {
+  assert.deepEqual(expectedFilenames({ name: 'gift-used', pair: false, rtl: true }), [
+    'gift-used.svg',
+    'gift-used-rtl.svg',
+  ]);
+});
+
+test('MOMENTS lists the 2026-11-27 scenes, with -rtl where the art has direction', () => {
+  const byName = Object.fromEntries(MOMENTS.map((m) => [m.name, m]));
+  for (const name of ['gift-month', 'plan-upgraded', 'pilot-ended', 'link-expired', 'code-locked', 'ledger-empty']) {
+    assert.ok(byName[name], name);
+    assert.ok(!byName[name].rtl, `${name} is neutral`);
+  }
+  for (const name of [
+    'gift-used', 'handover-welcome', 'handover-claimed', 'claimed-spot', 'pilot-welcome-1', 'pilot-welcome-2',
+    'pilot-welcome-3', 'milestone-first-scan', 'milestone-first-invoice', 'activating', 'change-scheduled',
+  ]) {
+    assert.equal(byName[name]?.rtl, true, `${name} ships -rtl`);
+  }
+});
+
 function fakeFs(files) {
   return {
     fileExists: (path) => path in files,
@@ -103,9 +124,9 @@ test('milestone requires both personal and firm variants', () => {
   assert.ok(result.ok.includes('milestone-personal.svg'));
 });
 
-test('the real MOMENTS manifest matches the briefs: 5 MUT-345 + 6 MUT-558 files', () => {
+test('the real MOMENTS manifest matches the briefs: 5 MUT-345 + 6 MUT-558 + 17 scenes and 11 -rtl (2026-11-27) files', () => {
   const totalFiles = MOMENTS.flatMap(expectedFilenames).length;
-  assert.equal(totalFiles, 11);
+  assert.equal(totalFiles, 11 + 17 + 11);
 });
 
 test('MUT-350: every moment is classified grand or minimal', () => {

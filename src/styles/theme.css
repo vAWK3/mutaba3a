@@ -142,6 +142,8 @@
     --stagger-step: 0ms;
     --stagger-rise: 0px;
     --press-scale: 1;
+    /* The celebrations' overshoot (2026-11-27 motion specs) never bounces past its end under reduced motion */
+    --ease-overshoot: linear;
   }
 }
 

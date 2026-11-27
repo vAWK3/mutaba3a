@@ -34,6 +34,8 @@ const CAMEL_CASE_ATTRS: Record<string, string> = {
   'stroke-linejoin': 'strokeLinejoin',
   // MUT-561: the scenes' dialect (scripts/illustration-set.ts) adds dashed strokes; no icon uses it.
   'stroke-dasharray': 'strokeDasharray',
+  // 2026-11-27 scenes: a drawn-on check starts from its dash offset.
+  'stroke-dashoffset': 'strokeDashoffset',
 };
 
 interface Token {
