@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.149.0-mut743
+  version: 1.150.0-mut764
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -795,6 +795,7 @@ components:
                 - PASSKEY_LIMIT
                 - SUBSCRIPTION_LAPSED
                 - ACCOUNTANT_PLAN_REQUIRED
+                - ACCOUNTANT_NOT_APPROVED
                 - INVITE_EMAIL_MISMATCH
                 - SHARE_LINK_REFUSED
                 - FEATURE_NOT_ENABLED
@@ -1958,6 +1959,90 @@ components:
           required:
             - entriesThisMonth
             - lastActivityAt
+    ProvisionExistingAddress:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - exists
+      required:
+        - status
+    ProvisionedCustomer:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - created
+        customer:
+          type: object
+          properties:
+            userId:
+              type: string
+              format: uuid
+            email:
+              type: string
+            displayName:
+              type: string
+          required:
+            - userId
+            - email
+            - displayName
+        profile:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+          required:
+            - id
+            - name
+        claimCode:
+          type: string
+          pattern: ^\d{6}$
+        linkExpiresAt:
+          type: string
+          format: date-time
+        mailSent:
+          type: boolean
+      required:
+        - status
+        - customer
+        - profile
+        - linkExpiresAt
+        - mailSent
+    ProvisionCustomerRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        profileName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
+        locale:
+          $ref: "#/components/schemas/UserLocale"
+      required:
+        - email
+        - displayName
+        - profileName
+        - defaultCurrency
+        - timezone
+      additionalProperties: false
     IntegrationStatusResponse:
       type: object
       properties:
@@ -19121,6 +19206,58 @@ paths:
           description: Left, or removed
         "404":
           description: "NOT_FOUND: no such client on your list"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant/customers:
+    post:
+      tags:
+        - Accountants
+      summary: Create a customer’s account and business profile (an approved accountant)
+      description: "MUT-764 (accountant channel). One call makes the customer's passwordless account, their business profile and your read-only grant (ADR-245: you view issued invoices and scanned receipts and act on nothing). The customer is mailed a setup link, valid 14 days; no response ever carries the link or its token. The 201 carries the 6-digit claim code once: tell it to the customer, who types it on the setup page; a repeat of the same Idempotency-Key returns the same account without the code. An address that already has an account makes none: you get `{ status: \"exists\" }` (ask the customer to share their books with you). Per UTC day an approved accountant makes at most 50 accounts and at most 100 attempts on addresses that already have one (the operator can change both): beyond that 429 RATE_LIMITED, details.limit CREATE_PER_DAY or LOOKUP_PER_DAY. 403 ACCOUNTANT_NOT_APPROVED until the operator approves you. 404 while the feature is off."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisionCustomerRequest"
+      responses:
+        "200":
+          description: The address already has an account; nothing was created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionExistingAddress"
+        "201":
+          description: Created; the claim code is in this answer only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionedCustomer"
+        "403":
+          description: "ACCOUNTANT_NOT_APPROVED: the operator has not approved this person to create customers, or withdrew it"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The feature is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "IDEMPOTENCY_KEY_REQUIRED (send an Idempotency-Key header), IDEMPOTENCY_KEY_REUSED (the key was used with a different body), or VALIDATION_FAILED: a malformed request, or details.reason ADDRESS_REFUSED (a disposable or relay address)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: the daily limit, details.limit CREATE_PER_DAY or LOOKUP_PER_DAY, with details.max and Retry-After"
           content:
             application/json:
               schema:

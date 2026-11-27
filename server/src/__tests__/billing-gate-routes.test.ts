@@ -27,6 +27,7 @@ import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing-
 import { BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing-starter.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/account-closure.js';
 import { ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/accountants.js';
+import { ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/accountant-customers.js';
 import { SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/share-links.js';
 import { TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/two-factor.js';
 import { provisionUser } from './helpers/provision.js';
@@ -354,6 +355,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES,
       ...OPERATOR_USAGE_ROUTES,
       ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES,
       ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES,
       ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES,
       ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES,

@@ -79,6 +79,7 @@ import { TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, twoFactorRoutes } from './r
 import { TwoFactorFlow } from './auth/two-factor-flow.js';
 import { TwoFactorKeys } from './auth/two-factor.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
+import { ACCOUNTANT_CUSTOMER_ENDPOINTS, ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, accountantCustomerRoutes } from './routes/accountant-customers.js';
 import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
 import { ACCOUNTANT_PLAN_OFF, type AccountantPlanConfig } from './billing/accountant-plan.js';
 import { SHARE_LINK_ENDPOINTS, SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, shareLinkRoutes } from './routes/share-links.js';
@@ -299,6 +300,11 @@ export interface AppDependencies {
    */
   accountantAccess?: boolean;
   /**
+   * MUT-764 (ACCOUNTANT_PROVISIONING): an approved accountant creates a customer's account. Absent or false =
+   * POST /v1/accountant/customers answers 404 (the server deploys dark).
+   */
+  accountantProvisioning?: boolean;
+  /**
    * MUT-593 (MALAFAT_DELEGATION, ADR-254): Malafat acting as each person. Absent or false = delegated tokens are
    * refused, the token endpoint serves no confidential client, and Connected apps and the operator switch answer 404.
    */
@@ -345,7 +351,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -432,7 +438,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.149.0-mut743';
+export const API_VERSION = '1.150.0-mut764';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -523,6 +529,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // switch). One table, one mechanism: each row is a route file's exported endpoint set, its switch and its 404.
   const darkLaunches: ReadonlyArray<{ endpoints: ReadonlySet<string>; on: boolean; refusal: () => ApiError }> = [
     { endpoints: ACCOUNTANT_ENDPOINTS, on: accountantAccess, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    { endpoints: ACCOUNTANT_CUSTOMER_ENDPOINTS, on: deps.accountantProvisioning ?? false, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
     { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     // MUT-593 (ADR-254 D10): Connected apps and the operator's per-firm switch.
@@ -650,6 +657,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       turnstile: selfService.turnstile,
     }),
   );
+  app.route('/', accountantCustomerRoutes({ store, settings: sessions, mailer, logger: deps.logger }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));

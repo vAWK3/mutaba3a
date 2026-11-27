@@ -1741,6 +1741,38 @@ export const InviteAccountantRequestSchema = z
   })
   .openapi('InviteAccountantRequest');
 
+/** MUT-764 (accountant channel): an approved accountant creates a customer's account and business profile. */
+export const ProvisionCustomerRequestSchema = z
+  .object({
+    /** The customer's address; the setup link is mailed here. */
+    email: z.string().trim().max(254).email(),
+    displayName: z.string().trim().min(1).max(120),
+    /** The customer's business profile, the one the accountant then reads. */
+    profileName,
+    defaultCurrency: CurrencySchema,
+    timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }),
+    /** The account's language and the setup mail's. The accountant's own when omitted. */
+    locale: UserLocaleSchema.optional(),
+  })
+  .strict()
+  .openapi('ProvisionCustomerRequest');
+
+export const ProvisionedCustomerSchema = z
+  .object({
+    status: z.literal('created'),
+    customer: z.object({ userId: z.string().uuid(), email: z.string(), displayName: z.string() }),
+    profile: z.object({ id: z.string().uuid(), name: z.string() }),
+    /** Six digits, in the first answer only: a replay of the same Idempotency-Key never carries it. The accountant tells it to the customer. */
+    claimCode: z.string().regex(/^\d{6}$/).optional(),
+    /** When the mailed link stops working. */
+    linkExpiresAt: z.string().datetime(),
+    /** Whether the mail with the link was handed to the mail service. The link itself is never in any response. */
+    mailSent: z.boolean(),
+  })
+  .openapi('ProvisionedCustomer');
+
+export const ProvisionExistingAddressSchema = z.object({ status: z.literal('exists') }).openapi('ProvisionExistingAddress');
+
 export const AccountantGrantParamSchema = ProfileIdParamSchema.extend({ grantId: z.string().uuid().openapi({ param: { name: 'grantId', in: 'path' } }) });
 
 /** D3: the invite token travels in the body, never a path; the portal reads it from the link's fragment. */

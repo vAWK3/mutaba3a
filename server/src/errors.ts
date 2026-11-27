@@ -100,6 +100,8 @@ export const ERROR_CODES = {
    * Not 409 ACCOUNTANT_LIMIT-style: that reason is the owner's 5-accountants-per-profile limit.
    */
   ACCOUNTANT_PLAN_REQUIRED: 402,
+  /** MUT-764 (accountant channel): creating a customer's account needs the operator's approval, which this person doesn't have (or was withdrawn). */
+  ACCOUNTANT_NOT_APPROVED: 403,
   /**
    * MUT-559 (ADR-245, D4): an accountant invite accepted by someone else: neither the invited address nor a colleague
    * on the same business domain (webmail, disposable and relay domains never match). `details.maskedEmail` names the

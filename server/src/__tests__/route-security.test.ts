@@ -160,6 +160,8 @@ const ACCOUNTANT_OPERATIONS = [
   // MUT-575: the accountant's client books.
   'GET /v1/clients',
   'DELETE /v1/clients/{profileId}',
+  // MUT-764: an operator-approved accountant creates a customer's account.
+  'POST /v1/accountant/customers',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
@@ -425,6 +427,7 @@ beforeAll(async () => {
     receiptsLibrary: true,
     // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
     accountantAccess: true,
+    accountantProvisioning: true,
     malafatDelegation: true,
     // MUT-560: and share links (SHARE_LINKS).
     shareLinks: true,
