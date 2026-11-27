@@ -1507,6 +1507,36 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 
 /* The desk: full width (layout C). An ended client stays, faded, until removed (AW4). */
 .hp-desk { max-width: 1200px; margin-inline: auto; }
+/* MUT-768 (accountant channel): the desk's filter chips, and the code the accountant says out loud. */
+.hp-desk-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.hp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-height: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.hp-chip[aria-pressed='true'] { background: var(--accent-2-subtle); border-color: var(--accent-2); }
+.hp-chip-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hp-code-reveal {
+  direction: ltr;
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+.hp-desk-next { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); margin: var(--space-3) 0; }
+.hp-desk-next .btn, .hp-desk-next button { min-height: 44px; }
 .hp-row-ended td { color: var(--muted); }
 .hp-row-ended td:not(.hp-sticky-end) { opacity: 0.6; }
 .hp-ended-note { font-size: var(--text-label); color: var(--muted); }
