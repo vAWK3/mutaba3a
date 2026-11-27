@@ -117,6 +117,28 @@ describe('signupAccountOutcome (MUT-366 D1, MUT-367)', () => {
   });
 });
 
+describe('signupAccountOutcome with OPEN_SIGNUP (MUT-737)', () => {
+  const classes = [
+    { domainClass: 'BUSINESS' as const, domainReasons: [] },
+    { domainClass: 'WEBMAIL' as const, domainReasons: ['webmail'] },
+    { domainClass: 'WEBMAIL' as const, domainReasons: ['relay'] },
+    { domainClass: 'BUSINESS_UNVERIFIED' as const, domainReasons: ['rdap-age-12d'] },
+    { domainClass: null, domainReasons: [] },
+  ];
+
+  it.each(classes)('opens $domainClass at once, on Starter, with no review', (link) => {
+    expect(signupAccountOutcome(signupLink(link), NOW, { starter: true, openSignup: true })).toEqual({ status: 'ACTIVE', trialStartsAt: null, review: null });
+  });
+
+  it('without Starter an open sign-up still starts the trial at the redeem (the config refuses this pairing)', () => {
+    expect(signupAccountOutcome(signupLink({ domainClass: 'WEBMAIL', domainReasons: ['webmail'] }), NOW, { starter: false, openSignup: true })).toEqual({ status: 'ACTIVE', trialStartsAt: NOW, review: null });
+  });
+
+  it('off keeps the review branch exactly', () => {
+    expect(signupAccountOutcome(signupLink({ domainClass: 'WEBMAIL', domainReasons: ['webmail'] }), NOW, { starter: true, openSignup: false }).status).toBe('PENDING_REVIEW');
+  });
+});
+
 describe('defaultDisplayName (MUT-366, D3)', () => {
   it('is the address’s local part', () => {
     expect(defaultDisplayName('rana.saleh@studio.example')).toBe('rana.saleh');

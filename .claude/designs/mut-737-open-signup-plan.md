@@ -119,3 +119,14 @@ New ADR (supersedes ADR-178 d1 review branch, d2 PENDING_REVIEW outcome, d4, d5;
 3. **Try Solo on the phone:** MUT-737 says portal **and** phone, but MUT-731 Q7/Q4 keep the trial web-only and the phone sells nothing. Keep the phone's plain Starter step (the trial appears on the first web visit)? [Default: yes.]
 4. **Accountant-provisioned customers** (MUT-762+) and pilot testers (MUT-751): do they see the Try Solo step, or skip it? [Default: skip it; they have their own Welcome.]
 5. **Released pending accounts:** get the one-time Solo trial offer on their first web visit (they are "new" but older than `SOLO_TRIAL_OFFER_SINCE`)? [Default: no, per Q7 "accounts that exist before release never get it".]
+
+## Build decisions (server half, 2026-11-27, built alone with the approved defaults)
+
+1. **ADR-289**, API **1.155.0-mut737** (numbers chosen past those other open branches hold; renumber on merge if they collide).
+2. **The release goes through a new admin endpoint, not `approve`.** `POST /admin/v1/signup-reviews/{userId}/release` (AC5 asks for its own audit `user.signup_released`, and approve is retired once the flag is on, so a straggler redeemed between the release and the flag can still be released). It refuses 409 `STARTER_PLAN_OFF` while Starter is off, so it can never start a trial. The CLI command is `users.ts release-pending-signups` (`npm --prefix server run signups:release`), over the admin API like every other users command.
+3. **The audit entry is `user.signed_up`** (the plan says `user.signup`; that is the action that exists). Metadata gains `domainClass` and `reasons` on every branch, flag on or off.
+4. **The operator account view gets `signupDomain`** (`{ domainClass, reasons } | null`), read from that audit entry, so the portal chip needs no audit endpoint.
+5. **The digest:** a small `scheduleReviewDigest` returns null with the flag on; the module and `createReviewDigest` stay.
+6. **Terraform** also validates `open_signup` needs `starter_plan`, matching the boot refusal.
+7. **Left for the UI half:** the operator Signups page read-only and its nav move, the domain chip, the two PostHog events and `docs/analytics/events.json`, the legal-draft edits (AC7; MUT-732's drafts branch is open in another session), and the four QA flows.
+

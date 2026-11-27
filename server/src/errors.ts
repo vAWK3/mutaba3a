@@ -125,6 +125,8 @@ export const ERROR_CODES = {
    */
   PLAN_LIMIT: 409,
   OPERATION_IN_PROGRESS: 409,
+  /** MUT-737 (ADR-289): with OPEN_SIGNUP on there is no review: approve and decline are retired (the list stays as history). */
+  SIGNUP_REVIEW_RETIRED: 409,
   /** MUT-360: a Stripe reconcile is already running on this instance; the next one runs when it ends. */
   RECONCILE_RUNNING: 409,
   /** MUT-419 (R11): a real trial-mail run in production whose links would point at a loopback origin; `details.origin`. */

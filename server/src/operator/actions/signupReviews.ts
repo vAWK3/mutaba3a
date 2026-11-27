@@ -21,6 +21,8 @@ export interface SignupReviewActionOptions {
   settings: Pick<SessionSettings, 'portalOrigin'>;
   /** Where a declined person may write (MAIL_REPLY_TO). */
   supportAddress: string;
+  /** MUT-737 (ADR-289): OPEN_SIGNUP. On, approve and decline answer 409 SIGNUP_REVIEW_RETIRED; list and release stay. Absent = off. */
+  openSignup?: boolean;
 }
 
 /** D15: what the admin token stores as `decidedBy`; an operator stores `operator:<id>`. */
@@ -33,6 +35,7 @@ const RESEND_BUCKET_MS = 60_000;
 
 export function signupReviewActions(options: SignupReviewActionOptions) {
   const { store, mailer, logger, settings, supportAddress } = options;
+  const retired = (): ApiError => new ApiError('SIGNUP_REVIEW_RETIRED', 'Sign-ups open without a review now; nothing to approve or decline');
 
   async function list(query: { state: SignupReviewState; limit?: number | undefined; cursor?: string | undefined }) {
     const page = await store.signupReviews.list({ state: query.state, limit: parseLimit(query.limit), cursor: query.cursor ? decodeCursor(query.cursor) : null });
@@ -40,6 +43,7 @@ export function signupReviewActions(options: SignupReviewActionOptions) {
   }
 
   async function approve(userId: string, ctx: ActionContext) {
+    if (options.openSignup) throw retired();
     const result = await store.signupReviews.approve({
       userId,
       at: ctx.at,
@@ -56,6 +60,7 @@ export function signupReviewActions(options: SignupReviewActionOptions) {
   }
 
   async function decline(userId: string, ctx: ActionContext) {
+    if (options.openSignup) throw retired();
     const result = await store.signupReviews.decline({ userId, at: ctx.at, decidedBy: byLabelOf(ctx.actor, REVIEW_DECIDED_BY) });
     if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No signup review for this user');
     if (result.kind === 'already_decided') throw alreadyDecided(result.review);
@@ -66,6 +71,30 @@ export function signupReviewActions(options: SignupReviewActionOptions) {
     // The operator log line (the profile, and with it the audit trail, is gone): the review id, domain and who, never the address.
     logger.info({ reviewId: result.review.id, domain: result.review.domain, reasons: result.review.reasons, mail, operatorUserId: auditActorIdOf(ctx.actor) }, 'user.signup_declined');
     return { review: serializeReview({ ...result.review, person: null }), mail };
+  }
+
+  /**
+   * MUT-737 (ADR-289, AC5): releases one account still waiting for review: ACTIVE, on Starter (refused 409 CONFLICT
+   * `STARTER_PLAN_OFF` while STARTER_PLAN is off, where approval would start a trial), the same "your account is
+   * ready" mail keyed per review (a re-run never mails twice), an audit `user.signup_released` and an operator log
+   * line. Works with OPEN_SIGNUP on or off (it runs before the flag goes on, and again after for any straggler).
+   * `users.ts release-pending-signups` drives it.
+   */
+  async function release(userId: string, ctx: ActionContext) {
+    if (!store.billing.starterPlan) throw new ApiError('CONFLICT', 'Releasing puts the account on Starter; turn STARTER_PLAN on first', { reason: 'STARTER_PLAN_OFF' });
+    const result = await store.signupReviews.approve({
+      userId,
+      at: ctx.at,
+      decidedBy: byLabelOf(ctx.actor, REVIEW_DECIDED_BY),
+      auditFor: (personalOrganizationId) => [
+        { organizationId: personalOrganizationId, actorType: 'ADMIN', actorId: auditActorIdOf(ctx.actor), action: 'user.signup_released', entityType: 'user', entityId: userId, metadata: { plan: 'STARTER' }, requestId: ctx.requestId },
+      ],
+    });
+    if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No signup review for this user');
+    if (result.kind === 'already_decided') throw alreadyDecided(result.review);
+    const mail = await sendAccountReady(result.user, `account-ready:${result.review.id}`, ctx.requestUrl);
+    logger.info({ reviewId: result.review.id, domain: result.review.domain, mail, operatorUserId: auditActorIdOf(ctx.actor) }, 'user.signup_released');
+    return { review: serializeReview({ ...result.review, person: { email: result.user.email, displayName: result.user.displayName, locale: result.user.locale } }), mail };
   }
 
   /**
@@ -102,7 +131,7 @@ export function signupReviewActions(options: SignupReviewActionOptions) {
     }
   }
 
-  return { list, approve, decline, resendApproval };
+  return { list, approve, decline, release, resendApproval };
 }
 
 function alreadyDecided(review: SignupReviewRecord): ApiError {

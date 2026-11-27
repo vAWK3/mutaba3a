@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Open sign-up: no email review, every verified sign-up opens on Starter (MUT-737 server half, ADR-289, API 1.155.0-mut737)
+
+Epic MUT-701. Plan `.claude/designs/mut-737-open-signup-plan.md` (approved with defaults). Server only; the portal (Signups page read-only, the domain chip, the first-run analytics events) and the legal-draft edit come with the UI half. Dark behind `OPEN_SIGNUP`. No migration.
+
+### Added
+- `OPEN_SIGNUP` (Terraform `open_signup`, default off; refused at boot, and by a Terraform validation, without `STARTER_PLAN`): every SIGNUP link the domain screen let through opens ACTIVE on Starter; no review row, no "we're reviewing" mail, no review digest (the hourly sweep is not scheduled).
+- `GET /v1/self-service` `openSignup` (additive).
+- `user.signed_up` audit metadata carries `domainClass` and `reasons` (a risk signal, never a gate); `GET /v1/operator/accounts/{userId}` `account.signupDomain` reads it (null for accounts made another way).
+- `POST /admin/v1/signup-reviews/{userId}/release`: a pending account opens on Starter (no trial), the "your account is ready" mail keyed per review, audit `user.signup_released`, an operator log line; 409 CONFLICT `STARTER_PLAN_OFF` while Starter is off. CLI `users.ts release-pending-signups [--apply]` (`npm --prefix server run signups:release`): dry run by default, exit 1 on any failure, re-runnable.
+- Error code `SIGNUP_REVIEW_RETIRED` (409): approve and decline (admin and operator) with `OPEN_SIGNUP` on; the list keeps working as history.
+
+### Unchanged
+- Disposable and no-mail refusals, Turnstile, the per-IP and per-address budgets, verification by link, `SELF_SIGNUP_ENABLED`. `ACCOUNT_UNDER_REVIEW` at sign-in stays for any account not released yet. `signup_reviews` and `PENDING_REVIEW` stay (history, rollback).
+
 ## [Unreleased] - 2026-11-27 — Accountant provisioning: migration and store (MUT-763, epic MUT-762, no route, no API change)
 
 Plan: `docs/designs/accountant-channel.md` (eng review R1–R6). Store layer only; the route (MUT-764), claim code (MUT-765) and the UI come in their own tickets.

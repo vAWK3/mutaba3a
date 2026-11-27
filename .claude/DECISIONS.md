@@ -7338,3 +7338,20 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** Live needs Basel's catalog run with a live key (`--live`), Barmajiyat's Israeli VAT file before the first Israeli charge (ADR-286, MUT-749), and the Israeli tax document per payment (MUT-749/750). TD-347 (portal-live flows), TD-348 (the unique key).
 
+---
+
+## ADR-289: Sign-ups Open at Once on Starter; the Domain Class Is a Signal, Not a Gate (MUT-737; supersedes ADR-178 decisions 1, 2, 4 and 5)
+
+**Status:** Accepted (2026-11-27; Basel approved the MUT-737 plan with every default answer). Builds on ADR-284 (Starter, no new no-card trials). Resolves TD-213 (no trial to abuse once Starter is on).
+
+**Context:** ADR-178 sent every webmail, relay or young domain to an operator review, with a digest and two mails. With Starter there is no free trial to protect, and the review only delays real people.
+
+**Decision:**
+1. `OPEN_SIGNUP` (default off; Terraform `open_signup`) opens every SIGNUP link the screen let through ACTIVE on Starter at redeem time. Refused without `STARTER_PLAN` (config and Terraform).
+2. The screen's refusals stay (disposable, no-mail), with Turnstile, the budgets and verification by link. The class and reasons go on the `user.signed_up` audit entry; the operator's account view shows them (`signupDomain`).
+3. With the flag on, approve and decline answer 409 `SIGNUP_REVIEW_RETIRED`; the list stays as history; the hourly digest is not scheduled.
+4. Accounts still waiting are released by `POST /admin/v1/signup-reviews/{userId}/release` (`signups:release -- --apply`): Starter, the ready mail keyed per review, audit `user.signup_released`. Order: `STARTER_PLAN` on, release, `OPEN_SIGNUP` on.
+5. Released and pre-release accounts never get the one-time Solo trial offer (Q5); accountant-provisioned customers skip the first-run plan step (Q4); the phone keeps its plain Starter step (Q3).
+
+**Consequences:** `signup_reviews`, `PENDING_REVIEW`, `ACCOUNT_UNDER_REVIEW` and the digest module stay until a cleanup ticket. Turning the flag off restores the review for new sign-ups.
+

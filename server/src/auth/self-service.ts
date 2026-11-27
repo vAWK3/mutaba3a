@@ -61,10 +61,12 @@ export interface SignupAccountOutcome {
  * The account a redeemed SIGNUP link opens (MUT-366 D1, MUT-367). A BUSINESS domain opens at once and its trial
  * starts now. Anything else (webmail, relay, a young or unverifiable domain, or a link issued before the screen
  * existed, D19) waits for the operator as PENDING_REVIEW with no trial: approval starts it. MUT-731 (ADR-284): with
- * Starter on there is no trial on any branch (`starter`): a new account is on Starter.
+ * Starter on there is no trial on any branch (`starter`): a new account is on Starter. MUT-737 (ADR-289): with
+ * `openSignup` no branch waits for review.
  */
-export function signupAccountOutcome(link: SignupLinkRecord, at: Date, options: { starter: boolean } = { starter: false }): SignupAccountOutcome {
-  if (link.domainClass === 'BUSINESS') return { status: 'ACTIVE', trialStartsAt: options.starter ? null : at, review: null };
+export function signupAccountOutcome(link: SignupLinkRecord, at: Date, options: { starter: boolean; openSignup?: boolean } = { starter: false }): SignupAccountOutcome {
+  // MUT-737 (ADR-289): with OPEN_SIGNUP every address the screen let through opens at once; the class is a signal only.
+  if (link.domainClass === 'BUSINESS' || options.openSignup) return { status: 'ACTIVE', trialStartsAt: options.starter ? null : at, review: null };
   const domain = domainOf(link.email);
   const review = link.domainClass
     ? { domain, classification: link.domainClass, reasons: [...link.domainReasons] }
