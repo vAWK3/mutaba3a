@@ -12,6 +12,7 @@ import { useMeOrNull } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { useAccountDrawers } from '../shell/AccountDrawers';
 import { AlertIcon } from './Icons';
+import { Scene } from './Scene';
 
 /**
  * MUT-731 (ADR-284, wireframe 2) and MUT-705: a plan's limit reached, from a 409 PLAN_LIMIT or from the usage the portal
@@ -20,7 +21,25 @@ import { AlertIcon } from './Icons';
  * so no new styles. `onByHand`: a scan's refusal offers to add the expense by hand. `withUpgrade` false when the
  * drawer's own primary button is the upgrade (the Issue drawer at the cap).
  */
-export function PlanLimitNotice({ limit, onByHand, withUpgrade = true }: { limit: PlanLimit; onByHand?: () => void; withUpgrade?: boolean }) {
+export function PlanLimitNotice({
+  limit,
+  onByHand,
+  withUpgrade = true,
+  onContinue,
+  continuing = false,
+}: {
+  limit: PlanLimit;
+  onByHand?: () => void;
+  withUpgrade?: boolean;
+  /** MUT-733: the gift's Continue, inside the notice where the drawer has no footer of its own (the receipt upload). */
+  onContinue?: () => void;
+  continuing?: boolean;
+}) {
+  if (limit.gift) return <GiftNotice limit={limit} onContinue={onContinue} continuing={continuing} />;
+  return <LimitNotice limit={limit} onByHand={onByHand} withUpgrade={withUpgrade} />;
+}
+
+function LimitNotice({ limit, onByHand, withUpgrade }: { limit: PlanLimit; onByHand?: () => void; withUpgrade: boolean }) {
   const t = useT();
   const { language } = useLanguage();
   const me = useMeOrNull();
@@ -32,9 +51,11 @@ export function PlanLimitNotice({ limit, onByHand, withUpgrade = true }: { limit
     if (upgradeOffered(limit)) trackPlanEvent('plan_upgrade_offered', { limit: analyticsLimit(limit.limit) });
   }, [limit, current]);
   const monthly = limit.limit === 'documents' || limit.limit === 'scans';
+  // MUT-733: a paid plan's monthly limit after the gift is a hard cap: the `gift-used` still beside the line.
+  const giftUsed = monthly && (current === 'solo' || current === 'business');
   return (
-    <section className="hp-banner hp-banner-warning hp-lapse-banner" role="alert" data-testid="plan-limit-notice" data-limit={limit.limit}>
-      <AlertIcon />
+    <section className="hp-banner hp-banner-warning hp-lapse-banner" role="alert" data-testid="plan-limit-notice" data-limit={limit.limit} data-hard={giftUsed || undefined}>
+      {giftUsed ? <Scene name="gift-used" size={96} className="hp-banner-scene" /> : <AlertIcon />}
       <div className="hp-lapse-banner-body">
         <p className="hp-lapse-banner-title">
           <LimitTitle limit={limit} plan={current} />
@@ -49,6 +70,35 @@ export function PlanLimitNotice({ limit, onByHand, withUpgrade = true }: { limit
               </Button>
             )}
             {upgrade && <UpgradeTo plan={next} size="sm" />}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * MUT-733 (wireframe mut-733 "use" A): the first time a paid plan reaches a monthly limit, the gift in the banner slot
+ * before anything goes through: the `gift-month` scene with its celebration, "Congratulations: 50 invoices this month."
+ * and the line that says until when. Continue (the drawer's footer, or here) records it and sends the held request again.
+ */
+export function GiftNotice({ limit, onContinue, continuing = false }: { limit: PlanLimit; onContinue?: () => void; continuing?: boolean }) {
+  const t = useT();
+  const { language } = useLanguage();
+  const meter = limit.limit === 'scans' ? 'scans' : 'documents';
+  useEffect(() => trackPlanEvent('plan_gift_shown', { limit: meter }), [meter]);
+  const vars = { count: String(limit.cap ?? limit.used ?? ''), date: limit.resetsOn ? formatDay(limit.resetsOn, language) : '' };
+  return (
+    <section className="hp-banner hp-banner-warning hp-lapse-banner hp-gift-notice" role="alert" data-testid="gift-notice" data-limit={meter}>
+      <Scene name="gift-month" size={96} motion="gift-month" className="hp-banner-scene" />
+      <div className="hp-lapse-banner-body">
+        <p className="hp-lapse-banner-title">{t(`hosted.planLimit.gift.${meter}.title`, vars)}</p>
+        <p>{t(`hosted.planLimit.gift.${meter}.body`, vars)}</p>
+        {onContinue && (
+          <div className="hp-lapse-banner-actions">
+            <Button size="sm" onClick={onContinue} isLoading={continuing} keepLabelWhileLoading data-testid="gift-continue">
+              {t('hosted.planLimit.gift.continue')}
+            </Button>
           </div>
         )}
       </div>

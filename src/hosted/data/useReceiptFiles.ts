@@ -7,6 +7,7 @@ import { checkReceiptFile } from './receiptFileRules';
 import { limitFromUsage, planLimitOf, type PlanLimit } from './planUsage';
 import { uploadErrorOf, useUploadReceipts } from './receiptQueries';
 import { useStarterUsage } from './useStarterUsage';
+import { giftBeforeTyping, useAcceptGift, usePlanUsage } from './usePlanUsage';
 
 /**
  * Files picked or dropped into the receipts library (MUT-260 D9), wherever they come from: the gallery's Upload and
@@ -24,6 +25,10 @@ export function useReceiptFiles(profileId: string, { onLanded }: { onLanded?: (c
   const starter = useStarterUsage();
   const navigate = useNavigate();
   const [planLimit, setPlanLimit] = useState<PlanLimit | null>(null);
+  // MUT-733: the files the gift holds until Continue (the first refusal on a paid plan, or known before the upload).
+  const [held, setHeld] = useState<File[]>([]);
+  const paid = usePlanUsage();
+  const acceptGift = useAcceptGift(profileId);
   const byHand = () => {
     setPlanLimit(null);
     void navigate({ to: `/p/${profileId}/expenses`, search: { newExpense: '1' } } as never);
@@ -32,6 +37,12 @@ export function useReceiptFiles(profileId: string, { onLanded }: { onLanded?: (c
   const onFiles = async (files: File[]) => {
     if (starter.usage && starter.billing && starter.usage.scans.level === 'at_cap') {
       setPlanLimit(limitFromUsage(starter.usage, 'scans', starter.billing));
+      return;
+    }
+    const gift = giftBeforeTyping(paid.usage, 'scans');
+    if (gift) {
+      setHeld(files);
+      setPlanLimit(gift);
       return;
     }
     const problems: string[] = [];
@@ -48,6 +59,7 @@ export function useReceiptFiles(profileId: string, { onLanded }: { onLanded?: (c
     const limit = failed ? planLimitOf(failed.error) : null;
     if (limit) {
       setPlanLimit(limit);
+      if (limit.gift) setHeld(outcomes.filter((o) => planLimitOf(o.error)).map((o) => o.file));
     } else if (failed) {
       const { key, seconds } = uploadErrorOf(failed.error);
       showToast(t(`hosted.receipts.errors.${key}`, { name: failed.file.name, seconds: seconds ?? 0 }));
@@ -57,5 +69,16 @@ export function useReceiptFiles(profileId: string, { onLanded }: { onLanded?: (c
     if (landed > 0) onLanded?.(landed);
   };
 
-  return { onFiles, uploading: uploads.uploading, pending: uploads.pending, planLimit, byHand, dismissLimit: () => setPlanLimit(null) };
+  /** MUT-733: Continue on the gift: record it, then upload the held files again. */
+  const continueWithGift = () =>
+    acceptGift.mutate('scans', {
+      onSuccess: () => {
+        const again = held;
+        setHeld([]);
+        setPlanLimit(null);
+        if (again.length > 0) void onFiles(again);
+      },
+    });
+
+  return { onFiles, uploading: uploads.uploading, pending: uploads.pending, planLimit, byHand, dismissLimit: () => setPlanLimit(null), continueWithGift, acceptingGift: acceptGift.isPending };
 }

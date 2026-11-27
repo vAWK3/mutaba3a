@@ -145,7 +145,7 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
     <>
       {fileInput}
       {/* MUT-731 (wireframe 2): Starter's scans used up; the expense can still be added by hand. */}
-      {uploads.planLimit && <PlanLimitNotice limit={uploads.planLimit} onByHand={uploads.byHand} />}
+      {uploads.planLimit && <PlanLimitNotice limit={uploads.planLimit} onByHand={uploads.byHand} onContinue={uploads.continueWithGift} continuing={uploads.acceptingGift} />}
       <div className="hp-receipts-bar">
         <SegmentedTabs<ReceiptStatusFilter>
           options={options}

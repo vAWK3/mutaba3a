@@ -1263,6 +1263,15 @@ export class FakeApi {
       const at = new Date().toISOString();
       return json({ change: { id: 'aaaaaaaa-7340-4000-8000-000000000002', kind: undone.kind, state: 'UNDONE', fromPlan: p.plan.toUpperCase(), toPlan: undone.plan.toUpperCase(), effectiveAt: p.periodEnd, amountMinor: null, currency: null, createdAt: at } });
     }
+    // MUT-733: the once-ever gift for a meter at its cap; then that meter has no cap until the 1st.
+    if (e.method === 'POST' && id === 'over-cap-gift') {
+      const meter = ((e.body ?? {}) as { meter?: 'documents' | 'scans' }).meter ?? 'documents';
+      if (p.gift?.running === meter) return json({ meter, until: new Date(`${nextMonthStart()}T00:00:00.000Z`).toISOString() });
+      if (p.gift?.used || p.gift?.running) return json({ error: { code: 'GIFT_USED', message: 'used' } }, 409);
+      if (p.plan === 'firm' || p[meter] < PAID_CAPS[p.plan][meter]) return json({ error: { code: 'GIFT_NOT_AVAILABLE', message: 'not available' } }, 409);
+      p.gift = { running: meter };
+      return json({ meter, until: new Date(`${nextMonthStart()}T00:00:00.000Z`).toISOString() });
+    }
     // MUT-532's cancel flow on a paid plan: no pause or stay offer here, so Why? leads to the confirm.
     if (e.method === 'GET' && id === 'retention') return json({ endsOn: p.periodEnd, pause: null, stayOffer: null });
     if (e.method === 'PUT' && id === 'active-businesses' && p.businesses) {

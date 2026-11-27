@@ -4003,7 +4003,18 @@
       },
       "upgradeTo": "الترقية إلى {plan}",
       "includes": "تشمل خطة {plan} {items}",
-      "reached": "بلغت الحد: {usage}"
+      "reached": "بلغت الحد: {usage}",
+      "gift": {
+        "documents": {
+          "title": "مبروك: {count} فاتورة هذا الشهر.",
+          "body": "هذا الشهر أصدر ما تحتاج. من {date} يعود الحد إلى {count}، وبعده تحتاج خطة أكبر."
+        },
+        "scans": {
+          "title": "مبروك: {count} مسحًا هذا الشهر.",
+          "body": "هذا الشهر امسح ما تحتاج. من {date} يعود الحد إلى {count}، وبعده تحتاج خطة أكبر."
+        },
+        "continue": "متابعة"
+      }
     },
     "onboarding": {
       "trial": {

@@ -154,3 +154,17 @@ describe('planUsageOf (MUT-705)', () => {
     expect(planUsageOf(usageOf([2, 'ok'], [7, 'ok'], 'malafat'))).toBeNull();
   });
 });
+
+describe('the gift (MUT-733)', () => {
+  it('a paid plan’s first refusal carries the gift; a later one does not', () => {
+    const first = new ApiError(409, 'PLAN_LIMIT', 'cap', { limit: 'documents', plan: 'solo', used: 50, cap: 50, resetsOn: '2026-12-01', nextPlan: 'business', canUpgrade: true, gift: 'available' });
+    expect(planLimitOf(first)).toMatchObject({ limit: 'documents', nextPlan: 'business', gift: true });
+    const hard = new ApiError(409, 'PLAN_LIMIT', 'cap', { limit: 'documents', plan: 'solo', used: 50, cap: 50, resetsOn: '2026-12-01', nextPlan: 'business', canUpgrade: true });
+    expect(planLimitOf(hard)?.gift).toBeUndefined();
+  });
+
+  it('Firm’s refusal names no next plan', () => {
+    const firm = new ApiError(409, 'PLAN_LIMIT', 'cap', { limit: 'businesses', plan: 'firm', used: 6, cap: 6, nextPlan: null, canUpgrade: false });
+    expect(planLimitOf(firm)?.nextPlan).toBeNull();
+  });
+});

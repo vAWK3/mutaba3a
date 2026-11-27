@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-733 (UI): paid plans' monthly limits, the gift and the hard cap
+
+### Added
+- `GiftNotice` (in `PlanLimitNotice`): the gift in the banner slot with the `gift-month` scene and its celebration; Continue records it (`useAcceptGift`, POST /v1/billing/over-cap-gift) and re-sends the held invoice or re-uploads the held receipts. Known before typing from `usage.gift.available` (`giftBeforeTyping`).
+- The hard cap after the gift: the `gift-used` still, "Limit reached", the reset day, Upgrade to the next plan.
+- `usePlanUsage` (Billing's usage on any limited plan); the Issue drawer's paid documents line (80% plain, 90% butter with Upgrade, gift "No limit until").
+- API client `acceptOverCapGift`; analytics `plan_gift_shown`, `plan_gift_accepted`; i18n `hosted.planLimit.gift.*` (ar + en). FakeApi `paid` answers the gift.
+
+### Changed
+- `planLimitOf` reads `gift` and keeps a null `nextPlan` (Firm).
+
+### Technical
+- Tests: `data/__tests__/usePlanUsage.test.ts`, gift cases in `planUsage.test.ts`. QA: `portal.paid-caps.paid-cap-gift`, `paid-cap-hard`, `paid-scan-gift`, `paid-usage-nudge`.
+
 ## [Unreleased] - 2026-11-27 — MUT-734 (UI): change plan from Billing
 
 ### Added
