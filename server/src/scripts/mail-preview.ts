@@ -46,6 +46,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-profile/you/invoicing` },
   'plan-change-scheduled': { plan: 'solo', changesOn: { year: 2026, month: 12, day: 15 }, manageLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/accountant-invite#sample-token`, expiresOn: { year: 2026, month: 11, day: 20 } },
+  'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/setup#sample-token`, validDays: 14 },
+  'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
   // MUT-618
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },

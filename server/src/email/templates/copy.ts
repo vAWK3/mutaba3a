@@ -909,6 +909,55 @@ const planChangeScheduled: Copy<'plan-change-scheduled'> = {
   },
 };
 
+/**
+ * MUT-765 (ADR-294): an accountant set the account up. Names him and the business (who and why, the claim page's
+ * context line); the code he says in person is never in the mail. MUT-767: `reminder` words it as a reminder.
+ */
+const customerSetup: Copy<'customer-setup'> = {
+  en: ({ accountantName, businessName, link, validDays, reminder }) => ({
+    subject: reminder ? `Reminder: finish setting up “${businessName}” on MTB3A` : `${accountantName} set up “${businessName}” for you on MTB3A`,
+    preheader: 'Set a password with the code your accountant gave you.',
+    headline: reminder ? 'Your account is still waiting' : 'Your account is ready to claim',
+    intro: [
+      [`${accountantName} set up “${businessName}” for you on MTB3A.`],
+      ['Open the link, type the code your accountant gave you, and set a password.'],
+      [`The link works once and expires in ${enDays(validDays)}.`],
+    ],
+    action: { label: 'Set up my account', href: link },
+    outro: [['Not expecting this? Ignore this email.']],
+  }),
+  ar: ({ accountantName, businessName, link, validDays, reminder }) => ({
+    subject: reminder ? `تذكير: أكمل إعداد «${businessName}» في متابعة` : `${accountantName} أعدّ لك «${businessName}» في متابعة`,
+    preheader: 'عيّن كلمة المرور بالرمز الذي أعطاك إياه محاسبك.',
+    headline: reminder ? 'حسابك ما زال بانتظارك' : 'حسابك جاهز لتستلمه',
+    intro: [
+      [`أعدّ ${accountantName} لك «${businessName}» في متابعة.`],
+      ['افتح الرابط، واكتب الرمز الذي أعطاك إياه محاسبك، ثم عيّن كلمة المرور.'],
+      [`يعمل الرابط مرة واحدة وتنتهي صلاحيته بعد ${arDays(validDays)}.`],
+    ],
+    action: { label: 'إعداد حسابي', href: link },
+    outro: [['لا تتوقع هذه الرسالة؟ تجاهلها.']],
+  }),
+};
+
+/** MUT-765 (ACCT-6): the accountant changed the address; the link this address got no longer works. */
+const customerSetupCancelled: Copy<'customer-setup-cancelled'> = {
+  en: ({ accountantName, businessName }) => ({
+    subject: 'Your MTB3A setup link no longer works',
+    preheader: `${accountantName} sent it to another address.`,
+    headline: 'This setup link no longer works',
+    intro: [[`${accountantName} changed the address for “${businessName}” on MTB3A, so the setup link sent here no longer works.`]],
+    outro: [['If this is your business, ask your accountant.']],
+  }),
+  ar: ({ accountantName, businessName }) => ({
+    subject: 'رابط إعداد حسابك في متابعة لم يعد يعمل',
+    preheader: `أرسله ${accountantName} إلى عنوان آخر.`,
+    headline: 'رابط الإعداد هذا لم يعد يعمل',
+    intro: [[`غيّر ${accountantName} عنوان البريد لـ«${businessName}» في متابعة، فلم يعد رابط الإعداد المرسل إلى هنا يعمل.`]],
+    outro: [['إن كان هذا عملك، فاسأل محاسبك.']],
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -935,4 +984,6 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'monthly-summary': monthlySummary,
   'tax-authority-reconnect': taxAuthorityReconnect,
   'plan-change-scheduled': planChangeScheduled,
+  'customer-setup': customerSetup,
+  'customer-setup-cancelled': customerSetupCancelled,
 };

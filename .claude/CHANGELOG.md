@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Claim code, fresh links and change of address (MUT-765 server half, epic MUT-762, ADR-294, API 1.160.0-mut765)
+
+Plan `docs/designs/accountant-channel.md` (eng T4; ACCT-6, ACCT-10, R6; build decisions B5–B11). Server only, dark behind `ACCOUNTANT_PROVISIONING`. No migration (MUT-763's columns). The /setup code step (MUT-769) and the desk's Customer drawer (MUT-768) wait for the UI.
+
+### Added
+- `POST /v1/account-setup/claim-code`; `claim` on `POST /v1/account-setup/check`; `claimCode` on `POST /v1/account-setup` (provisioned links only). Errors CLAIM_CODE_WRONG (403, `triesLeft`), CLAIM_CODE_LOCKED (403), CUSTOMER_CLAIMED (403).
+- `GET /v1/accountant/customers` (state per customer, paged by `before`), `POST /v1/accountant/customers/{userId}/link`, `PUT /v1/accountant/customers/{userId}/email` (Idempotency-Key; 5 a day per customer).
+- Mail templates `customer-setup` (replaces `finish-setup` for provisioned links; names the accountant and the business; `reminder` for MUT-767) and `customer-setup-cancelled`, ar and en.
+- `store.provision.reissue`, `claimOf`, `failClaimCode`, `setMailStatus`, `countReissuesSince`, `customersOf` (memory and Prisma; contract tests).
+- Audit `accountant.customer_link_reissued`, `accountant.customer_email_changed`, `accountant.customer_claimed`.
+
+### Changed
+- Self-service recovery gives an unclaimed provisioned account no link (neutral answer).
+- The create route records the link's mail status.
 ## [Unreleased] - 2026-11-27 — Paid plans' monthly caps: one gift, then hard (MUT-733 server half, ADR-293, API 1.159.0-mut733)
 
 Epic MUT-701. Plan `.claude/designs/mut-733-over-cap-gift-plan.md` (approved with defaults). Server only; the gift message on the portal and phone, the usage lines and the analytics come with the UI half (and MUT-706). Dark behind `PAID_HARD_CAPS`. No migration (the gift columns exist since MUT-735).

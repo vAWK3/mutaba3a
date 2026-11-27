@@ -3463,6 +3463,61 @@ export interface ProvisionRepository {
   countLookupsSince(accountantUserId: string, since: Date): Promise<number>;
   /** MUT-764: provisioned accounts that still have no password (the operator's list), newest first. */
   listUnclaimed(input: { limit: number }): Promise<UnclaimedProvisionedAccount[]>;
+  /**
+   * MUT-765 (ACCT-6, ACCT-10, R6): one transaction under the customer's row lock. Refuses `not_found` unless the
+   * customer was provisioned by this accountant (and he still holds the ACTIVE grant on their business profile), and
+   * `claimed` once they have a password. With `email`: refuses `email_taken` when another account holds it (the signup
+   * lock), else moves the account to it. Then cancels every open link, writes the fresh SETUP link with the new claim
+   * code's digest (attempts 0, mail PENDING) and `auditFor(...)`.
+   */
+  reissue(input: ReissueProvisionedLinkInput): Promise<ReissueProvisionedLinkResult>;
+  /**
+   * MUT-765: one wrong claim code on this link, counted atomically. Returns the wrong tries so far (the fifth locks
+   * the code); null when the link carries no claim code or its code is already locked (nothing counted).
+   */
+  failClaimCode(tokenDigest: string): Promise<number | null>;
+  /** MUT-765: the claim side of the setup link with this digest; null for an unknown link. */
+  claimOf(tokenDigest: string): Promise<ProvisionedSetupLink | null>;
+  /** MUT-765: whether the mail carrying this link was handed to the mail service. */
+  setMailStatus(tokenDigest: string, status: 'SENT' | 'FAILED'): Promise<void>;
+  /** MUT-765 (R6): links made for the customer at or after `since` other than the one their account was created with (each reissue and change of address makes one), for the reissue cap. */
+  countReissuesSince(userId: string, since: Date): Promise<number>;
+  /** MUT-765: the customers this accountant created, newest first, claimed or not (the desk's list). `before` pages by provisionedAt. */
+  customersOf(accountantUserId: string, input: { limit: number; before?: Date | undefined }): Promise<ProvisionedCustomerRow[]>;
+}
+
+export interface ReissueProvisionedLinkInput {
+  accountantUserId: string;
+  customerUserId: string;
+  /** A new address (normalised) for a change of email; omitted to keep the current one. */
+  email?: string | undefined;
+  setupLink: { tokenDigest: string; expiresAt: Date };
+  /** HMAC of the new claim code, bound to the address the link goes to (known inside the transaction). */
+  claimCodeDigestFor(email: string): string;
+  at: Date;
+  /** Written in the same transaction. `organizationId` is the customer's business profile the grant reads. */
+  auditFor(context: { organizationId: string; grant: AccountantGrantRecord; previousEmail: string }): AuditEventInput[];
+}
+
+export type ReissueProvisionedLinkResult =
+  | { kind: 'issued'; email: string; previousEmail: string; displayName: string; locale: UserLocale; organization: Organization }
+  | { kind: 'not_found' }
+  | { kind: 'claimed' }
+  | { kind: 'email_taken' };
+
+/** One customer an accountant created, with what the desk shows about their claim. */
+export interface ProvisionedCustomerRow {
+  userId: string;
+  email: string;
+  displayName: string;
+  locale: UserLocale;
+  provisionedAt: Date;
+  /** True once the customer has set a password. */
+  claimed: boolean;
+  /** The business profile the accountant reads; null if it is gone. */
+  profile: { id: string; name: string } | null;
+  /** The newest setup link; null if there is none. */
+  link: (ProvisionedSetupLink & { usedAt: Date | null; cancelledAt: Date | null; createdAt: Date }) | null;
 }
 
 /** One provisioned account not yet claimed (no password). `accountantUserId` is null once the accountant's account is deleted. */

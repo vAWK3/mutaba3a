@@ -309,6 +309,9 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     const person = await store.users.findByEmail(input.email);
     const purpose = person ? recoveryPurposeOf(person) : null;
     if (!person || !purpose) return null;
+    // MUT-765 (ADR-294): an account an accountant created and nobody claimed is claimed only with his link and code. A
+    // code-less recovery link would skip the code (the wrong-recipient guard) and cancel his link; the neutral answer only.
+    if (person.passwordHash === null && (await store.provision.originOf(person.id))) return null;
     const hours = purpose === 'RESET' ? SELF_SERVICE_POLICY.recoveryResetHours : SELF_SERVICE_POLICY.recoverySetupHours;
     const token = generateSetupToken();
     const expiresAt = new Date(input.now.getTime() + hours * HOUR_MS);

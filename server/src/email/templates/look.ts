@@ -94,6 +94,9 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'comeback-offer': { mood: 'hello', header: 'milestone-firm', chip: 'success' },
   // MUT-559: an owner shares a profile with their accountant.
   'accountant-invite': { mood: 'hello', header: 'spot-email', chip: 'email' },
+  // MUT-765: the existing art only: an account an accountant set up, and its cancelled link.
+  'customer-setup': { mood: 'hello', header: 'empty-state', chip: 'edit' },
+  'customer-setup-cancelled': { mood: 'safety', header: 'spot-person', chip: 'person' },
   // MUT-535: a month's summary, so the calendar.
   'monthly-summary': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   // MUT-571 AC3: the existing art only: a consent that ends on a day.

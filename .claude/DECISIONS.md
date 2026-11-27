@@ -7423,3 +7423,17 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. In-app only, no mails (Q6). Short copy (Q5).
 
 **Consequences:** Turn on only after plan Checkout, MUT-734's plan change and the phone build that shows the gift are live.
+---
+
+## ADR-294: The Claim Step: A Six-Digit Code Said in Person, Five Tries, a 14-Day Link, and the Accountant's Setup Actions Only While Unclaimed (MUT-765, epic MUT-762; extends ADR-292, keeps ADR-088)
+
+**Status:** Accepted (2026-11-27; plan `docs/designs/accountant-channel.md`, CEO ACCT-6 and ACCT-10, eng R6; build decisions B5–B11).
+
+**Decision:**
+1. A provisioned link carries a claim code (HMAC bound to the address, purpose-separated from the sign-in code). `POST /v1/account-setup/check` answers `claim { accountantName, businessName, codeLocked }` for such a link only; `POST /v1/account-setup/claim-code` checks the code before the password step; `POST /v1/account-setup` needs `claimCode` for it (422 without, 403 CLAIM_CODE_WRONG with `triesLeft`, 403 CLAIM_CODE_LOCKED from the fifth wrong try on, counted atomically in the store). Operator links and recovery links carry no code and are unchanged.
+2. The link lives 14 days. The accountant's setup actions, `POST /v1/accountant/customers/{id}/link` (resend and new code are one action: a fresh link and code, the old ones dead) and `PUT …/email` (the account moves to the new address, a fresh link and code go there, the old address gets `customer-setup-cancelled`), need his approval, work only for his own customer (404 otherwise) and only until the claim (403 CUSTOMER_CLAIMED), at most five a day per customer (429 REISSUE_PER_DAY). The code is in the first answer only; an Idempotency-Key replay omits it.
+3. Self-service recovery never issues a link for an unclaimed provisioned account (the neutral answer only): a code-less link would skip the wrong-recipient guard and cancel the accountant's link.
+4. The mail (`customer-setup`, ar and en) names the accountant and the business and never carries the code; its status (SENT or FAILED) is stored on the link so the desk can offer Resend.
+5. The claim stamps the address verified and audits `accountant.customer_claimed` on the business profile in the redeem's transaction. `GET /v1/accountant/customers` gives the desk each customer's state: awaiting_claim, link_expired, code_locked, claimed.
+
+**Consequences:** A customer locked out by five wrong codes or an expired link waits for the accountant. A code lock is logged (`claim_code_locked`) for the T9 alert (TD-360).

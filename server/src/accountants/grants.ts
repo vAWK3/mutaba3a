@@ -57,6 +57,8 @@ export type GrantAuditAction =
   | 'accountant.customer_activated'
   | 'accountant.customer_claimed'
   | 'accountant.customer_email_changed'
+  // MUT-765: a fresh link and code for a customer who has not claimed.
+  | 'accountant.customer_link_reissued'
   | 'accountant.customer_lookup_existing'
   // The operator's approval of an accountant to create customers, and its withdrawal (MUT-764).
   | 'accountant.provisioning_approved'

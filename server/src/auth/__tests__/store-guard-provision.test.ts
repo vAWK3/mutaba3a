@@ -15,7 +15,16 @@ describe('the provision guard class (MUT-763)', () => {
   );
 
   it('belongs to the accountant’s own calls: creating a customer, reading one’s own approval and the two daily counts', () => {
-    expect(provisionMethods.sort()).toEqual(['provision.approvalOf', 'provision.countCreatedSince', 'provision.countLookupsSince', 'provision.create']);
+    expect(provisionMethods.sort()).toEqual([
+      'provision.approvalOf',
+      'provision.countCreatedSince',
+      'provision.countLookupsSince',
+      'provision.countReissuesSince',
+      'provision.create',
+      'provision.customersOf',
+      'provision.reissue',
+      'provision.setMailStatus',
+    ]);
   });
 
   it('keeps the operator’s approval, the origin, the setup link and the unclaimed list below every guard', () => {
@@ -23,6 +32,8 @@ describe('the provision guard class (MUT-763)', () => {
     expect(STORE_ACCESS.provision.originOf).toBe('operator');
     expect(STORE_ACCESS.provision.setupLinkOf).toBe('operator');
     expect(STORE_ACCESS.provision.listUnclaimed).toBe('operator');
+    // MUT-765: only the public claim step counts a wrong code, on the unguarded store.
+    expect(STORE_ACCESS.provision.failClaimCode).toBe('operator');
   });
 
   it('lets a signed-in session create, and refuses an API key', () => {

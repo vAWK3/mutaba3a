@@ -88,6 +88,12 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## Claim code and setup actions (MUT-765, 2026-11-27)
+
+`routes-accountant-claim.test.ts`: check names accountant and business; mail names them and never carries the code; right code with spaces; redeem without code 422; claim sets password, verifies address, audits, closes setup actions (403 CUSTOMER_CLAIMED) and keeps the read grant; four wrong tries count down, the fifth locks even the right code; 14-day expiry; operator links need no code; recovery mails nothing for an unclaimed provisioned account; reissue kills the old link and code, replay omits the code; a fresh code unlocks; 5 reissues a day then 429 until the next UTC day; change of address (old link dead, old address told, new link claims); EMAIL_TAKEN and throwaway refusals; another accountant 404; approval withdrawn 403; the desk list with states and paging; 404 with the flag off. Store contract: reissue, change of address, refusals, wrong-try counter and `claimOf`, mail status, `customersOf`.
+
+---
+
 ## Accountant provisioning route and operator console (MUT-764, 2026-11-27)
 
 `routes-accountant-customers.test.ts`: 404 with the flag off, 403 unapproved and withdrawn, 401, Idempotency-Key required, 201 with rows and mail, no link or token in any response, replay without the code (one create, one mail), key reuse 422, both daily limits per UTC day with operator overrides and the defaults, existing-address answer audited and counted, throwaway refused uncounted, customer cannot sign in before claiming, the grant is read-only, OpenAPI. `routes-operator-provisioning.test.ts`: non-operator 404, step-up on writes (a password session is refused), approve/withdraw with audit rows, limit validation, today's counts, the unclaimed list with `paid`. Store contract adds the counts, the list and audited `setApproval`. Pinned in `route-security.test.ts` and `billing-gate-routes.test.ts`.

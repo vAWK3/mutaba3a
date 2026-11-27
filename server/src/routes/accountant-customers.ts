@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { grantAudit } from '../accountants/grants.js';
 import { personalOrganizationIdOf } from '../accountants/provision.js';
 import { generateSetupToken, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
-import { claimCodeDigest, generateClaimCode } from '../auth/claim-code.js';
+import { CLAIM_REISSUES_PER_DAY, claimCodeDigest, generateClaimCode } from '../auth/claim-code.js';
+import { isClaimCodeLocked } from '../accountants/claim.js';
+import type { Context } from 'hono';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { sessionDigest } from '../auth/sessions.js';
 import { normalizeEmail } from '../auth/users.js';
@@ -13,8 +15,18 @@ import { ApiError } from '../errors.js';
 import { IDEMPOTENCY_HEADER, requestFingerprint, requireKey, runIdempotent, type IdempotentOutcome } from '../idempotency.js';
 import type { Logger } from '../logger.js';
 import { personalProfileFor } from '../personal-profile.js';
-import type { LedgerStore } from '../repositories/ports.js';
-import { ErrorEnvelopeSchema, ProvisionCustomerRequestSchema, ProvisionedCustomerSchema, ProvisionExistingAddressSchema } from '../schemas.js';
+import type { LedgerStore, ProvisionedCustomerRow, UserLocale, UserRecord } from '../repositories/ports.js';
+import {
+  ErrorEnvelopeSchema,
+  ProvisionChangeEmailRequestSchema,
+  ProvisionCustomerParamSchema,
+  ProvisionCustomerRequestSchema,
+  ProvisionedCustomerSchema,
+  ProvisionedCustomersQuerySchema,
+  ProvisionedCustomersSchema,
+  ProvisionedLinkSchema,
+  ProvisionExistingAddressSchema,
+} from '../schemas.js';
 import { isRefusedInviteDomain } from './accountants.js';
 import { PERSON } from './security.js';
 
@@ -23,7 +35,13 @@ import { PERSON } from './security.js';
  * accountant creates a customer's account, business profile and read grant in one call (`store.provision.create`),
  * behind the ACCOUNTANT_PROVISIONING dark flag.
  *
- *   POST /v1/accountant/customers   session: Idempotency-Key required
+ *   POST /v1/accountant/customers                    session: Idempotency-Key required
+ *   GET  /v1/accountant/customers                    MUT-765: the accountant's customers and their claim state
+ *   POST /v1/accountant/customers/{userId}/link      MUT-765: a fresh link and code (resend, new code), Idempotency-Key
+ *   PUT  /v1/accountant/customers/{userId}/email     MUT-765: change the address (old link dead, old address told), Idempotency-Key
+ *
+ * MUT-765 (ACCT-10): the setup actions work only while the customer has not claimed (403 CUSTOMER_CLAIMED after);
+ * another accountant's customer, or an account nobody provisioned, is 404. At most five fresh links a day per customer.
  *
  * The setup link goes to the customer's inbox and appears in no response (ADR-088 section 1). The 6-digit claim code
  * is in the first answer only: the stored outcome, which a replay returns, never holds it. Two limits per approved
@@ -32,7 +50,12 @@ import { PERSON } from './security.js';
  */
 
 /** These act on the person, like GET /v1/me: no X-Mutaba3a-Profile. */
-export const ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['POST /v1/accountant/customers']);
+export const ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
+  'POST /v1/accountant/customers',
+  'GET /v1/accountant/customers',
+  'POST /v1/accountant/customers/:userId/link',
+  'PUT /v1/accountant/customers/:userId/email',
+]);
 
 /** Every endpoint this file adds: the dark-launch switch (ACCOUNTANT_PROVISIONING off) answers 404 for each. */
 export const ACCOUNTANT_CUSTOMER_ENDPOINTS: ReadonlySet<string> = ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES;
@@ -42,9 +65,14 @@ export const PROVISION_DEFAULT_CREATE_LIMIT_PER_DAY = 50;
 export const PROVISION_DEFAULT_LOOKUP_LIMIT_PER_DAY = 100;
 /** The mailed setup link lives 14 days (ACCT-6), not the operator's 72 hours. */
 export const PROVISION_LINK_TTL_MS = 14 * 24 * 3_600_000;
-const SETUP_LINK_VALID_HOURS = PROVISION_LINK_TTL_MS / 3_600_000;
+
 const DAY_MS = 86_400_000;
+const SETUP_LINK_VALID_DAYS = PROVISION_LINK_TTL_MS / DAY_MS;
+
 const OPERATION = 'accountant.customers.create';
+const REISSUE_OPERATION = 'accountant.customers.link';
+const EMAIL_OPERATION = 'accountant.customers.email';
+const DEFAULT_PAGE = 100;
 
 export interface AccountantCustomerRouteOptions {
   store: LedgerStore;
@@ -60,6 +88,43 @@ const utcDayStart = (at: Date) => new Date(Date.UTC(at.getUTCFullYear(), at.getU
 export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions): OpenAPIHono<AppEnv> {
   const { store, settings, mailer, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
+
+  /** The operator's approval, needed by every call here (withdrawn means no setup action either). */
+  async function approvedAccountant(c: Context<AppEnv>): Promise<UserRecord> {
+    const { user } = c.get('identity');
+    const approval = await store.provision.approvalOf(user.id);
+    if (!approval?.enabled) throw new ApiError('ACCOUNTANT_NOT_APPROVED', 'The operator has not approved you to create customers');
+    return user;
+  }
+
+  /**
+   * Mails a provisioned link (`customer-setup`, naming the accountant and the business) and records whether it went.
+   * Never throws and never changes the answer: a failed send leaves the link valid and FAILED (the desk offers Resend).
+   */
+  async function mailSetupLink(c: Context<AppEnv>, input: { customerId: string; to: string; locale: UserLocale; businessName: string; tokenDigest: string; token: string }): Promise<boolean> {
+    const { user } = c.get('identity');
+    const link = setupUrl(setupLinkOrigin(settings.portalOrigin, c.req.url), input.token);
+    let sent = false;
+    try {
+      const outcome = await mailer.send({
+        to: input.to,
+        template: 'customer-setup',
+        locale: input.locale,
+        vars: { accountantName: user.displayName, businessName: input.businessName, link, validDays: SETUP_LINK_VALID_DAYS },
+        idempotencyKey: `provision-setup:${input.customerId}:${input.tokenDigest.slice(0, 16)}`,
+      });
+      if (outcome.status !== 'sent') logger.info({ template: 'customer-setup', outcome: outcome.status }, 'provisioned setup link not sent');
+      sent = outcome.status === 'sent';
+    } catch (err) {
+      logger.error({ err, template: 'customer-setup' }, 'provisioned setup link failed');
+    }
+    try {
+      await store.provision.setMailStatus(input.tokenDigest, sent ? 'SENT' : 'FAILED');
+    } catch (err) {
+      logger.error({ err }, 'provisioned link mail status not saved');
+    }
+    return sent;
+  }
 
   app.openapi(
     createRoute({
@@ -140,7 +205,7 @@ export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions
         if (result.kind === 'not_approved') throw new ApiError('ACCOUNTANT_NOT_APPROVED', 'The operator has not approved you to create customers');
         if (result.kind === 'account_exists') return existing();
 
-        const mailSent = await mailSetupLink(result.user.id, email, locale, setupUrl(setupLinkOrigin(settings.portalOrigin, c.req.url), token));
+        const mailSent = await mailSetupLink(c, { customerId: result.user.id, to: email, locale, businessName: result.organization.name, tokenDigest: sessionDigest(settings.pepper, token), token });
         claimCode = code;
         return {
           status: 201,
@@ -152,18 +217,6 @@ export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions
             mailSent,
           },
         };
-      }
-
-      /** Never throws and never changes the answer: a failed send leaves the account created (MUT-765 resends). */
-      async function mailSetupLink(customerId: string, to: string, locale: typeof user.locale, link: string): Promise<boolean> {
-        try {
-          const sent = await mailer.send({ to, template: 'finish-setup', locale, vars: { link, validHours: SETUP_LINK_VALID_HOURS }, idempotencyKey: `provision-setup:${customerId}` });
-          if (sent.status !== 'sent') logger.info({ template: 'finish-setup', outcome: sent.status }, 'provisioned setup link not sent');
-          return sent.status === 'sent';
-        } catch (err) {
-          logger.error({ err, template: 'finish-setup' }, 'provisioned setup link failed');
-          return false;
-        }
       }
 
       const outcome = await runIdempotent(
@@ -182,5 +235,147 @@ export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/accountant/customers',
+      tags: ['Accountants'],
+      summary: 'The customers you created and where each one is in claiming their account (MUT-765)',
+      description:
+        'Newest first; `limit` up to 500 (default 100), then `before` = the previous `nextBefore`. `state`: awaiting_claim, link_expired, code_locked (five wrong codes; issue a new link), or claimed (only the read access remains). 403 ACCOUNTANT_NOT_APPROVED; 404 while the feature is off. Additive since 1.160.0-mut765.',
+      security: PERSON,
+      request: { query: ProvisionedCustomersQuerySchema },
+      responses: {
+        200: { description: 'The customers', content: { 'application/json': { schema: ProvisionedCustomersSchema } } },
+        403: errorResponse('ACCOUNTANT_NOT_APPROVED'),
+        404: errorResponse('The feature is off on this server'),
+      },
+    }),
+    async (c) => {
+      const user = await approvedAccountant(c);
+      const query = c.req.valid('query');
+      const limit = query.limit ?? DEFAULT_PAGE;
+      const rows = await store.provision.customersOf(user.id, { limit, before: query.before ? new Date(query.before) : undefined });
+      const now = c.get('now')();
+      return c.json({ items: rows.map((row) => customerView(row, now)), nextBefore: rows.length === limit ? rows[rows.length - 1]!.provisionedAt.toISOString() : null }, 200);
+    },
+  );
+
+  const setupActionResponses = {
+    200: { description: 'A fresh link was mailed; the claim code is in this answer only', content: { 'application/json': { schema: ProvisionedLinkSchema } } },
+    403: errorResponse('ACCOUNTANT_NOT_APPROVED, or CUSTOMER_CLAIMED: the customer has claimed the account, so only your read access remains'),
+    404: errorResponse('No customer you created by this id, or the feature is off'),
+    409: errorResponse('CONFLICT reason EMAIL_TAKEN: another account has that address'),
+    422: errorResponse('IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, or VALIDATION_FAILED (details.reason ADDRESS_REFUSED for a throwaway or relay address)'),
+    429: errorResponse(`RATE_LIMITED details.limit REISSUE_PER_DAY: ${CLAIM_REISSUES_PER_DAY} fresh links a day per customer, with Retry-After`),
+  } as const;
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/accountant/customers/{userId}/link',
+      tags: ['Accountants'],
+      summary: 'Send the customer a fresh setup link with a new claim code (MUT-765)',
+      description:
+        'Resend and New code are this one action: the old link and code stop working, a fresh 14-day link is mailed and the new code is in this answer only (a replay of the same Idempotency-Key returns the rest without it). Only while the customer has not claimed. Additive since 1.160.0-mut765.',
+      security: PERSON,
+      request: { params: ProvisionCustomerParamSchema },
+      responses: setupActionResponses,
+    }),
+    async (c) => c.json((await setupAction(c, REISSUE_OPERATION, c.req.valid('param').userId, undefined)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/accountant/customers/{userId}/email',
+      tags: ['Accountants'],
+      summary: 'Change the customer’s address: the old link and code die, the old address is told (MUT-765)',
+      description:
+        'The account moves to the new address; a fresh link goes there with a new code (in this answer only), and the old address gets a short notice that its link no longer works. Only while the customer has not claimed. Additive since 1.160.0-mut765.',
+      security: PERSON,
+      request: { params: ProvisionCustomerParamSchema, body: jsonBody(ProvisionChangeEmailRequestSchema) },
+      responses: setupActionResponses,
+    }),
+    async (c) => c.json((await setupAction(c, EMAIL_OPERATION, c.req.valid('param').userId, normalizeEmail(c.req.valid('json').email))) as never, 200),
+  );
+
+  /** MUT-765: reissue or change of address, idempotent, capped, only while unclaimed. */
+  async function setupAction(c: Context<AppEnv>, operation: string, customerUserId: string, newEmail: string | undefined): Promise<object> {
+    const user = await approvedAccountant(c);
+    const key = requireKey(c, operation);
+    const now = c.get('now')();
+    const requestId = c.get('requestId');
+    if (newEmail !== undefined && isRefusedInviteDomain(domainOf(newEmail))) {
+      throw new ApiError('VALIDATION_FAILED', 'Use the customer’s own address, not a throwaway or forwarding one', { reason: 'ADDRESS_REFUSED' });
+    }
+    let claimCode: string | undefined;
+    const outcome = await runIdempotent(
+      {
+        claim: (args) => store.userIdempotency.claim({ userId: user.id, ...args }),
+        complete: (args) => store.userIdempotency.complete({ userId: user.id, ...args }),
+        fail: (args) => store.userIdempotency.fail({ userId: user.id, ...args }),
+      },
+      { key, operation, fingerprints: [requestFingerprint(c.req.method, c.req.path, JSON.stringify({ customerUserId, newEmail: newEmail ?? null }))], now },
+      async (): Promise<IdempotentOutcome> => {
+        const dayStart = utcDayStart(now);
+        if ((await store.provision.countReissuesSince(customerUserId, dayStart)) >= CLAIM_REISSUES_PER_DAY) {
+          const retryAfterSeconds = Math.max(1, Math.ceil((dayStart.getTime() + DAY_MS - now.getTime()) / 1000));
+          c.header('Retry-After', String(retryAfterSeconds));
+          throw new ApiError('RATE_LIMITED', 'Too many new links for this customer today; try again tomorrow', { limit: 'REISSUE_PER_DAY', max: CLAIM_REISSUES_PER_DAY, retryAfterSeconds });
+        }
+        const token = generateSetupToken();
+        const code = generateClaimCode();
+        const tokenDigest = sessionDigest(settings.pepper, token);
+        const expiresAt = new Date(now.getTime() + PROVISION_LINK_TTL_MS);
+        const result = await store.provision.reissue({
+          accountantUserId: user.id,
+          customerUserId,
+          email: newEmail,
+          setupLink: { tokenDigest, expiresAt },
+          // Bound to the address the link goes to: a change of address rotates the code.
+          claimCodeDigestFor: (email) => claimCodeDigest(settings.pepper, email, code),
+          at: now,
+          auditFor: ({ grant }) => [grantAudit(grant, newEmail === undefined ? 'accountant.customer_link_reissued' : 'accountant.customer_email_changed', user.id, requestId)],
+        });
+        if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'Customer not found');
+        if (result.kind === 'claimed') throw new ApiError('CUSTOMER_CLAIMED', 'The customer has claimed the account');
+        if (result.kind === 'email_taken') throw new ApiError('CONFLICT', 'Another account has that address', { reason: 'EMAIL_TAKEN' });
+        const mailSent = await mailSetupLink(c, { customerId: customerUserId, to: result.email, locale: result.locale, businessName: result.organization.name, tokenDigest, token });
+        if (newEmail !== undefined && result.previousEmail !== result.email) await tellOldAddress(result.previousEmail, result.locale, user.displayName, result.organization.name, customerUserId, tokenDigest);
+        claimCode = code;
+        return { status: 200, body: { email: result.email, linkExpiresAt: expiresAt.toISOString(), mailSent } };
+      },
+    );
+    if (outcome.replayed) c.header('Idempotent-Replayed', 'true');
+    return !outcome.replayed && claimCode ? { ...(outcome.body as object), claimCode } : (outcome.body as object);
+  }
+
+  /** ACCT-6: the old address learns its link is dead. Never throws, never changes the answer. */
+  async function tellOldAddress(to: string, locale: UserLocale, accountantName: string, businessName: string, customerId: string, tokenDigest: string): Promise<void> {
+    try {
+      const sent = await mailer.send({ to, template: 'customer-setup-cancelled', locale, vars: { accountantName, businessName }, idempotencyKey: `provision-cancelled:${customerId}:${tokenDigest.slice(0, 16)}` });
+      if (sent.status !== 'sent') logger.info({ template: 'customer-setup-cancelled', outcome: sent.status }, 'old-address notice not sent');
+    } catch (err) {
+      logger.error({ err, template: 'customer-setup-cancelled' }, 'old-address notice failed');
+    }
+  }
+
   return app;
+}
+
+/** The desk's row. A claimed customer shows no link (no setup action remains). */
+export function customerView(row: ProvisionedCustomerRow, now: Date) {
+  const link = row.claimed ? null : row.link;
+  const live = link && link.usedAt === null && link.cancelledAt === null && link.expiresAt.getTime() > now.getTime();
+  const state = row.claimed ? 'claimed' : !live ? 'link_expired' : isClaimCodeLocked(link) ? 'code_locked' : 'awaiting_claim';
+  return {
+    userId: row.userId,
+    email: row.email,
+    displayName: row.displayName,
+    profile: row.profile,
+    provisionedAt: row.provisionedAt.toISOString(),
+    state,
+    link: link ? { expiresAt: link.expiresAt.toISOString(), mailStatus: link.mailStatus } : null,
+  } as const;
 }

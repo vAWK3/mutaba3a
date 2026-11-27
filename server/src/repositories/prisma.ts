@@ -16,6 +16,7 @@ import { bestVendorSuggestions, RECENT_VENDORS_SCORED } from './memory.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
+import { CLAIM_CODE_MAX_ATTEMPTS } from '../auth/claim-code.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
 import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS, RETAINED_ISSUING_DOCUMENT_TABLES, RETAINED_ISSUING_PROFILE_TABLES, RETAINED_ISSUING_TABLES } from './prisma-purge-tables.js';
 import { handsOverArchive, retentionSweepMetadata } from '../issuing/retention.js';
@@ -178,6 +179,7 @@ import type {
   UserRecord,
   UserRepository,
   ProvisionCustomerResult,
+  ReissueProvisionedLinkResult,
   ProvisionRepository,
   ConversionCursor,
   ConversionFilter,
@@ -950,6 +952,102 @@ export class PrismaLedgerStore implements LedgerStore {
         select: { id: true, email: true, displayName: true, provisionedByUserId: true, provisionedAt: true },
       });
       return rows.flatMap((r) => (r.provisionedAt ? [{ userId: r.id, email: r.email, displayName: r.displayName, accountantUserId: r.provisionedByUserId, provisionedAt: r.provisionedAt }] : []));
+    },
+    reissue: async (input) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx): Promise<ReissueProvisionedLinkResult> => {
+            const [person] = await tx.$queryRaw<Array<{ email: string; passwordHash: string | null; provisionedByUserId: string | null }>>`SELECT "email", "passwordHash", "provisionedByUserId" FROM "users" WHERE "id" = ${input.customerUserId}::uuid FOR UPDATE`;
+            if (!person || person.provisionedByUserId !== input.accountantUserId) return { kind: 'not_found' };
+            const grantRow = await tx.accountantGrant.findFirst({ where: { accountantUserId: input.accountantUserId, status: 'ACTIVE', organization: { ownerUserId: input.customerUserId } }, orderBy: { createdAt: 'asc' } });
+            const organization = grantRow ? await tx.organization.findUnique({ where: { id: grantRow.organizationId } }) : null;
+            if (!grantRow || !organization) return { kind: 'not_found' };
+            if (person.passwordHash !== null) return { kind: 'claimed' };
+            const email = input.email ?? person.email;
+            if (email !== person.email) {
+              await lockSignupAddress(tx, email);
+              if (await tx.user.findUnique({ where: { email }, select: { id: true } })) return { kind: 'email_taken' };
+              await tx.user.update({ where: { id: input.customerUserId }, data: { email, emailVerifiedAt: null, updatedAt: input.at } });
+            }
+            await tx.accountSetupToken.updateMany({ where: { userId: input.customerUserId, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+            await tx.accountSetupToken.create({
+              data: { userId: input.customerUserId, tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt, createdAt: input.at, mailed: true, claimCodeDigest: input.claimCodeDigestFor(email), claimCodeAttempts: 0, mailStatus: 'PENDING' },
+            });
+            const audit = input.auditFor({ organizationId: organization.id, grant: toAccountantGrant(grantRow), previousEmail: person.email });
+            if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+            const user = await tx.user.findUniqueOrThrow({ where: { id: input.customerUserId }, select: { displayName: true, locale: true } });
+            return { kind: 'issued', email, previousEmail: person.email, displayName: user.displayName, locale: user.locale as UserLocale, organization };
+          }),
+        );
+      } catch (err) {
+        // Another account took the address between our check and our update.
+        if (err instanceof UniqueViolation && err.constraint.includes('email')) return { kind: 'email_taken' };
+        throw err;
+      }
+    },
+    failClaimCode: async (tokenDigest) => {
+      const rows = await this.prisma.$queryRaw<Array<{ claimCodeAttempts: number }>>`
+        UPDATE "account_setup_tokens" SET "claimCodeAttempts" = "claimCodeAttempts" + 1
+        WHERE "tokenDigest" = ${tokenDigest} AND "claimCodeDigest" IS NOT NULL AND "claimCodeAttempts" < ${CLAIM_CODE_MAX_ATTEMPTS}
+        RETURNING "claimCodeAttempts"`;
+      return rows[0]?.claimCodeAttempts ?? null;
+    },
+    claimOf: async (tokenDigest) => {
+      const row = await this.prisma.accountSetupToken.findUnique({ where: { tokenDigest } });
+      if (!row) return null;
+      const mail = row.mailStatus;
+      return { tokenDigest, purpose: row.purpose, claimCodeDigest: row.claimCodeDigest, claimCodeAttempts: row.claimCodeAttempts, mailStatus: mail === 'PENDING' || mail === 'SENT' || mail === 'FAILED' ? mail : null, expiresAt: row.expiresAt };
+    },
+    setMailStatus: async (tokenDigest, status) => {
+      await this.prisma.accountSetupToken.updateMany({ where: { tokenDigest, claimCodeDigest: { not: null } }, data: { mailStatus: status } });
+    },
+    countReissuesSince: async (userId, since) => {
+      const person = await this.prisma.user.findUnique({ where: { id: userId }, select: { provisionedAt: true } });
+      return this.prisma.accountSetupToken.count({ where: { userId, createdAt: { gte: since, ...(person?.provisionedAt ? { gt: person.provisionedAt } : {}) } } });
+    },
+    customersOf: async (accountantUserId, { limit, before }) => {
+      const rows = await this.prisma.user.findMany({
+        where: { provisionedByUserId: accountantUserId, ...(before ? { provisionedAt: { lt: before } } : {}) },
+        orderBy: [{ provisionedAt: 'desc' }, { id: 'desc' }],
+        take: limit,
+        select: { id: true, email: true, displayName: true, locale: true, provisionedAt: true, passwordHash: true },
+      });
+      if (rows.length === 0) return [];
+      const ids = rows.map((r) => r.id);
+      const [grants, links] = await Promise.all([
+        this.prisma.accountantGrant.findMany({ where: { accountantUserId, status: 'ACTIVE', organization: { ownerUserId: { in: ids } } }, select: { createdAt: true, organization: { select: { id: true, name: true, ownerUserId: true } } }, orderBy: { createdAt: 'asc' } }),
+        this.prisma.accountSetupToken.findMany({ where: { userId: { in: ids } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+      ]);
+      return rows.flatMap((r) => {
+        if (!r.provisionedAt) return [];
+        const org = grants.find((g) => g.organization.ownerUserId === r.id)?.organization ?? null;
+        const newest = links.find((l) => l.userId === r.id);
+        const mail = newest?.mailStatus;
+        return [
+          {
+            userId: r.id,
+            email: r.email,
+            displayName: r.displayName,
+            locale: r.locale as UserLocale,
+            provisionedAt: r.provisionedAt,
+            claimed: r.passwordHash !== null,
+            profile: org ? { id: org.id, name: org.name } : null,
+            link: newest
+              ? {
+                  tokenDigest: newest.tokenDigest,
+                  purpose: newest.purpose,
+                  claimCodeDigest: newest.claimCodeDigest,
+                  claimCodeAttempts: newest.claimCodeAttempts,
+                  mailStatus: mail === 'PENDING' || mail === 'SENT' || mail === 'FAILED' ? mail : null,
+                  expiresAt: newest.expiresAt,
+                  usedAt: newest.usedAt,
+                  cancelledAt: newest.cancelledAt,
+                  createdAt: newest.createdAt,
+                }
+              : null,
+          },
+        ];
+      });
     },
   };
 

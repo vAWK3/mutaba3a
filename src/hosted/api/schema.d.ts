@@ -2322,6 +2322,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account-setup/claim-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check the claim code of an account an accountant created, before the password step (MUT-765)
+         * @description For a valid link whose check answered `claim`. The code the accountant said; spaces are ignored. A wrong one is counted (403 CLAIM_CODE_WRONG, `details.triesLeft`); the fifth locks it (403 CLAIM_CODE_LOCKED: the accountant issues a new link and code). The redeem checks it again. 409 CONFLICT reason NO_CLAIM_CODE for a link that carries none. Additive since 1.160.0-mut765.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupLinkClaimCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description The code is right */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetupLinkClaimCodeResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, CLAIM_CODE_WRONG (details.triesLeft) or CLAIM_CODE_LOCKED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason NO_CLAIM_CODE — this link needs no code */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account-setup/two-factor": {
         parameters: {
             query?: never;
@@ -2442,7 +2530,7 @@ export interface paths {
                         "application/json": components["schemas"]["SetupLinkRedeemResponse"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                /** @description CROSS_SITE_REQUEST; CLAIM_CODE_WRONG or CLAIM_CODE_LOCKED (MUT-765: a link whose check answered `claim` needs `claimCode`); TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -3741,7 +3829,51 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * The customers you created and where each one is in claiming their account (MUT-765)
+         * @description Newest first; `limit` up to 500 (default 100), then `before` = the previous `nextBefore`. `state`: awaiting_claim, link_expired, code_locked (five wrong codes; issue a new link), or claimed (only the read access remains). 403 ACCOUNTANT_NOT_APPROVED; 404 while the feature is off. Additive since 1.160.0-mut765.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    before?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The customers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProvisionedCustomers"];
+                    };
+                };
+                /** @description ACCOUNTANT_NOT_APPROVED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The feature is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         put?: never;
         /**
          * Create a customer’s account and business profile (an approved accountant)
@@ -3816,6 +3948,182 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/accountant/customers/{userId}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the customer a fresh setup link with a new claim code (MUT-765)
+         * @description Resend and New code are this one action: the old link and code stop working, a fresh 14-day link is mailed and the new code is in this answer only (a replay of the same Idempotency-Key returns the rest without it). Only while the customer has not claimed. Additive since 1.160.0-mut765.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A fresh link was mailed; the claim code is in this answer only */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProvisionedLink"];
+                    };
+                };
+                /** @description ACCOUNTANT_NOT_APPROVED, or CUSTOMER_CLAIMED: the customer has claimed the account, so only your read access remains */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No customer you created by this id, or the feature is off */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason EMAIL_TAKEN: another account has that address */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, or VALIDATION_FAILED (details.reason ADDRESS_REFUSED for a throwaway or relay address) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED details.limit REISSUE_PER_DAY: 5 fresh links a day per customer, with Retry-After */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/accountant/customers/{userId}/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the customer’s address: the old link and code die, the old address is told (MUT-765)
+         * @description The account moves to the new address; a fresh link goes there with a new code (in this answer only), and the old address gets a short notice that its link no longer works. Only while the customer has not claimed. Additive since 1.160.0-mut765.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProvisionChangeEmailRequest"];
+                };
+            };
+            responses: {
+                /** @description A fresh link was mailed; the claim code is in this answer only */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProvisionedLink"];
+                    };
+                };
+                /** @description ACCOUNTANT_NOT_APPROVED, or CUSTOMER_CLAIMED: the customer has claimed the account, so only your read access remains */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No customer you created by this id, or the feature is off */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason EMAIL_TAKEN: another account has that address */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, or VALIDATION_FAILED (details.reason ADDRESS_REFUSED for a throwaway or relay address) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED details.limit REISSUE_PER_DAY: 5 fresh links a day per customer, with Retry-After */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -30174,6 +30482,11 @@ export interface components {
                 /** @enum {string} */
                 method: "totp" | "email";
             } | null;
+            claim?: {
+                accountantName: string | null;
+                businessName: string | null;
+                codeLocked: boolean;
+            };
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
@@ -30183,6 +30496,14 @@ export interface components {
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
         SetupLinkCheckRequest: {
             token: string;
+        };
+        SetupLinkClaimCodeResponse: {
+            /** @enum {boolean} */
+            ok: true;
+        };
+        SetupLinkClaimCodeRequest: {
+            token: string;
+            claimCode: string;
         };
         SetupLinkTwoFactor: {
             challengeToken: string;
@@ -30213,6 +30534,7 @@ export interface components {
             challengeToken?: string;
             code?: string;
             recoveryCode?: string;
+            claimCode?: string;
         };
         SelfServiceDoors: {
             signup: boolean;
@@ -30393,6 +30715,43 @@ export interface components {
             defaultCurrency: components["schemas"]["Currency"];
             timezone: string;
             locale?: components["schemas"]["UserLocale"];
+        };
+        ProvisionedCustomers: {
+            items: components["schemas"]["ProvisionedCustomerRow"][];
+            /** Format: date-time */
+            nextBefore: string | null;
+        };
+        ProvisionedCustomerRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            displayName: string;
+            profile: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            /** Format: date-time */
+            provisionedAt: string;
+            /** @enum {string} */
+            state: "awaiting_claim" | "link_expired" | "code_locked" | "claimed";
+            link: {
+                /** Format: date-time */
+                expiresAt: string;
+                /** @enum {string|null} */
+                mailStatus: "PENDING" | "SENT" | "FAILED" | null;
+            } | null;
+        };
+        ProvisionedLink: {
+            claimCode?: string;
+            email: string;
+            /** Format: date-time */
+            linkExpiresAt: string;
+            mailSent: boolean;
+        };
+        ProvisionChangeEmailRequest: {
+            /** Format: email */
+            email: string;
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];

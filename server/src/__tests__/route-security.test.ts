@@ -162,6 +162,10 @@ const ACCOUNTANT_OPERATIONS = [
   'DELETE /v1/clients/{profileId}',
   // MUT-764: an operator-approved accountant creates a customer's account.
   'POST /v1/accountant/customers',
+  // MUT-765: the accountant's customers and the setup actions while unclaimed.
+  'GET /v1/accountant/customers',
+  'POST /v1/accountant/customers/{userId}/link',
+  'PUT /v1/accountant/customers/{userId}/email',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
@@ -380,6 +384,8 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   'POST /v1/sign-in-codes', 'POST /v1/device-sign-in-codes', 'POST /v1/sessions/code', 'POST /v1/device-sessions/code',
   // MUT-710 (ADR-274): finishing a two-step sign-in, a fresh emailed code, and a setup link's second step: signed out, the challenge or link token in the body.
   'POST /v1/sessions/two-factor', 'POST /v1/device-sessions/two-factor', 'POST /v1/two-factor/email-code', 'POST /v1/account-setup/two-factor',
+  // MUT-765: a provisioned link's claim code (the link token in the body).
+  'POST /v1/account-setup/claim-code',
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
   'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup',
   // MUT-560: a share link's visitor has no account; the token and the viewer token travel in the body.
@@ -597,6 +603,13 @@ describe('authenticate() enforces each declaration', () => {
     }
   });
 
+  /**
+   * Refusals about the person's standing, not the credential: MUT-710 (D10) the issuing gate asks for the second step
+   * (routes-two-factor-gate.test.ts); MUT-765 the accountant's customer routes need the operator's approval
+   * (routes-accountant-claim.test.ts).
+   */
+  const NOT_A_PRINCIPAL_REFUSAL = new Set(['TWO_FACTOR_SETUP_REQUIRED', 'ACCOUNTANT_NOT_APPROVED']);
+
   it('a session is let through on every operation that declares it (no handler re-refuses it)', async () => {
     const refused: string[] = [];
     // Sign-out would end the shared session mid-loop; routes-sessions.test.ts covers it.
@@ -604,7 +617,7 @@ describe('authenticate() enforces each declaration', () => {
       const res = await request(op, { cookie: sessionCookie, 'x-mutaba3a-profile': orgId, origin: 'http://localhost' });
       const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
       // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
-      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
+      if (code && !NOT_A_PRINCIPAL_REFUSAL.has(code)) refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });
@@ -616,7 +629,7 @@ describe('authenticate() enforces each declaration', () => {
       const res = await request(op, { authorization: `Bearer ${deviceToken}`, 'x-mutaba3a-profile': orgId });
       const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
       // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
-      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
+      if (code && !NOT_A_PRINCIPAL_REFUSAL.has(code)) refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });

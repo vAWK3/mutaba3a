@@ -609,3 +609,10 @@ Taken during the build where the plan was silent; each is the plan's default or 
 - **B2 (MUT-764):** operator limits are whole numbers from 1 to 1000; null or omitted means the default (50 / 100). Withdrawing keeps the limits for a later approval.
 - **B3 (MUT-764):** a throwaway or relay address is refused (422 `ADDRESS_REFUSED`) before any count, so it uses neither daily limit.
 - **B4 (MUT-764):** no Terraform variable yet for `ACCOUNTANT_PROVISIONING`; unset is off. Adding it is a before-release item for the pilot.
+- **B5 (MUT-765):** Resend and New code are one action: every resend makes a fresh link and a fresh code (the old ones die), so the plan's "a fresh link and code on reissue" holds for both.
+- **B6 (MUT-765):** the setup actions and the desk list need the operator's approval still on; withdrawing it stops them (403).
+- **B7 (MUT-765):** self-service recovery answers neutrally and mails nothing for an unclaimed provisioned account; the customer asks the accountant (a code-less link would skip the code and cancel his link).
+- **B8 (MUT-765):** the cap of five a day per customer counts reissues and changes of address together, per UTC day; the link made at creation does not count.
+- **B9 (MUT-765):** the code is checked on its own route before the password (`POST /v1/account-setup/claim-code`) and again on the redeem; a redeem without it is 422 `fields: [claimCode]`.
+- **B10 (MUT-765):** a change of address clears `emailVerifiedAt` (the claim through the mailed link verifies it again).
+- **B11 (MUT-765):** the mail names the accountant by his display name; the desk state is one of awaiting_claim, link_expired, code_locked, claimed (MUT-766 adds the billing states).

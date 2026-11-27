@@ -41,6 +41,8 @@ export const TEMPLATE_IDS = [
   'two-factor-changed',
   'tax-authority-reconnect',
   'plan-change-scheduled',
+  'customer-setup',
+  'customer-setup-cancelled',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -161,6 +163,14 @@ export interface TemplateVars {
    * from the per-recipient cap: anyone with a profile can send it to any address.
    */
   'accountant-invite': { ownerName: string; profileName: string; link: string; expiresOn: CalendarDay };
+  /**
+   * MUT-765 (accountant channel, ADR-294): the setup link of an account an accountant created, naming him and the
+   * business. `validDays` is how long the link works (14); `reminder` (MUT-767) words it as a reminder with a fresh link.
+   * The claim code is never in the mail: the accountant says it to the customer.
+   */
+  'customer-setup': { accountantName: string; businessName: string; link: string; validDays: number; reminder?: boolean };
+  /** MUT-765: to the old address after the accountant changed it: the link sent here no longer works. */
+  'customer-setup-cancelled': { accountantName: string; businessName: string };
   /**
    * MUT-535 (ADR-259): the monthly summary. `month` is the month reported; `asOf` the day owed and overdue are read on;
    * one panel per profile (never empty); `yearly` (MUT-531's line) the saving in minor units of the subscription's
