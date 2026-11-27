@@ -50,6 +50,45 @@ Plan `.claude/designs/mut-703-offers-plan.md` (Basel approved all 12 §13 defaul
 - Spikes S1 (no over-credit after a spent launch coupon), S1b (a plans-wide coupon follows an upgrade unless dropped) and S2 (phases drop discounts unless carried by `di_…`) run in the Stripe sandbox; results in the plan's "Build decisions". `docs/operations/before-release.md` stage 1: Write on Coupons on the live key, then the script. TD-372.
 - Files: `server/src/billing/{offer,offer-read,offers.json,retention,comeback,comeback-read,comeback-mail,renewal-mail,yearly-switch-line,monthly-summary-mail,checkout}.ts`, `billing/stripe/{plan-gateway,checkout-gateway}.ts`, `routes/{billing,billing-plan,billing-plan-change,comeback-mail,trial-mail,monthly-summary-mail}.ts`, `scripts/stripe-plans.ts`, `email/{ports,templates/copy}.ts`, `schemas.ts`, `openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`.
 
+---
+
+## [Unreleased] - 2026-11-27 — The accountant's customers on the Client books desk (MUT-768 portal, epic MUT-762, ADR-325, no API change)
+
+Plan `docs/designs/accountant-channel.md` (DR-2..DR-6, B22). Wireframe `.claude/designs/accountant-channel-wireframe.html`, extended with a Take card pane and a five-field Add customer drawer, approved by Basel.
+
+### Added
+- `/client-books` shows a state badge on every row (Awaiting claim, Link expired, Needs card, Activating, Active, No longer shared), filter chips with counts (All, Awaiting claim, Needs card, Active), and ONE next action per row (New code, Resend link, Take card). An accountant the operator has not approved sees the desk as before.
+- Add customer drawer (`?newCustomer=true`): customer, business, email, mail language, country; then the spoken claim code and where the link went. Refusals (existing address, daily limit, not approved, refused address, "added, link not sent" with Resend) are banners at the top of the drawer.
+- Customer drawer (`?customer=<id>`): Resend link, New code, Change email (confirmed in place), and the Take card pane (`&pane=card`: plan, payment, customer type, country, address, then Stripe). Setup actions vanish once the customer claims.
+- Activating after Stripe: the row reads Activating and the list is re-read every 5 s for 2 minutes (`data/activating.ts`), then "Check back shortly".
+- Files: `pages/client-books/{deskRules,deskCountries,DeskBadge,AddCustomerDrawer,CustomerDrawer,TakeCardPane}`, `pages/client-books/DeskActivating.tsx` (MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer), `components/accountantErrors.ts`, MUT-770's `CodeReveal` and the `claimed-spot` Scene (once per client, `data/claimedSeen.ts`), `data/{accountantCustomersQueries,activating}.ts`, `parseDeskSearch`, the `hosted.desk.*` strings in Arabic and English, `api.accountantCustomers` and its four siblings, and `leaveFor` exported from `billingQueries`.
+- release-qa: `qa/features/portal/accountant-desk.yaml` and `qa/specs/portal/accountant-desk.spec.ts` (add, code, take-card, claimed), with the customer routes in `qa/support/clientBooksApi.ts`.
+
+### Changed
+- The desk table's columns are Customer (business and owner), State, This month, Last activity and the action. The last-month download stays for rows with no setup action.
+
+### Known gaps
+- A free-plan (Starter) customer reads Needs card (the server stores no plan intent). Resend link and New code are one server call. See ADR-325.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-770: CodeReveal, the Activating poll and motion, live regions, ar/en strings (accountant channel, portal)
+
+Plan `docs/designs/accountant-channel.md` (DR-5, DR-8, DR-11; DT5, DT6). Shared parts the desk (MUT-768) and `/setup` (MUT-769) use.
+
+### Added
+- `CodeReveal` (`src/hosted/components/CodeReveal.tsx`, props `{ code, labelledBy? }`): the claim code shown once, Plex Mono at `--text-figure-fluid` on the field ground, `dir="ltr"`, grouped 3 and 3, `role="img"` named by the spaced digits; Copy → Copied for 2 s in a polite status. Rules in `claimCode.ts` (`codeGroups`, `spokenCode`, `bareCode`, `COPIED_HOLD_MS`).
+- `motion-claim-code` in CSS from its spec (digits settle 10 px / 320 ms spring / 60 ms stagger, leftmost first; label cross-fade 150 ms linear; check 0.6 → 1 in 240 ms spring); reduced motion: the still with a 150 ms fade.
+- `useActivatingPoll` / `activatingPhase` (`src/hosted/data/activatingPoll.ts`): poll every 4 s for at most 2 min; `activating` → `active` (paid) or `late` ("Check back shortly").
+- `ActivatingMotion` (`src/hosted/components/ActivatingMotion.tsx`, timing in `activatingHop.ts`): `motion-activating` from its spec and key frames (1.5 s loop of three 500 ms hops; on done it finishes the current hop, then a 600 ms resolve onto the `activating` scene's pose); the `-rtl` key frames in Arabic (an in-SVG flip, as delivered); reduced motion shows the `activating` scene (the still).
+- `ActivatingStatus`: the motion, the customer's name and one line, announced in a polite live region; Close once it settles.
+- `hosted.accountantChannel.*` strings (ar + en): code, activating, the desk states and chips.
+
+### Technical
+- Tests: `src/hosted/components/__tests__/CodeReveal.test.tsx`, `Activating.test.tsx` (spec values pinned against `hosted.css`); `src/styles/__tests__/direction.test.ts` lists the two new `dir` sites.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Claude Design's UI moments art: scenes with -rtl drawings, motion specs, mail headers (shared foundation for MUT-733/734/755/758/765/767/768/769/770/775)
 
 Delivered by Basel from `~/Downloads/mtb3a-ui-moments-art-2026-11-27/` (brief `.claude/designs/2026-11-27-claude-design-brief-plans-handover-pilot.md`). No screen uses the new scenes or motion yet; the screen tickets do.
