@@ -929,6 +929,19 @@ export class PrismaLedgerStore implements LedgerStore {
         expiresAt: row.expiresAt,
       };
     },
+    countCreatedSince: (accountantUserId, since) => this.prisma.user.count({ where: { provisionedByUserId: accountantUserId, provisionedAt: { gte: since } } }),
+    countLookupsSince: (accountantUserId, since) =>
+      this.prisma.auditEvent.count({ where: { actorId: accountantUserId, action: 'accountant.customer_lookup_existing', createdAt: { gte: since } } }),
+    listUnclaimed: async ({ limit }) => {
+      // The predicate of users_unclaimed_provisioned_idx (MUT-763): no password and provisioned.
+      const rows = await this.prisma.user.findMany({
+        where: { passwordHash: null, provisionedAt: { not: null } },
+        orderBy: [{ provisionedAt: 'desc' }, { id: 'desc' }],
+        take: limit,
+        select: { id: true, email: true, displayName: true, provisionedByUserId: true, provisionedAt: true },
+      });
+      return rows.flatMap((r) => (r.provisionedAt ? [{ userId: r.id, email: r.email, displayName: r.displayName, accountantUserId: r.provisionedByUserId, provisionedAt: r.provisionedAt }] : []));
+    },
   };
 
   /**

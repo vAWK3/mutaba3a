@@ -3396,6 +3396,21 @@ export interface ProvisionRepository {
   originOf(userId: string): Promise<{ accountantUserId: string | null; provisionedAt: Date } | null>;
   /** The person's newest setup link (the provisioned one at creation). */
   setupLinkOf(userId: string): Promise<ProvisionedSetupLink | null>;
+  /** MUT-764: accounts this accountant created at or after `since` (from `users.provisionedByUserId`), for the daily creation limit. */
+  countCreatedSince(accountantUserId: string, since: Date): Promise<number>;
+  /** MUT-764: this accountant's existing-address attempts at or after `since` (`accountant.customer_lookup_existing` audit rows by actor), for the daily lookup limit. */
+  countLookupsSince(accountantUserId: string, since: Date): Promise<number>;
+  /** MUT-764: provisioned accounts that still have no password (the operator's list), newest first. */
+  listUnclaimed(input: { limit: number }): Promise<UnclaimedProvisionedAccount[]>;
+}
+
+/** One provisioned account not yet claimed (no password). `accountantUserId` is null once the accountant's account is deleted. */
+export interface UnclaimedProvisionedAccount {
+  userId: string;
+  email: string;
+  displayName: string;
+  accountantUserId: string | null;
+  provisionedAt: Date;
 }
 
 export interface AccountantGrantRepository {

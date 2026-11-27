@@ -1048,6 +1048,18 @@ export class MemoryLedgerStore implements LedgerStore {
       const extra = this.provisionedLinks.get(newest.id);
       return { tokenDigest: newest.tokenDigest, purpose: newest.purpose, claimCodeDigest: extra?.claimCodeDigest ?? null, claimCodeAttempts: extra?.claimCodeAttempts ?? 0, mailStatus: extra?.mailStatus ?? null, expiresAt: newest.expiresAt };
     },
+    countCreatedSince: async (accountantUserId, since) =>
+      [...this.provisionOrigins.values()].filter((o) => o.accountantUserId === accountantUserId && o.provisionedAt.getTime() >= since.getTime()).length,
+    countLookupsSince: async (accountantUserId, since) =>
+      this.events.filter((e) => e.actorId === accountantUserId && e.action === 'accountant.customer_lookup_existing' && e.createdAt.getTime() >= since.getTime()).length,
+    listUnclaimed: async ({ limit }) =>
+      [...this.provisionOrigins.entries()]
+        .flatMap(([userId, origin]) => {
+          const person = this.people.get(userId);
+          return person && person.passwordHash === null ? [{ userId, email: person.email, displayName: person.displayName, accountantUserId: origin.accountantUserId, provisionedAt: origin.provisionedAt }] : [];
+        })
+        .sort((a, b) => b.provisionedAt.getTime() - a.provisionedAt.getTime())
+        .slice(0, limit),
   };
 
   /** MUT-559: a PENDING grant with this digest, unexpired at `at`; what accept and signup may claim. */
