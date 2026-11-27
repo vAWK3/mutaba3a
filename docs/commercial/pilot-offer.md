@@ -114,6 +114,18 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
   - "download your records yourself", until MUT-325 ships;
   - the terms link, until MUT-324's /terms is live.
 
+## 7. The free feedback pilot (accountants' clients, MUT-751)
+
+Beside the paying pilot above, which is unchanged. Plan: `docs/designs/pilot-testers-business-plan.md`.
+
+- **Who:** 5 to 8 clients of a design-partner accountant. The accountant creates each account (accountant channel); we grant the plan after.
+- **What they get:** Business, free, for 60 days: 3 businesses, 2 partners, 250 documents and 500 scans a month. Limits are counted, never refused.
+- **What they see:** "Free until <date>", their usage, and the three plans with Expected prices (Solo ₪39, Business ₪89, Firm ₪249 a month, excl. VAT) until the final ones are set (MUT-761).
+- **What we watch:** a first scan and a first invoice, unaided, on phone and on web. Feature wishes only after week 3.
+- **Extending:** only we can. Testers write to us.
+- **The end:** Starter, free, with `STARTER_PLAN` on; read-only with download otherwise. Their records stay.
+- **Open:** whether testers agree to be watched or recorded (plan open question 5). Session replay stays off.
+
 ---
 
 # برنامج متابعة المستضافة التجريبي: العرض
@@ -179,3 +191,13 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
 - نستخدم **Stripe من اليوم الأول، دون برمجة**: ننشئ اشتراك كل عميل يدويًا من لوحة Stripe، في حساب **Mutaba3a** التابع لـ Barmajiyat Ltd.
 - تصل الفاتورة بالبريد، ويدفع العميل بالبطاقة.
 - حين يصل MUT-332 تكون الاشتراكات موجودة، فلا ننقل شيئًا.
+
+## ٧. التجربة المجانية لعملاء المحاسبين (MUT-751)
+
+إلى جانب التجربة المدفوعة أعلاه، ولا تغيّرها.
+
+- **لمن:** 5 إلى 8 من عملاء محاسب شريك. المحاسب ينشئ الحساب، ونحن نمنح الباقة بعده.
+- **ما يحصلون عليه:** باقة Business مجانًا لمدة 60 يومًا: 3 أعمال، شريكان، 250 مستندًا و500 مسح في الشهر. الحدود تُعدّ ولا تمنع.
+- **ما يرونه:** «مجانًا حتى <التاريخ>»، استخدامهم، والباقات الثلاث بأسعار متوقعة (Solo ‏39 ₪، Business ‏89 ₪، Firm ‏249 ₪ شهريًا، دون ضريبة).
+- **التمديد:** منّا فقط. يكتب لنا المختبِر.
+- **النهاية:** باقة Starter المجانية إن كانت مفعّلة، وإلا للقراءة فقط مع التنزيل. السجلات تبقى.

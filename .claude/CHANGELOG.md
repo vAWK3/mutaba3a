@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Docs: the free 2-month pilot in the offer and the runbook (MUT-760, epic MUT-751)
+
+### Added
+- `docs/commercial/pilot-offer.md` §7 (en, ar): who, what testers get and see, extending, the end.
+- `docs/operations/pilot-runbook.md` §1.13: grant, extend, end, follow the cohort, the watched-session script.
+
 ## [Unreleased] - 2026-11-27 — Pilot analytics contract and the pilot's start and firsts on Billing (MUT-758 server, epic MUT-751, ADR-298, API 1.172.0-mut758)
 
 Server and contract only; web and phone emitting the events is UI work (MUT-753/755/756). No migration.

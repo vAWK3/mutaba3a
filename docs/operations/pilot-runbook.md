@@ -434,6 +434,46 @@ covers the person's own profiles.
 `ACCOUNTANT_PLAN_REQUIRED` until the plan is back (or older clients end). A pending invite stays open for its 14
 days while the accountant subscribes; the portal accepts it again on the way back from Checkout.
 
+### 1.13 The free feedback pilot (MUT-751, ADR-296, ADR-297)
+
+Business, free, 60 days, for a design-partner accountant's clients (offer §7). Needs API 1.162.0 or later
+(migration `20261127210000_mut752_pilot_grants`).
+
+**Grant (after the accountant has created the account).**
+
+```bash
+cd server
+npm run billing:grant -- --url "$URL" --email <tester> --tier BUSINESS --reason "pilot <accountant>" \
+  --cohort <slug> --accountant <accountant email>
+```
+
+- `--cohort`: lowercase letters, digits, `.`, `-`, `_` (e.g. `dec-2026`). No names: it goes to analytics.
+- No `--expires`: 60 days from now. Give one (`--expires 2027-01-31T21:59:59Z`) to end on a set day.
+- The console's billing grants on the account do the same (cohort and accountant fields).
+- Check: `npm run billing:grants -- --url "$URL" --email <tester> --active` shows `BUSINESS pilot <slug>`.
+
+**Extend.** Revoke the running grant, then grant again with the new `--expires` and the same cohort and accountant:
+
+```bash
+npm run billing:revoke -- --url "$URL" --grant-id <id>
+npm run billing:grant -- --url "$URL" --email <tester> --tier BUSINESS --reason "pilot <accountant>, extended" \
+  --cohort <slug> --accountant <accountant email> --expires <ISO>
+```
+
+The Welcome does not show again; the start date stays the first grant's.
+
+**End.** Nothing to do: at the expiry the person falls to Starter (`STARTER_PLAN` on) or read-only with download.
+No mail goes out before the end (TD-370), so tell the tester yourself in the last two weeks. To end early, revoke.
+
+**Follow the cohort.** Console › Accounts › Pilot filter (`GET /v1/operator/accounts?pilot=1`): each tester with the
+end date, the accountant, and ticks for first scan and first invoice.
+
+**Watched session (once per tester, phone then web).**
+
+1. Ask the tester to scan one receipt, then issue one invoice. Say nothing.
+2. Write down the first place they hesitate, and the time to each.
+3. After week 3, ask which features they miss. Never ask what they would pay.
+
 ## 2. Reset a password
 
 There's no "forgot password" form (ADR-037). The person emails support (§6), and you reply with a
