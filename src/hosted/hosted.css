@@ -2162,11 +2162,11 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-change-row-text { display: grid; flex: 1 1 auto; min-inline-size: 0; }
 .hp-change-row-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: var(--weight-semibold); }
 .hp-change-row-limits { font-size: var(--text-label); color: var(--muted); }
-.hp-change-row-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hp-change-row-price { white-space: nowrap; }
 .hp-change-preview { display: grid; gap: var(--space-1); padding: var(--space-4); border-radius: var(--radius-md); background: var(--surface-2); }
 .hp-change-preview-label { font-size: var(--text-label); color: var(--muted); }
-.hp-change-preview-figure { font-family: var(--font-mono); font-size: var(--text-figure-fluid, var(--text-figure)); font-weight: var(--weight-medium); line-height: 1.1; }
-.hp-change-preview-date { font-family: inherit; font-size: var(--text-headline, 1.25rem); font-weight: var(--weight-semibold); }
+.hp-change-preview-figure { font-family: var(--font-mono); font-size: var(--text-figure-fluid); font-weight: var(--weight-medium); line-height: 1.1; }
+.hp-change-preview-date { font-family: inherit; font-size: var(--text-headline); font-weight: var(--weight-semibold); }
 .hp-change-done { justify-items: center; text-align: center; }
 .hp-scheduled { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 350ms var(--ease-spring), opacity 350ms var(--ease-spring); }
 .hp-scheduled[data-leaving] { grid-template-rows: 0fr; opacity: 0; }
