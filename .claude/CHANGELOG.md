@@ -48,6 +48,8 @@
 
 ## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.201.0-mut777, ADR-333, migration)
 
+## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.214.0-mut777, ADR-333, migration)
+
 ### Added
 - Server: `users.pilotWatchConsentAt` (migration `20261127230000_mut777_pilot_watch_consent`), `pilotWatchConsentOf` / `markPilotWatchConsent` in both stores, `POST /v1/billing/pilot-watch-consent`, `pilot.watchConsentAt` on `GET /v1/billing` and on the operator's Accounts rows, `watchConsent` on both grant create requests (pilot only) and `billing:grant --watch-consent`.
 - Portal: the Welcome's consent tick (off by default); the grant drawer's "The tester agreed…" tick; the Accounts row says whether and when.
@@ -95,6 +97,8 @@
 
 ## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.200.0-mut753, ADR-330)
 
+## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.213.0-mut753, ADR-330)
+
 ### Added
 - Portal: Billing's `pilot` and `pilotEnded` panels (`src/hosted/data/billingView.ts`, `BillingDrawer.tsx`): status, this month's lines, the plans with Expected prices from `pilot.plans`, one Write to us link; the last 14 days; Pilot ended with the `pilot-ended` scene. `src/hosted/data/pilot.ts`, `src/hosted/components/PilotBilling.tsx`.
 - Shared usage lines: `usageLinesOf` (`src/hosted/data/usageLines.ts`) and `PlanUsageLines` (butter from 90%, design review 2B), for MUT-754 and MUT-733 to reuse.
@@ -103,6 +107,47 @@
 
 ### Technical
 - Tests: `server/src/billing/__tests__/pilot.test.ts`, `server/src/__tests__/billing-pilot.test.ts`, `src/hosted/data/__tests__/pilot.test.ts`, `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx`. OpenAPI and `src/hosted/api/schema.d.ts` regenerated.
+
+## [Unreleased] - 2026-11-28 — Art for the guides, Get started and the help centre, from Claude Design (epic MUT-672, MUT-690; assets only, no behaviour change)
+
+Brief `.claude/designs/guides-and-help/claude-design-brief-guides-and-help.md`; mockups beside it. Nothing renders the new art yet: the guide viewer (MUT-674), Get started (MUT-676/677) and the help shell (MUT-692) use it when they are built.
+
+### Added
+- 29 scenes in `assets/illustrations/source/` (58 drawings with the `-rtl` twins; the two neutral help scenes have none): `guide-{tax,claude,scan,banktext,accountant}-{hero,1..n}`, `getstarted-done`, `help-cluster-{allocation,documents,receipts}`, `help-explainer-{allocation,documents,receipts}`, `help-not-found`. Generated into `src/components/illustrations/generated/` (`npm run illustrations:generate`), so `SCENE_NAMES` lists them.
+- 3 icons in `assets/icons/source/`: `guide`, `get-started`, `support` (generated: `GuideIcon`, `GetStartedIcon`, `SupportIcon`).
+- Motion specs, key frames, stills and GIF/MP4 references for `getstarted-done`, `step-done`, `progress-fill`, `card-hide`, `website-entrance`, `prompt-in-out`, `prompt-to-guide` and `guide-step-change` in `docs/design/motion/2026-11-27-guides/` (the delivery's README is there too).
+
+### Fixed
+- The check marks in `activating-rtl` and `claimed-spot-rtl` (and the activating RTL key frame and still) no longer mirror, from Claude Design's correction of the 2026-11-27 plans, hand-over and pilot set.
+
+### Technical
+- Audited before import: every scene passes `sceneFromSvg` (three colours, sizes, dialect), every step scene keeps its subject inside the central 120×96, no `-rtl` is a plain copy, and the files carry no script or external reference.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-703 server half: offers on Solo, Business and Firm (API 1.210.0-mut703, ADR-340)
+
+Plan `.claude/designs/mut-703-offers-plan.md` (Basel approved all 12 §13 defaults). No migration, no new env. The portal's lines are the billing lane's (§11 hooks).
+
+### Added
+- `offers.json`: three entries on `["solo","business","firm"]`: `launch-plans-2026` (yearly), `stay-plans-2026` (monthly), `comeback-plans-2026` (percent, monthly only). Entries name their `plans`; lookup by kind, plan and interval (`entryFor`, `stayEntryFor`, `comebackEntryFor`).
+- `billing:plans` makes the three coupons (`COUPON_SPEC`: launch 50% once until 2027-02-22 00:59 Jerusalem, stay 50% × 2 months, come-back 67% once), all restricted to the plans' products; a live coupon of another shape stops the run with "give the spec a new id"; name/metadata drift updated; `RETIRED_COUPON_IDS` deleted. A test ties offers.json to the spec.
+- GET `/v1/billing`: `plans[].launch` (`{ id, firstYear }`) and `plans[].comeback`; `comeback.plan` and `.percentOff`; `yearlySwitch.plan`. POST `/v1/billing/plan-change/preview` upgrade: `offerEnds`. `SCHEDULED` refusal on stay, pause and the yearly switch.
+- A yearly plan Checkout carries the launch coupon (never on the Solo trial or an accountant's activation); a monthly one the come-back; `expectedOffer`/OFFER_ENDED as on the legacy path; audit `offer`.
+
+### Changed
+- Launch eligibility: never had a subscription that took money (an incomplete one, or a trial cancelled at or before its end, doesn't count). Stripe's subscription list now carries `trialEnd`/`endedAt`.
+- Stay, pause and the yearly switch work on any plan's monthly list price, from its own plan's catalog; the legacy stay coupon stays for ₪29 payers.
+- Come-back: Firm lapses count; "already had" reads every come-back id; with PLAN_CHECKOUT on the mail offers the lapsed plan (Solo for a ₪29 lapser) at 67%, monthly only, and names it.
+- Renewal notice: any plan's list price is due; the mail names the plan. `renewsAtListPrice` on any plan's list price.
+- Plan change: an upgrade drops running discounts in the same update (and its preview prices without them); a downgrade's schedule carries the discounts into both phases (spike S2: before, scheduling dropped a running stay offer).
+- Trial mails' offer line reads the plans' launch while PLAN_CHECKOUT is on.
+
+### Technical
+- Spikes S1 (no over-credit after a spent launch coupon), S1b (a plans-wide coupon follows an upgrade unless dropped) and S2 (phases drop discounts unless carried by `di_…`) run in the Stripe sandbox; results in the plan's "Build decisions". `docs/operations/before-release.md` stage 1: Write on Coupons on the live key, then the script. TD-372.
+- Files: `server/src/billing/{offer,offer-read,offers.json,retention,comeback,comeback-read,comeback-mail,renewal-mail,yearly-switch-line,monthly-summary-mail,checkout}.ts`, `billing/stripe/{plan-gateway,checkout-gateway}.ts`, `routes/{billing,billing-plan,billing-plan-change,comeback-mail,trial-mail,monthly-summary-mail}.ts`, `scripts/stripe-plans.ts`, `email/{ports,templates/copy}.ts`, `schemas.ts`, `openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`.
+
+---
 
 ## [Unreleased] - 2026-11-27 — The accountant's customers on the Client books desk (MUT-768 portal, epic MUT-762, ADR-325, no API change)
 

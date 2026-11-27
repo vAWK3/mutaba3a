@@ -7,7 +7,7 @@ import { choiceForSwitch, mailProfilesOf } from '../billing/monthly-summary.js';
 import { coveredProfilesOf, MONTHLY_SUMMARY_DAILY_SENDS, runMonthlySummaryMail } from '../billing/monthly-summary-mail.js';
 import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
-import { catalogOf } from '../billing/yearly-switch-line.js';
+import { offerCatalogsOf } from '../billing/yearly-switch-line.js';
 import { verifyMailOffToken } from '../email/mail-off-token.js';
 import { verifyUnsubscribeToken } from '../email/unsubscribe.js';
 import type { Mailer } from '../email/ports.js';
@@ -70,7 +70,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       now,
       portalOrigin: origin,
       pepper: settings.pepper,
-      stripe: checkout && plan ? { catalog: () => catalogOf(checkout), plan } : null,
+      stripe: checkout && plan ? { catalog: () => offerCatalogsOf(checkout), plan } : null,
       dryRun,
       invoicingForAll,
       sendBudget: options.sendBudget ?? MONTHLY_SUMMARY_DAILY_SENDS,

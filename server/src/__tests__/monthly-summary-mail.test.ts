@@ -98,7 +98,7 @@ async function harness(setup: { dailyCap?: number } = {}) {
     now: NOW,
     portalOrigin: PORTAL,
     pepper: PEPPER,
-    stripe: { catalog: async () => CATALOG, plan: { paidInvoiceCount: async (id: string) => paid.get(id) ?? 0 } as unknown as PlanGateway },
+    stripe: { catalog: async () => ({ legacy: CATALOG, plans: null }), plan: { paidInvoiceCount: async (id: string) => paid.get(id) ?? 0 } as unknown as PlanGateway },
     dryRun: false,
     ...over,
   });

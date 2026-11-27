@@ -1,6 +1,7 @@
 import type { BillingRetentionEventRecord, BillingTierRecord } from '../repositories/ports.js';
 import type { BillingCurrency, Catalog } from './checkout.js';
-import { productIdsOf, type ComebackOfferEntry, type CouponFact } from './offer.js';
+import { catalogFor, couponCovers, firstYearOf, productIdsOf, productsOf, type CouponFact, type LegacyComebackEntry, type OfferCatalogs, type OfferPlan, type PercentComebackEntry } from './offer.js';
+import type { PlanName } from './plans.js';
 
 /**
  * MUT-534 (plan D8–D14, ADR-243): the come-back offer. A person whose paid Freelancer plan ended gets a mail 30 and 90
@@ -32,6 +33,10 @@ type PerCurrency = Record<BillingCurrency, number | null>;
 
 export interface ComebackOffer {
   id: string;
+  /** MUT-703: the plan these amounts are for (`freelancer`: the legacy Checkout). */
+  plan: OfferPlan;
+  /** MUT-703: the plans' coupon is a percent off; null for the legacy amount off. */
+  percentOff: number | null;
   /** The coupon a Checkout in that currency carries; null where the currency has no come-back price. */
   couponIds: Record<BillingCurrency, string | null>;
   /** Minor units per currency, Stripe's arithmetic (the list price less the amount off); null where it isn't sold. */
@@ -45,7 +50,7 @@ export interface ComebackOffer {
  * D8: per currency, its coupon must be valid, `once`, an amount off in that currency below the monthly price, and on the
  * Freelancer product only. A currency whose coupon isn't has no come-back price; with none at all there is no offer.
  */
-export function comebackOfferOf(entry: ComebackOfferEntry, coupons: Record<BillingCurrency, CouponFact | null>, catalog: Catalog): ComebackOffer | null {
+export function comebackOfferOf(entry: LegacyComebackEntry, coupons: Record<BillingCurrency, CouponFact | null>, catalog: Catalog): ComebackOffer | null {
   const freelancer = productIdsOf(catalog);
   const amountIn = (c: BillingCurrency): number | null => {
     const coupon = coupons[c];
@@ -63,12 +68,64 @@ export function comebackOfferOf(entry: ComebackOfferEntry, coupons: Record<Billi
   const per = (pick: (c: BillingCurrency) => number): PerCurrency => ({ ILS: currencies.includes('ILS') ? pick('ILS') : null, USD: currencies.includes('USD') ? pick('USD') : null });
   return {
     id: entry.id,
+    plan: 'freelancer',
+    percentOff: null,
     couponIds: { ILS: amounts.ILS !== null ? entry.couponIds.ILS : null, USD: amounts.USD !== null ? entry.couponIds.USD : null },
     firstMonth: per((c) => catalog[c]!.month.unitAmount - amounts[c]!),
     listMonth: per((c) => catalog[c]!.month.unitAmount),
     firstYear: per((c) => catalog[c]!.year.unitAmount - amounts[c]!),
     listYear: per((c) => catalog[c]!.year.unitAmount),
   };
+}
+
+/**
+ * MUT-703 (§3.6, §13 Q1/Q4): the plans' come-back on one plan: a valid percent coupon, `once`, inside the entry's
+ * products and covering the plan's. One coupon serves both currencies; a currency the plan isn't sold in has no price.
+ * The yearly pair is null when the entry is monthly only.
+ */
+export function percentComebackOfferOf(entry: PercentComebackEntry, coupon: CouponFact | null, catalogs: OfferCatalogs, plan: PlanName): ComebackOffer | null {
+  if (!coupon || !coupon.valid || coupon.duration !== COMEBACK_DURATION) return null;
+  const percent = coupon.percentOff;
+  // 100% would make the first month free: not the offer §13 Q1 shapes.
+  if (percent === null || !(percent > 0 && percent < 100)) return null;
+  const catalog = catalogFor(catalogs, plan);
+  if (!couponCovers(coupon, productsOf(entry.plans, catalogs), productIdsOf(catalog))) return null;
+  const yearly = entry.interval !== 'month';
+  const per = (pick: (pair: NonNullable<Catalog[BillingCurrency]>) => number | null): PerCurrency => ({ ILS: catalog.ILS ? pick(catalog.ILS) : null, USD: catalog.USD ? pick(catalog.USD) : null });
+  return {
+    id: entry.id,
+    plan,
+    percentOff: percent,
+    couponIds: { ILS: catalog.ILS ? entry.couponId : null, USD: catalog.USD ? entry.couponId : null },
+    firstMonth: per((pair) => firstYearOf(pair.month.unitAmount, percent)),
+    listMonth: per((pair) => pair.month.unitAmount),
+    firstYear: per((pair) => (yearly ? firstYearOf(pair.year.unitAmount, percent) : null)),
+    listYear: per((pair) => (yearly ? pair.year.unitAmount : null)),
+  };
+}
+
+/** MUT-703 (§13 Q5): the plan a come-back offers: the lapsed plan, Solo for a legacy Freelancer lapse; none for Accountant. */
+export function comebackPlanOf(tier: BillingTierRecord | null): PlanName | null {
+  switch (tier) {
+    case 'FREELANCER':
+    case 'SOLO':
+      return 'solo';
+    case 'BUSINESS':
+      return 'business';
+    case 'FIRM':
+      return 'firm';
+    default:
+      return null;
+  }
+}
+
+/** MUT-703: the tier of the person's latest paid lapse (the come-back mail names its plan); null with none. */
+export function lapsedTierOf(subscriptions: ComebackFacts['subscriptions']): BillingTierRecord | null {
+  return latestLapseOf(subscriptions)?.tier ?? null;
+}
+
+function latestLapseOf(subscriptions: ComebackFacts['subscriptions']) {
+  return subscriptions.filter((s) => s.status === 'canceled' && s.endedAt !== null).sort((a, b) => b.endedAt!.getTime() - a.endedAt!.getTime())[0];
 }
 
 /** D11: the stage a lapse that ended at `endedAt` is in at `now`, or null between and after the windows. */
@@ -89,18 +146,17 @@ export interface ComebackFacts {
   comebackOfferIds: ReadonlySet<string>;
 }
 
-export type ComebackRefusal = 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'FIRM' | 'ALREADY_HAD' | 'STAY_OFFER_RECENT' | 'COVERED' | 'NO_PROFILE' | 'NOT_OFFERED';
+export type ComebackRefusal = 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'ALREADY_HAD' | 'STAY_OFFER_RECENT' | 'COVERED' | 'NO_PROFILE' | 'NOT_OFFERED';
 
 /**
  * D13 (review): the refusals the person's subscriptions alone settle, so GET /v1/billing, polled after a return from
  * Stripe, reads events and coverage only for someone these let through.
  */
-export function comebackSubscriptionRefusalOf(subscriptions: ComebackFacts['subscriptions'], comebackOfferIds: ReadonlySet<string>, now: Date): 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'FIRM' | 'ALREADY_HAD' | null {
+export function comebackSubscriptionRefusalOf(subscriptions: ComebackFacts['subscriptions'], comebackOfferIds: ReadonlySet<string>, now: Date): 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'ALREADY_HAD' | null {
   if (subscriptions.some((s) => !ENDED_STATUSES.has(s.status))) return 'PAYING';
-  const lapses = subscriptions.filter((s) => s.status === 'canceled' && s.endedAt !== null).sort((a, b) => b.endedAt!.getTime() - a.endedAt!.getTime());
-  const latest = lapses[0];
+  // MUT-703 (§13 Q5): any paid plan's lapse, Firm included (the old ₪149 Firm refusal is gone).
+  const latest = latestLapseOf(subscriptions);
   if (!latest) return 'NO_LAPSE';
-  if (latest.tier === 'FIRM') return 'FIRM';
   if (now.getTime() - latest.endedAt!.getTime() < COMEBACK_AFTER_DAYS * DAY_MS) return 'TOO_SOON';
   if (subscriptions.some((s) => s.offerId !== null && comebackOfferIds.has(s.offerId) && !NEVER_PAID_STATUSES.has(s.status))) return 'ALREADY_HAD';
   return null;

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 96" width="120" height="96">
+<g transform="matrix(-1 0 0 1 120 0)">
+<path id="tab" d="M22 38V28a5 5 0 0 1 5-5h16l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(32.00 38.00) scale(1.0000) translate(-32.00 -38.00)"/><rect id="back" x="20" y="36" width="80" height="54" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect id="front" x="20" y="50" width="80" height="40" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M40 68Q60 50.0 80 68Q60 86.0 40 68Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle id="nuqta" cx="60" cy="68" r="5.5" fill="#E89960"/>
+</g>
+</svg>
