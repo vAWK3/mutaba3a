@@ -1,11 +1,11 @@
 import type { JurisdictionPack } from '../pack.js';
 import { IL_DEALER } from './dealers.js';
-import { aboveAllocationThreshold, allocationNumberRequired, normalizeAllocationNumber } from './allocation-number.js';
+import { aboveAllocationThreshold, ALLOCATION_THRESHOLDS, allocationNumberRequired, normalizeAllocationNumber } from './allocation-number.js';
 import { IL_DOCUMENT_TYPES } from './documents.js';
 import { allocationInvoiceId, allocator, approvalRequest, DEFAULT_MANUAL_ALLOCATION_URL, manualAllocator, needsAllocation, statusOf } from './tax-authority/service.js';
 import { IL_STATUTORY_FILE } from './uniform-file/statutory-file.js';
 import { normalizeTaxId } from './tax-id.js';
-import { standardVatRateOn } from './vat.js';
+import { ISRAEL_STANDARD_VAT_RATES, standardVatRateOn } from './vat.js';
 
 /** The seven years the Tax Authority's rules keep a document (ADR-277, amended 2026-11-25). */
 const IL_RETENTION_YEARS = 7;
@@ -22,6 +22,10 @@ export const IL_PACK: JurisdictionPack = {
   dealer: IL_DEALER,
   vat: { rateOn: standardVatRateOn, perLineExemption: true },
   retention: { years: IL_RETENTION_YEARS },
+  datedTables: [
+    { name: 'vat.standardRate', starts: ISRAEL_STANDARD_VAT_RATES.map((step) => step.from) },
+    { name: 'expense.allocationThreshold', starts: ALLOCATION_THRESHOLDS.map((step) => step.from) },
+  ],
   expense: { allocationNumberRequired, aboveAllocationThreshold, normalizeAllocationNumber },
   clearance: { kind: 'IL_ALLOCATION', needsAllocation, allocationInvoiceId, approvalRequest, allocator, manualAllocator, DEFAULT_MANUAL_ALLOCATION_URL, statusOf },
   statutoryFile: IL_STATUTORY_FILE,

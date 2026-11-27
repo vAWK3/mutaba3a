@@ -56,6 +56,11 @@ export interface JurisdictionPack {
     readonly years: number;
   };
   /**
+   * MUT-745: every dated table of rates or thresholds the pack reads by date, by the dates each step starts. The pack
+   * contract flags a table with no step in force on the current date (a rate that ran out, or one not started yet).
+   */
+  readonly datedTables: readonly DatedTable[];
+  /**
    * What a purchase invoice's number-for-the-buyer rule asks of the expense side (Israel: the allocation number, MUT-557).
    * Every pack answers; a country without the rule answers false.
    */
@@ -112,6 +117,12 @@ export interface DealerRule {
   readonly defaultType: IssuedDocType;
   /** What an entry that is already recorded may become: an Owed one, a Received one. */
   readonly entryTypes: { readonly owed: readonly IssuedDocType[]; readonly received: readonly IssuedDocType[] };
+}
+
+/** MUT-745: one dated table of a pack: its name (`vat.standardRate`) and the YYYY-MM-DD each step starts on, ascending. */
+export interface DatedTable {
+  readonly name: string;
+  readonly starts: readonly string[];
 }
 
 /** What `composeDocument` needs from a pack. */

@@ -4939,6 +4939,18 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route matrices | `route-security.test.ts`, `accountant-route-matrix.test.ts` | the new route is listed and gated |
 | QA | none yet | no screen changes in this piece; the portal piece extends `portal.invoicing.country-not-live` and re-runs the setup and issue flows |
 
+## MUT-745 — the pack contract and per-pack fixtures (ADR-287 §8)
+
+| Layer | File | Covers |
+|---|---|---|
+| Fixtures | `jurisdictions/__tests__/fixtures/{index,il,types}.ts` | each registered pack's rules by hand, golden hashes, route inputs and clearance failure; Israel's are the MUT-741/742/743 assertions, unchanged |
+| Pack | `jurisdictions/__tests__/pack.contract.test.ts` + `pack-contract.ts` | every registered pack passes every check (identity, document types, dealers, languages, tax IDs, dated rules, lines add up, hooks, fixture present) and answers its fixture exactly; 28 broken packs each fail their check; every check is proven by one |
+| Golden | `jurisdictions/__tests__/golden.test.ts` | per pack: composed-document hashes and statutory-file bytes from the fixture (Israel's 11 hashes and the uniform file, unchanged) |
+| Pack (IL only) | `jurisdictions/__tests__/il-pack.contract.test.ts` | the Tax Authority codes, `DOC_TYPE_RANK` = Israeli code order, the registry and boot check |
+| Boundary | `jurisdictions/__tests__/boundary.test.ts` | core imports no pack directory (any `<cc>`); Israel's allowlist unchanged; self-test for another pack |
+| Routes | `__tests__/routes-pack-contract.test.ts` | per pack: the stamp, numbers 1-2-3 with no gaps, an idempotent retry, lines adding up, no change after issue, a refused clearance leaving no trace |
+| QA | none | AC3 (`invoicing-<cc>.yaml`) open: the portal specs run on a stubbed API (brief, "Not done") |
+
 ## MUT-737 (server half) — open sign-up (2026-11-27, ADR-289)
 
 | Layer | File | Covers |
