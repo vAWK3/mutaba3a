@@ -2621,3 +2621,18 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 
 - `ClientBalance` (`src/hosted/components/ledger/ClientBalance.tsx`): one client balance in one currency (owes / "Client in credit · …" / "Settled"), the ledger card's words. `useCustomerBalances(profileId)` (`src/hosted/data/statementQueries.ts`) groups `GET /v1/customer-balances` by client.
 
+## MUT-768 — the accountant's desk (ADR-325)
+
+| Where | Exports | Used by |
+|---|---|---|
+| `src/hosted/pages/client-books/deskRules.ts` | `buildDeskRows`, `nextActionOf`, `matchesDeskFilter`, `filterCounts`, `matchesDeskRow`, `DeskState` | `ClientBooksPage` |
+| `src/hosted/pages/client-books/DeskBadge.tsx` | `DeskBadge({ state })`: the word on a colour, never colour alone | the desk table, the Customer drawer |
+| `src/hosted/pages/client-books/AddCustomerDrawer.tsx` | `AddCustomerDrawer({ onClose })` on `?newCustomer=true` | `ClientBooksPage` |
+| `src/hosted/pages/client-books/CustomerDrawer.tsx` | `CustomerDrawer({ row, pane, onClose, onPane })` on `?customer=` | `ClientBooksPage` |
+| `src/hosted/pages/client-books/TakeCardPane.tsx` | `TakeCardPane({ userId, onBack })`: plan, payment, customer type, country, address, then Stripe | `CustomerDrawer` |
+| `src/hosted/components/accountantErrors.ts` | `mapDeskError(error)` → `{ banner, refetchDesk? }` | the three desk panes |
+| `src/hosted/data/accountantCustomersQueries.ts` | `useAccountantCustomers`, `useCreateCustomer`, `useReissueLink`, `useChangeCustomerEmail`, `useCustomerCheckout` | the desk |
+| `src/hosted/data/activating.ts` | `markActivating`, `activatingIds`, `lapsedActivationIds`, `clearActivating` (sessionStorage) | `TakeCardPane`, `ClientBooksPage` |
+| `src/hosted/pages/client-books/DeskActivating.tsx` | `DeskActivating({ rows, marks, poll, onClose })`: MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer sent to Stripe | `ClientBooksPage` |
+| `src/hosted/data/claimedSeen.ts` | `hasSeenClaimed`, `markClaimedSeen` (localStorage): the `claimed-spot` Scene once per client | `CustomerDrawer` |
+| `CodeReveal` (MUT-770) | `<CodeReveal code labelledBy />`, used by the two drawers | `AddCustomerDrawer`, `CustomerDrawer` |

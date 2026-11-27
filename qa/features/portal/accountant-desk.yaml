@@ -1,0 +1,64 @@
+app: portal
+area: accountant-desk
+title: The accountant's customers on the Client books desk (عملاء المحاسب)
+tier: secondary
+# MUT-768 (epic MUT-762, accountant channel): an operator-approved accountant adds a customer, says the code out loud,
+# sets the customer up again from a drawer, takes the card in the room and watches the row turn Active. The server's
+# routes (MUT-764 to MUT-767) in an in-memory API (qa/support/clientBooksApi.ts); Stripe is a stub page.
+paths:
+  - src/hosted/pages/client-books/**
+  - src/hosted/data/accountantCustomersQueries.ts
+  - src/hosted/data/activating.ts
+  - src/hosted/components/accountantErrors.ts
+  - src/hosted/components/CodeReveal.tsx
+features:
+  - id: add
+    title: An approved accountant adds a customer and gets the code to say out loud
+    tier: secondary
+    tickets: [MUT-768]
+    steps:
+      - Open the desk with no clients
+      - Add a customer with the five fields
+      - Read the code and where the link went, then Done
+      - Open the drawer in Arabic at 375 px
+    expect:
+      - The empty desk offers Add customer; the drawer asks the customer, business, email, language and country
+      - POST /v1/accountant/customers carries an Idempotency-Key, the lowercased email, the currency and the time zone of the country
+      - The second pane shows "Link sent to" the address and the six-digit code
+      - After Done the row is Awaiting claim with New code as its one action
+      - The Arabic drawer is right to left with no horizontal overflow at 375 px
+  - id: code
+    title: A new code and a changed email, from the Customer drawer
+    tier: secondary
+    tickets: [MUT-768]
+    steps:
+      - Open an unclaimed customer from its row
+      - Make a new code
+      - Change the email and confirm
+    expect:
+      - The drawer offers Resend link, New code, Change email and Take card
+      - New code shows a different code and where the link went
+      - Change email names what stops working first, then PUT /v1/accountant/customers/<id>/email carries the new address
+  - id: take-card
+    title: Take card collects the plan and address, leaves for Stripe, and the row turns Active
+    tier: secondary
+    tickets: [MUT-768]
+    steps:
+      - Open Take card from a customer who has claimed and not paid
+      - Fill plan, payment, customer type, country and address
+      - Continue to Stripe and come back to the desk
+    expect:
+      - The row says Needs card with Take card as its one action, which opens the pane in the Customer drawer
+      - POST /v1/accountant/customers/<id>/checkout-session carries the plan, the payment, the buyer, the country, the address and the return to the desk
+      - Back on the desk the row says Activating, and within a minute Active
+  - id: claimed
+    title: A customer who claims while the drawer is open loses the setup actions
+    tier: secondary
+    tickets: [MUT-768]
+    steps:
+      - Open an unclaimed customer's drawer
+      - The customer claims the account
+      - Make a new code
+    expect:
+      - The refusal is a banner at the top of the drawer, "Claimed"
+      - Resend link, New code and Change email are gone; Take card stays while the customer has not paid

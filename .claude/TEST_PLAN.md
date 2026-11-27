@@ -5052,6 +5052,17 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route | `__tests__/billing-pilot.test.ts` | `pilot.startedAt`, `firstScanAt` (first of several), `firstInvoiceAt` null until the first document |
 | Client | with MUT-753/755/756 | each event fires once in a production-gate test and never in dev or QA |
 
+## The accountant's desk (MUT-768, epic MUT-762, ADR-325)
+
+| Level | Test | Covers |
+|---|---|---|
+| Unit | `pages/client-books/__tests__/deskRules.test.ts` | the row states, the join by profile, Ended wins, the one next action, filters and counts, search |
+| Unit | `components/__tests__/accountantErrors.test.ts` | every refusal as a banner key, the three daily limits, the activation refusals, the generic fallback |
+| Integration | `pages/client-books/__tests__/DeskCustomers.test.tsx` | badges and actions, chips, an unapproved accountant, the empty state, Add customer (body, key, code, banners), the Customer drawer (new code, change email, claimed meanwhile), Take card (body, Stripe, marker), Activating and polling to Active |
+| Integration | `pages/client-books/__tests__/ClientBooks.test.tsx` (existing) | the plain desk still works with the new columns |
+| Parity | `i18n/__tests__/parity.test.ts` | the `hosted.desk.*` keys in both languages |
+| release-qa | `qa/features/portal/accountant-desk.yaml`, `qa/specs/portal/accountant-desk.spec.ts` | add (with Arabic at 375 px), code, take-card, claimed |
+
 ## MUT-770 — CodeReveal, the Activating poll and motion (2026-11-27)
 
 | Layer | File | Covers |
