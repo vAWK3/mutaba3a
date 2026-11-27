@@ -45,6 +45,17 @@ features:
       - Turn sharing on, then add a received income of 1,200 for Client 1
     expect:
       - income_recorded is sent with currency ILS and paid true, and nothing about the amount or the client
+  - id: pilot-events
+    title: With sharing on, a pilot tester's Billing counts the pilot events, never the cohort (MUT-758)
+    tickets: [MUT-758]
+    paths:
+      - src/hosted/analytics/portalAnalytics.ts
+    steps:
+      - Turn sharing on as a pilot tester with documents at 92% of Business's limit, and open Billing
+      - Press Write to us
+    expect:
+      - pilot_billing_opened is sent with days_left, then pilot_plans_viewed and pilot_usage_near_cap (limit documents), once each; none carries the cohort
+      - pilot_contact_tapped is sent
   - id: opt-out-last-note
     title: Turning sharing off on You › App sends one last note, then nothing, and forgets the random ID
     paths:
