@@ -1507,6 +1507,25 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 
 /* The desk: full width (layout C). An ended client stays, faded, until removed (AW4). */
 .hp-desk { max-width: 1200px; margin-inline: auto; }
+/* MUT-768 (accountant channel): the desk's filter chips and the setup actions. The code is CodeReveal's (MUT-770). */
+.hp-desk-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.hp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-height: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.hp-chip[aria-pressed='true'] { background: var(--accent-2-subtle); border-color: var(--accent-2); }
+.hp-chip-count { color: var(--muted); }
+.hp-desk-next { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); margin: var(--space-3) 0; }
+.hp-desk-next .btn, .hp-desk-next button { min-height: 44px; }
 .hp-row-ended td { color: var(--muted); }
 .hp-row-ended td:not(.hp-sticky-end) { opacity: 0.6; }
 .hp-ended-note { font-size: var(--text-label); color: var(--muted); }
@@ -1599,6 +1618,84 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 @media (prefers-reduced-motion: reduce) {
   .hp-scene--drop-in [data-part="nuqta"] { animation: none; }
 }
+
+/*
+ * ---------- CodeReveal (MUT-770, DR-8): the claim code, shown once; motion-claim-code ----------
+ * docs/design/motion/2026-11-27/claim-code/motion-claim-code-spec.md: each digit 10 px up and in over 320 ms on the
+ * spring, 60 ms apart, leftmost first in both directions (codes are LTR). Copy → Copied: the labels cross-fade 150 ms
+ * linear, the check grows 0.6 → 1 over 240 ms on the spring; the 2 s hold and the revert are CodeReveal's timer.
+ */
+.hp-code-reveal { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); margin-block: var(--space-3); }
+.hp-code-reveal-digits {
+  display: flex; justify-content: center; gap: var(--space-5); inline-size: 100%; box-sizing: border-box;
+  padding: var(--space-5) var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border);
+  direction: ltr; unicode-bidi: isolate; font-family: var(--font-mono); font-size: var(--text-figure-fluid); font-weight: var(--weight-medium);
+  line-height: 1; font-variant-numeric: tabular-nums; color: var(--text);
+}
+.hp-code-reveal-group { display: inline-flex; gap: 0.12em; }
+.hp-code-digit { display: inline-block; animation: hp-code-digit-settle 320ms var(--ease-spring) calc(var(--digit, 0) * 60ms) both; }
+@keyframes hp-code-digit-settle { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.hp-code-reveal-copy {
+  display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 44px; padding-inline: var(--space-5);
+  border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface); color: var(--accent-text);
+  font: inherit; font-weight: var(--weight-medium); cursor: pointer;
+}
+.hp-code-reveal-icon, .hp-code-reveal-labels { display: inline-grid; place-items: center; }
+.hp-code-reveal-icon > *, .hp-code-reveal-labels > * { grid-area: 1 / 1; }
+.hp-code-reveal-copy-glyph, .hp-code-reveal-copy-label, .hp-code-reveal-copied-label { transition: opacity 150ms linear; }
+.hp-code-reveal-check-glyph { opacity: 0; transform: scale(0.6); transition: opacity 150ms linear, transform 240ms var(--ease-spring); }
+.hp-code-reveal-copied-label { opacity: 0; }
+.hp-code-reveal-copy[data-state="copied"] .hp-code-reveal-copy-glyph,
+.hp-code-reveal-copy[data-state="copied"] .hp-code-reveal-copy-label { opacity: 0; }
+.hp-code-reveal-copy[data-state="copied"] .hp-code-reveal-copied-label,
+.hp-code-reveal-copy[data-state="copied"] .hp-code-reveal-check-glyph { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  /* The still pose (motion-claim-code-still.svg), with the one 150 ms fade-in the spec allows */
+  .hp-code-digit { animation: hp-fade-in-still 150ms linear both; }
+  .hp-code-reveal-check-glyph { transform: none; transition: opacity 150ms linear; }
+}
+@keyframes hp-fade-in-still { from { opacity: 0; } to { opacity: 1; } }
+
+/*
+ * ---------- Activating (MUT-770, DR-5): motion-activating ----------
+ * docs/design/motion/2026-11-27/activating/motion-activating-spec.md: a 1.5 s loop while the desk polls; the nuqta
+ * hops dot 1 → 2 → 3 → 1 (11 px apart; arcs of 7, 7 and 10 px), 500 ms a hop on the spring. Done: after the current
+ * hop (ActivatingMotion's timer) it resolves in 600 ms on the spring: the dots shrink, the check draws (dash 31 → 0),
+ * the nuqta moves to the card corner (102, 22) and grows r 4.5 → 6. The x travel is `translate`, the arc `transform`,
+ * so each runs on its own keyframes. In Arabic the art is the -rtl drawing (flipped inside the SVG), so the same
+ * offsets hold. Reduced motion never runs it: ActivatingMotion shows the `activating` scene (the still) instead.
+ */
+.hp-activating [data-part="nuqta"], .hp-activating [data-part="dot"] { transform-box: fill-box; transform-origin: center; }
+.hp-activating [data-part="check"] { stroke-dashoffset: 31; }
+.hp-activating[data-phase="loop"] [data-part="nuqta"] {
+  animation: hp-activating-hop-x 1500ms infinite, hp-activating-hop-arc 1500ms infinite;
+}
+@keyframes hp-activating-hop-x {
+  0% { translate: 0 0; animation-timing-function: var(--ease-spring); }
+  33.333% { translate: 11px 0; animation-timing-function: var(--ease-spring); }
+  66.667% { translate: 22px 0; animation-timing-function: var(--ease-spring); }
+  100% { translate: 0 0; }
+}
+@keyframes hp-activating-hop-arc {
+  0% { transform: translateY(0); animation-timing-function: var(--ease-spring); }
+  16.667% { transform: translateY(-7px); animation-timing-function: var(--ease-spring); }
+  33.333% { transform: translateY(0); animation-timing-function: var(--ease-spring); }
+  50% { transform: translateY(-7px); animation-timing-function: var(--ease-spring); }
+  66.667% { transform: translateY(0); animation-timing-function: var(--ease-spring); }
+  83.333% { transform: translateY(-10px); animation-timing-function: var(--ease-spring); }
+  100% { transform: translateY(0); }
+}
+.hp-activating[data-phase="resolving"] [data-part="nuqta"] { animation: hp-activating-nuqta-home 600ms var(--ease-spring) both; }
+.hp-activating[data-phase="resolving"] [data-part="dot"] { animation: hp-activating-dot-out 600ms var(--ease-spring) both; }
+.hp-activating[data-phase="resolving"] [data-part="check"] { animation: hp-activating-check-draw 600ms var(--ease-spring) both; }
+@keyframes hp-activating-nuqta-home { from { translate: var(--from-x, 0px) 0; scale: 1; } to { translate: 36px -27px; scale: 1.3333; } }
+@keyframes hp-activating-dot-out { from { scale: 1; } to { scale: 0; } }
+@keyframes hp-activating-check-draw { from { stroke-dashoffset: 31; } to { stroke-dashoffset: 0; } }
+.hp-activating-still { animation: hp-fade-in-still 150ms linear both; }
+.hp-activating-status { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-4); margin-block-end: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.hp-activating-status-text { display: flex; flex-direction: column; gap: var(--space-1); flex: 1 1 12rem; min-inline-size: 0; }
+.hp-activating-status-name { font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.hp-activating-status[data-phase="active"] .hp-activating-status-text > span { color: var(--success); font-weight: var(--weight-medium); }
 
 /* ---------- Sharing (MUT-561, layout B): two columns, one at 760px and below; rows on the .hp-profile-row recipe ---------- */
 .hp-sharing { max-width: 1040px; margin-inline: auto; }

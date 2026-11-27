@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Page, Request, Route } from '@playwright/test';
 import { OFFICE_A, QA_TERMS_VERSION, meBody, office, openSignedInPortal, type StubProfile } from './portal';
 import { STORAGE } from './portalApi';
@@ -40,6 +41,29 @@ export interface StubClient {
 export const RANA: StubClient = { profileId: STUDIO, name: 'Studio', ownerName: 'Rana Haddad', status: 'active', entriesThisMonth: 23, lastActivityAt: ago(0) };
 export const LINA: StubClient = { profileId: BAKERY, name: 'Bakery', ownerName: 'Lina Sabbagh', status: 'ended', entriesThisMonth: null, lastActivityAt: null };
 
+/** MUT-768 (accountant channel): an account the accountant created for a customer, as GET /v1/accountant/customers lists it. */
+export interface StubCustomer {
+  userId: string;
+  profileId: string;
+  name: string;
+  email: string;
+  displayName: string;
+  state: 'awaiting_claim' | 'link_expired' | 'code_locked' | 'claimed';
+  paid: boolean;
+  /** The Stripe webhook is slow: after Checkout the list says paid only from this moment (ms since epoch). */
+  paidAt?: number;
+}
+
+export const CAFE_USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+export const CAFE = '11111111-1111-4111-8111-111111111111';
+export const CARD_USER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+export const CARD_PROFILE = '33333333-3333-4333-8333-333333333333';
+export const NEW_CODE = '135790';
+export const FIRST_CODE = '481702';
+
+export const CAFE_CUSTOMER: StubCustomer = { userId: CAFE_USER, profileId: CAFE, name: 'Café Nour', email: 'samer@cafenour.ps', displayName: 'Samer Haddad', state: 'awaiting_claim', paid: false };
+export const CARD_CUSTOMER: StubCustomer = { userId: CARD_USER, profileId: CARD_PROFILE, name: 'Dar Al-Salam', email: 'layla@daralsalam.ps', displayName: 'Layla Mansour', state: 'claimed', paid: false };
+
 export interface Logged {
   method: string;
   path: string;
@@ -64,6 +88,8 @@ export interface ClientBooksOptions {
   revoked?: boolean;
   /** signup answers 409 ACCOUNT_EXISTS. */
   accountExists?: boolean;
+  /** MUT-768: the accountant's customers. Absent = the feature is off and every accountant route answers 404. */
+  customers?: StubCustomer[];
 }
 
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -74,6 +100,8 @@ export class ClientBooksApi {
   signedIn: boolean;
   clients: StubClient[];
   revoked: boolean;
+  /** MUT-768: null while the feature is off. A spec changes a state to play "the customer claimed meanwhile". */
+  customers: StubCustomer[] | null;
   attemptsLeft = 4;
   /** expireView: every view read after the first unlock answers 401 (the 8 hours ended) until the PIN is entered again. */
   private viewExpired: boolean;
@@ -89,6 +117,9 @@ export class ClientBooksApi {
     this.clients = options.clients ?? [RANA, LINA];
     this.revoked = options.revoked ?? false;
     this.viewExpired = options.expireView ?? false;
+    this.customers = options.customers ? options.customers.map((c) => ({ ...c })) : null;
+    // A customer's profile is a client book the accountant reads.
+    for (const c of this.customers ?? []) if (!this.clients.some((k) => k.profileId === c.profileId)) this.clients.push({ profileId: c.profileId, name: c.name, ownerName: c.displayName, status: 'active', entriesThisMonth: 0, lastActivityAt: null });
   }
 
   calls(method: string, path: string): Logged[] {
@@ -168,6 +199,8 @@ export class ClientBooksApi {
       this.signedIn = true;
       return json(this.me(language));
     }
+    // MUT-768: the accountant's customers
+    if (path.startsWith('/v1/accountant/customers')) return this.customerRoute(method, path, body);
     // The desk
     if (key === 'GET /v1/clients') return json({ items: this.clients.map((c) => ({ ...this.clientRow(c), entriesThisMonth: c.entriesThisMonth, lastActivityAt: c.lastActivityAt })) });
     if (method === 'DELETE' && path.startsWith('/v1/clients/')) {
@@ -180,6 +213,53 @@ export class ClientBooksApi {
     // A share link's visitor
     if (path.startsWith('/v1/share-links/')) return this.visitor(key, body);
     return null;
+  }
+
+  /**
+   * MUT-768: list, create, new code (the link route), change email and the activation Checkout. A customer who has
+   * claimed refuses setup (403 CUSTOMER_CLAIMED). After Checkout the list says paid only a few seconds later (a slow
+   * webhook), which is what the desk's Activating wait is for.
+   */
+  private customerRoute(method: string, path: string, body: Record<string, unknown> | null) {
+    if (!this.customers) return error(404, 'NOT_FOUND');
+    const customers = this.customers;
+    const linkEnds = () => new Date(Date.now() + 14 * DAY).toISOString();
+    if (method === 'GET' && path === '/v1/accountant/customers') {
+      const now = Date.now();
+      return json({
+        items: customers.map((c) => ({
+          userId: c.userId,
+          email: c.email,
+          displayName: c.displayName,
+          profile: { id: c.profileId, name: c.name },
+          provisionedAt: ago(1),
+          state: c.state,
+          link: c.state === 'claimed' ? null : { expiresAt: linkEnds(), mailStatus: 'SENT' },
+          paid: c.paid || (c.paidAt !== undefined && now >= c.paidAt),
+        })),
+        nextBefore: null,
+      });
+    }
+    if (method === 'POST' && path === '/v1/accountant/customers') {
+      const userId = randomUUID();
+      const profileId = randomUUID();
+      const name = String(body?.profileName ?? '');
+      const displayName = String(body?.displayName ?? '');
+      const email = String(body?.email ?? '');
+      customers.push({ userId, profileId, name, email, displayName, state: 'awaiting_claim', paid: false });
+      this.clients.push({ profileId, name, ownerName: displayName, status: 'active', entriesThisMonth: 0, lastActivityAt: null });
+      return json({ status: 'created', customer: { userId, email, displayName }, profile: { id: profileId, name }, claimCode: FIRST_CODE, linkExpiresAt: linkEnds(), mailSent: true }, 201);
+    }
+    const match = /^\/v1\/accountant\/customers\/([^/]+)\/(link|email|checkout-session)$/.exec(path);
+    const customer = match ? customers.find((c) => c.userId === match[1]) : undefined;
+    if (!match || !customer) return error(404, 'NOT_FOUND');
+    if (match[2] === 'checkout-session') {
+      customer.paidAt = Date.now() + 6_000;
+      return json({ url: 'https://checkout.stripe.com/c/pay/qa-customer' });
+    }
+    if (customer.state === 'claimed') return error(403, 'CUSTOMER_CLAIMED');
+    if (match[2] === 'email') customer.email = String(body?.email ?? customer.email);
+    return json({ claimCode: NEW_CODE, email: customer.email, linkExpiresAt: linkEnds(), mailSent: true });
   }
 
   private accept() {
