@@ -47,6 +47,24 @@ Plan `docs/designs/accountant-channel.md` (DR-1, DR-7; B7, B9). No new page: the
 ### Technical
 - Tests: `SetupClaim.test.tsx`, `claimStep.test.ts` (with motion-handover-claimed's spec values), `server/src/__tests__/routes-accountant-claim.test.ts` (the dead-link flag); release QA `portal.setup.claim-code`, `portal.setup.claim-refused`.
 
+## [Unreleased] - 2026-11-27 — The accountant's customers on the Client books desk (MUT-768 portal, epic MUT-762, ADR-325, no API change)
+
+Plan `docs/designs/accountant-channel.md` (DR-2..DR-6, B22). Wireframe `.claude/designs/accountant-channel-wireframe.html`, extended with a Take card pane and a five-field Add customer drawer, approved by Basel.
+
+### Added
+- `/client-books` shows a state badge on every row (Awaiting claim, Link expired, Needs card, Activating, Active, No longer shared), filter chips with counts (All, Awaiting claim, Needs card, Active), and ONE next action per row (New code, Resend link, Take card). An accountant the operator has not approved sees the desk as before.
+- Add customer drawer (`?newCustomer=true`): customer, business, email, mail language, country; then the spoken claim code and where the link went. Refusals (existing address, daily limit, not approved, refused address, "added, link not sent" with Resend) are banners at the top of the drawer.
+- Customer drawer (`?customer=<id>`): Resend link, New code, Change email (confirmed in place), and the Take card pane (`&pane=card`: plan, payment, customer type, country, address, then Stripe). Setup actions vanish once the customer claims.
+- Activating after Stripe: the row reads Activating and the list is re-read every 5 s for 2 minutes (`data/activating.ts`), then "Check back shortly".
+- Files: `pages/client-books/{deskRules,deskCountries,DeskBadge,AddCustomerDrawer,CustomerDrawer,TakeCardPane}`, `pages/client-books/DeskActivating.tsx` (MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer), `components/accountantErrors.ts`, MUT-770's `CodeReveal` and the `claimed-spot` Scene (once per client, `data/claimedSeen.ts`), `data/{accountantCustomersQueries,activating}.ts`, `parseDeskSearch`, the `hosted.desk.*` strings in Arabic and English, `api.accountantCustomers` and its four siblings, and `leaveFor` exported from `billingQueries`.
+- release-qa: `qa/features/portal/accountant-desk.yaml` and `qa/specs/portal/accountant-desk.spec.ts` (add, code, take-card, claimed), with the customer routes in `qa/support/clientBooksApi.ts`.
+
+### Changed
+- The desk table's columns are Customer (business and owner), State, This month, Last activity and the action. The last-month download stays for rows with no setup action.
+
+### Known gaps
+- A free-plan (Starter) customer reads Needs card (the server stores no plan intent). Resend link and New code are one server call. See ADR-325.
+
 ---
 
 ## [Unreleased] - 2026-11-27 — MUT-770: CodeReveal, the Activating poll and motion, live regions, ar/en strings (accountant channel, portal)

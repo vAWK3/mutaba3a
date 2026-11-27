@@ -2403,6 +2403,102 @@
       },
       "whatIs": "What is MTB3A?"
     },
+    "desk": {
+      "add": "Add customer",
+      "filters": {
+        "label": "Show",
+        "all": "All",
+        "awaiting": "Awaiting claim",
+        "needcard": "Needs card",
+        "active": "Active"
+      },
+      "states": {
+        "await": "Awaiting claim",
+        "expired": "Link expired",
+        "card": "Needs card",
+        "activating": "Activating",
+        "active": "Active",
+        "ended": "No longer shared"
+      },
+      "cols": {
+        "customer": "Customer",
+        "state": "State"
+      },
+      "next": {
+        "newCode": "New code",
+        "resend": "Resend link",
+        "takeCard": "Take card"
+      },
+      "nextAria": "{action}: {profile}",
+      "emptyTitle": "No clients yet",
+      "emptyOr": "or ask a client to share",
+      "required": "Required",
+      "invalidEmail": "Check the email",
+      "addDrawer": {
+        "title": "Add customer",
+        "name": "Customer name",
+        "business": "Business name",
+        "email": "Email",
+        "language": "Language of the mail",
+        "country": "Country",
+        "submit": "Add",
+        "submitting": "Adding…",
+        "added": "Added",
+        "sent": "Link sent to {email}",
+        "notSent": "Added, link not sent",
+        "code": "Code",
+        "done": "Done"
+      },
+      "customerDrawer": {
+        "title": "Customer",
+        "claimed": "Claimed",
+        "changeEmail": "Change email",
+        "newEmail": "New email",
+        "changeWarn": "Old link and code stop working.",
+        "change": "Change",
+        "sent": "Link sent to {email}",
+        "code": "Code"
+      },
+      "takeCard": {
+        "plan": "Plan",
+        "plans": {
+          "solo": "Solo",
+          "business": "Business",
+          "firm": "Firm"
+        },
+        "interval": "Payment",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "buyer": "Customer type",
+        "company": "Company (tax ID)",
+        "person": "Person",
+        "country": "Country",
+        "countryChoose": "Choose a country",
+        "address": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "back": "Back",
+        "stripe": "Continue to Stripe",
+        "opening": "Opening Stripe…"
+      },
+      "errors": {
+        "notApproved": "You can't add customers yet",
+        "claimed": "Claimed",
+        "addressRefused": "Use the customer's own address",
+        "exists": "An account exists. Ask the customer to share with you.",
+        "limitCreate": "Daily limit of {max} customers reached",
+        "limitLookup": "Daily limit reached",
+        "limitReissue": "Daily limit reached for this customer",
+        "rateLimited": "Try again later",
+        "emailTaken": "This email already has an account",
+        "alreadyPaid": "Already paid",
+        "cardUnavailable": "The card can't be taken here",
+        "countryNeedsBusiness": "Companies only in this country",
+        "addressInvalid": "Check the address",
+        "stripeDown": "Stripe is unavailable",
+        "failed": "Something went wrong"
+      }
+    },
     "clientBooks": {
       "title": "Client books",
       "corner": "Client books",

@@ -124,6 +124,7 @@ ar: {
  b_await:'لم يُفعَّل بعد', b_expired:'انتهى الرابط', b_card:'بحاجة إلى بطاقة', b_act:'جارٍ التفعيل', b_active:'نشط', b_ended:'لم يعد مشتركًا',
  a_newcode:'رمز جديد', a_resend:'إعادة إرسال الرابط', a_take:'أخذ البطاقة', a_open:'فتح',
  addTitle:'إضافة عميل', f_name:'اسم العميل', f_biz:'اسم النشاط', f_email:'البريد الإلكتروني', f_lang:'لغة الرسالة', f_plan:'الخطة', f_country:'الدولة', f_buyer:'نوع العميل',
+ tc_interval:'الدفع', o_month:'شهريًا', o_year:'سنويًا', tc_addr:'العنوان', tc_city:'المدينة', tc_zip:'الرمز البريدي', o_solo:'Solo', o_business:'Business', o_firm:'Firm', back:'رجوع',
  o_ar:'العربية', o_en:'English', o_free:'مجانية', o_paid:'مدفوعة (تحتاج بطاقة)', o_ps:'فلسطين', o_il:'إسرائيل', o_jo:'الأردن', o_person:'فرد', o_company:'شركة (برقم ضريبي)',
  cancel:'إلغاء', addBtn:'إضافة', added:'تمت إضافة العميل', codeNote:'الرمز', sent:'أُرسل الرابط إلى', done:'تم',
  e_exists:'لهذا البريد حساب. اطلب من العميل مشاركة دفاتره.', e_limit:'بلغت حد اليوم.', e_na:'غير مفعّل لحسابك.', e_mail:'أُضيف العميل. لم يُرسل الرابط.', resend:'إعادة الإرسال',
@@ -142,6 +143,7 @@ en: {
  b_await:'Awaiting claim', b_expired:'Link expired', b_card:'Needs card', b_act:'Activating', b_active:'Active', b_ended:'No longer shared',
  a_newcode:'New code', a_resend:'Resend link', a_take:'Take card', a_open:'Open',
  addTitle:'Add customer', f_name:'Customer name', f_biz:'Business name', f_email:'Email', f_lang:'Language of the mail', f_plan:'Plan', f_country:'Country', f_buyer:'Customer type',
+ tc_interval:'Payment', o_month:'Monthly', o_year:'Yearly', tc_addr:'Address', tc_city:'City', tc_zip:'Postal code', o_solo:'Solo', o_business:'Business', o_firm:'Firm', back:'Back',
  o_ar:'Arabic', o_en:'English', o_free:'Free', o_paid:'Paid (needs a card)', o_ps:'Palestine', o_il:'Israel', o_jo:'Jordan', o_person:'Person', o_company:'Company (tax ID)',
  cancel:'Cancel', addBtn:'Add', added:'Customer added', codeNote:'Code', sent:'Link sent to', done:'Done',
  e_exists:'This address already has an account. Ask the customer to share their books.', e_limit:'Daily limit reached.', e_na:'Not enabled for your account.', e_mail:'Customer added. Link not sent.', resend:'Resend',
@@ -175,8 +177,7 @@ const formHtml = () => `
   ${field('f_name','<input value="'+(S.lang==='ar'?'سامر حداد':'Samer Haddad')+'" dir="auto">')}
   ${field('f_biz','<input value="'+(S.lang==='ar'?'مقهى نور':'Café Nour')+'" dir="auto">')}
   ${field('f_email','<input value="samer@cafenour.ps" dir="ltr" inputmode="email">')}
-  <div class="two">${field('f_lang',sel(['o_ar','o_en']))}${field('f_plan',sel(['o_paid','o_free']))}</div>
-  <div class="two">${field('f_country',sel(['o_ps','o_il','o_jo']))}${field('f_buyer',sel(['o_company','o_person']))}</div>
+  <div class="two">${field('f_lang',sel(['o_ar','o_en']))}${field('f_country',sel(['o_ps','o_il','o_jo']))}</div>
   <div class="legend"><span class="sub">${t('demo')}</span>${['none','exists','limit','na','mail'].map(b=>`<button class="tb" data-banner="${b}" aria-pressed="${S.banner===b}">${t('d_'+(b==='na'?'na':b==='none'?'none':b))}</button>`).join('')}</div>`;
 const codeHtml = () => `<h3 tabindex="-1" id="paneH" style="margin:0 0 4px">${t('added')}</h3><p class="sub">${t('sent')} <bdi class="num">samer@cafenour.ps</bdi></p>
   <div class="code" role="img" aria-label="4 8 1 7 0 2">481 702</div><p class="note">${t('codeNote')}</p>`;
@@ -185,6 +186,13 @@ function custDrawerBody(r){
   const claimed = D.claimed;
   let h = `<p><span class="name">${nm(r)}</span><br><span class="sub">${ow(r)} · <bdi class="num">${r.em}</bdi></span></p><p>${badge(claimed?'active':r.st)}</p>`;
   if (claimed) return h + `<div class="banner ban-info" role="note">${t('claimedNote')}</div>`;
+  // The Take card pane (MUT-768 wireframe extension): what the server's activation call needs. Plan, payment interval, country, buyer type and the billing address; the button opens Stripe.
+  if (D.pane==='card') return h + `<h4 style="margin:14px 0 8px">${t('a_take')}</h4>
+    <div class="two">${field('f_plan',sel(['o_solo','o_business','o_firm']))}${field('tc_interval',sel(['o_month','o_year']))}</div>
+    <div class="two">${field('f_buyer',sel(['o_company','o_person']))}${field('f_country',sel(['o_ps','o_il','o_jo']))}</div>
+    ${field('tc_addr','<input dir="auto" autocomplete="street-address">')}
+    <div class="two">${field('tc_city','<input dir="auto">')}${field('tc_zip','<input dir="ltr" inputmode="numeric">')}</div>
+    <div style="display:flex;gap:8px;margin-top:6px"><button class="btn sec" data-act="back">${t('back')}</button><button class="btn" data-act="stripe">${t('stripe')}</button></div>`;
   if (r.st==='activating') h += `<div class="banner ban-info" role="status">${t('actNote')}</div>`;
   h += `<div style="display:flex;flex-direction:column;align-items:flex-start">
     <button class="lb" data-act="resend">${t('a_resend')}</button><button class="lb" data-act="newcode">${t('a_newcode')}</button>
@@ -268,7 +276,7 @@ document.addEventListener('click', e=>{
   if (g('[data-ps]')) { S.sheet=g('[data-ps]').dataset.ps||null; return render(); }
   if (g('[data-step]')) { S.step=+g('[data-step]').dataset.step; S.cerr= S.cerr==='expired'?'expired':'none'; return render(); }
   if (g('[data-cerr]')) { S.cerr=g('[data-cerr]').dataset.cerr; S.step=0; return render(); }
-  if (g('[data-take]')) { e.stopPropagation(); const id=+g('[data-take]').dataset.take; const r=S.rows.find(x=>x.id===id); S.drawer={kind:'cust',id,claimed:false,confirm:false,taking:r.st==='card'}; return render(); }
+  if (g('[data-take]')) { e.stopPropagation(); const id=+g('[data-take]').dataset.take; const r=S.rows.find(x=>x.id===id); S.drawer={kind:'cust',id,claimed:false,confirm:false,taking:false,pane:r.st==='card'?'card':null}; return render(); }
   const a = g('[data-act]'); const row = g('[data-row]');
   if (!a && row && S.tab==='desk') { S.drawer={kind:'cust',id:+row.dataset.row,claimed:false,confirm:false,taking:false}; return render(); }
   if (!a) return;
@@ -278,7 +286,9 @@ document.addEventListener('click', e=>{
   else if (k==='submit') { if (S.banner==='none'||S.banner==='mail') S.drawer.pane=2; }
   else if (k==='toggleEmpty') S.empty=!S.empty;
   else if (k==='chem') S.drawer.confirm=true; else if (k==='cc'||k==='cdo') S.drawer.confirm=false;
-  else if (k==='take') S.drawer.taking=true;
+  else if (k==='take') S.drawer.pane='card';
+  else if (k==='back') S.drawer.pane=null;
+  else if (k==='stripe') { S.drawer.pane=null; S.drawer.taking=true; }
   else if (k==='simclaim') S.drawer.claimed=true;
   else if (k==='ret') { const id=S.drawer.id; setState(id,'activating'); S.drawer=null; live(t('actNote')); clearTimeout(S.activeTimer); S.activeTimer=setTimeout(()=>{setState(id,'active'); live(t('liveActive')); render();},2500); }
   render();
