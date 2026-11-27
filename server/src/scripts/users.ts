@@ -84,6 +84,7 @@ const USAGE = [
   '  firm-disable --organization-id <uuid>',
   '  firm-decline --organization-id <uuid>',
   '  billing-grant  (--email <email> | --organization-id <uuid>) --tier SOLO|BUSINESS|FIRM|FREELANCER|ACCOUNTANT --reason <text> [--expires <ISO date-time>]',
+  '                 [--cohort <slug> [--accountant <email>]]   a pilot (MUT-752): a person only, ends in 60 days unless --expires',
   '          covers the person\'s own profiles, or one profile (MUT-358); a pilot user gets one until their Stripe subscription is linked',
   '  billing-revoke --grant-id <uuid>',
   '  billing-grants [--email <email> | --organization-id <uuid>] [--active]',
@@ -162,6 +163,8 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         'dry-run': { type: 'boolean' },
         apply: { type: 'boolean' },
         feature: { type: 'string' },
+        cohort: { type: 'string' },
+        accountant: { type: 'string' },
       },
     }).values;
   } catch (e) {
@@ -303,6 +306,7 @@ interface GrantRow {
   reason: string;
   expiresAt: string | null;
   revokedAt: string | null;
+  cohort?: string | null;
 }
 
 interface BillingAccountRow {
@@ -316,7 +320,8 @@ interface BillingAccountRow {
 function describeGrant(g: GrantRow): string {
   const target = g.userId ? `person ${g.userId}` : `profile ${g.organizationId}`;
   const state = g.revokedAt ? `revoked ${g.revokedAt}` : g.expiresAt ? `until ${g.expiresAt}` : 'no expiry';
-  return `${g.id} ${g.tier} for ${target} (${state}): ${g.reason}`;
+  const pilot = g.cohort ? ` pilot ${g.cohort}` : '';
+  return `${g.id} ${g.tier}${pilot} for ${target} (${state}): ${g.reason}`;
 }
 
 /** MUT-373 (DR8): what the operator sends both partners when a profile becomes shared, in both languages. */
@@ -371,8 +376,15 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     const organizationId = optional('organization-id');
     if ((email === undefined) === (organizationId === undefined)) throw new CliError('give exactly one of --email and --organization-id');
     const expires = optional('expires');
+    const cohort = optional('cohort');
+    const accountant = optional('accountant');
+    if (accountant !== undefined && cohort === undefined) throw new CliError('--accountant names a pilot\'s referring accountant: give --cohort too');
     const target = email ? { userId: (await client.userByEmail(email)).id } : { organizationId };
-    const grant = await client.call<GrantRow>('POST', '/admin/v1/billing/grants', { ...target, tier: need('tier'), reason: need('reason'), ...(expires ? { expiresAt: expires } : {}) });
+    const pilot = {
+      ...(cohort !== undefined ? { cohort } : {}),
+      ...(accountant !== undefined ? { referredByUserId: (await client.userByEmail(accountant)).id } : {}),
+    };
+    const grant = await client.call<GrantRow>('POST', '/admin/v1/billing/grants', { ...target, tier: need('tier'), reason: need('reason'), ...(expires ? { expiresAt: expires } : {}), ...pilot });
     out(`granted: ${describeGrant(grant)}`);
   },
   'billing-revoke': async ({ client, need, out }) => {

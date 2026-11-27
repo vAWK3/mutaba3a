@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Pilot marker on grants, `pilot` on Billing, the Welcome flag (MUT-752 server, epic MUT-751, ADR-296, API 1.162.0-mut752)
+
+Plan `docs/designs/pilot-testers-business-plan.md` (APPROVED; eng review D1, D2, D4; build decisions P1–P6). Server only; the Pilot panel (MUT-753), usage lines (MUT-754), Welcome (MUT-755), phone (MUT-756) and the console's filter and chip (MUT-757 UI) come later. One additive migration, `20261127210000_mut752_pilot_grants`.
+
+### Added
+- `entitlement_grants.cohort` and `referredByUserId` (SET NULL), `users.pilotWelcomeSeenAt`; CHECKs: a pilot has an expiry, an accountant only on a pilot.
+- `cohort` and `referredByUserId` on `POST /admin/v1/billing/grants` and `POST /v1/operator/accounts/{userId}/billing-grants`, and on every grant read. A pilot is a person's, never ACCOUNTANT; no expiry given = 60 days. 422 `REFERRAL_NEEDS_PILOT`, `PILOT_NOT_ACCOUNTANT`, `PILOT_PERSON_ONLY`; 404 for an unknown accountant. Audit metadata carries both.
+- `billing:grant --cohort <slug> [--accountant <email>]`; `billing:grants` shows the cohort.
+- `billing/pilot.ts` (`pilotOf`, `pilotExpiryOf`, `isPilotCohort`, the prices parser) and `billing/pilot-prices.json` (Solo ₪39 / $12, Business ₪89 / $27, Firm ₪249 / $75 a month, Expected).
+- `GET /v1/billing` `pilot { cohort, endsAt, welcomeSeenAt, pricesExpected, plans[{ plan, expectedMonthly, limits }] }` or null.
+- `POST /v1/billing/pilot-welcome` → `{ welcomeSeenAt }` (idempotent; open in the lapse gate).
+- `store.billing.pilotWelcomeSeenOf`, `markPilotWelcomeSeen`, `hasLivePilot` (memory and Prisma; contract tests).
+
+### Changed
+- With `PAID_HARD_CAPS` on, a payer on a live pilot grant is counted, never refused (P6).
 ## [Unreleased] - 2026-11-27 — The accountant takes the card in the room (MUT-766 server half, epic MUT-762, ADR-295, API 1.161.0-mut766)
 
 Plan `docs/designs/accountant-channel.md` (eng SC-1, T5, R4, R5; build decisions B12–B16). Server only, dark behind `ACCOUNTANT_PROVISIONING` and `PLAN_CHECKOUT`. No migration. MONEY CODE: the existing billing tests (billing-routes, billing-core, billing-gate-routes, routes-accountant-plan) are unchanged and green.

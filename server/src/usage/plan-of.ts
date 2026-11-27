@@ -68,8 +68,15 @@ async function capRuleOf(store: PlanStore, subjectKey: string, plan: UsagePlan, 
   if (!store.billing.paidHardCaps || !PAID_HARD_CAP_PLANS.has(plan)) return null;
   const payer = userIdOfSubject(subjectKey);
   if (!payer) return null;
+  // MUT-752 (ADR-296 P6): a pilot tester is counted, never refused (plan: "no tester is blocked by a limit").
+  if (await onPilot(store, payer, now)) return null;
   const gift = (await store.billing.overCapGiftOf(payer)) ?? NO_GIFT;
   const month = usageMonthOf(now);
   const giftMeter = gift.meter && giftCovers(gift, gift.meter, month) ? gift.meter : null;
   return { paidHardCaps: true, giftMeter, giftAvailable: giftAvailable(gift, plan, true) };
+}
+
+/** MUT-752: the payer holds a live pilot grant (a cohort, not ACCOUNTANT). One read, only where a paid cap could refuse. */
+async function onPilot(store: PlanStore, userId: string, now: Date): Promise<boolean> {
+  return store.billing.hasLivePilot(userId, now);
 }

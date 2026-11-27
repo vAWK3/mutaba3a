@@ -330,8 +330,22 @@ export const EntitlementGrantSchema = z
     grantedBy: z.string(),
     createdAt: z.string().datetime(),
     revokedAt: z.string().datetime().nullable(),
+    /** MUT-752 (ADR-296): set on a pilot grant (it then always has `expiresAt`). Additive since 1.162.0-mut752. */
+    cohort: z.string().nullable(),
+    /** MUT-752: the accountant who referred the pilot tester; null otherwise. Additive since 1.162.0-mut752. */
+    referredByUserId: z.string().uuid().nullable(),
   })
   .openapi('EntitlementGrant');
+
+/**
+ * MUT-752 (ADR-296): a pilot grant's fields on both create requests. `cohort` (a lowercase slug, it goes to analytics)
+ * makes it a pilot: a person's own profiles, not ACCOUNTANT, with an expiry (60 days from now when none is given).
+ * `referredByUserId` (the referring accountant) only with `cohort`. Additive since 1.162.0-mut752.
+ */
+const PilotGrantFields = {
+  cohort: z.string().min(1).max(64).optional(),
+  referredByUserId: z.string().uuid().optional(),
+};
 
 /** POST /admin/v1/billing/grants: exactly one of userId, userEmail and organizationId. */
 export const CreateEntitlementGrantRequestSchema = z
@@ -342,6 +356,7 @@ export const CreateEntitlementGrantRequestSchema = z
     tier: BillingTierSchema,
     reason: z.string().trim().min(1).max(200),
     expiresAt: z.string().datetime().optional(),
+    ...PilotGrantFields,
   })
   .strict()
   .refine((b) => [b.userId, b.userEmail, b.organizationId].filter((v) => v !== undefined).length === 1, 'exactly one of userId, userEmail, organizationId')
@@ -659,6 +674,30 @@ export const BillingPlanSchema = z
   })
   .openapi('BillingPlan');
 
+/**
+ * MUT-752 (ADR-296): the free pilot a person is on: a live operator grant with a cohort, while they don't pay. `endsAt`
+ * is the grant's expiry (then the normal order: Starter with STARTER_PLAN on, else read-only). `plans`: Solo, Business
+ * and Firm with the Expected monthly price (minor units, before VAT; `pricesExpected` until MUT-761 sets final ones)
+ * and their limits; empty when the server's prices file is missing or malformed. Additive since 1.162.0-mut752.
+ */
+export const BillingPilotSchema = z
+  .object({
+    cohort: z.string(),
+    endsAt: z.string().datetime(),
+    welcomeSeenAt: z.string().datetime().nullable(),
+    pricesExpected: z.boolean(),
+    plans: z.array(
+      z.object({
+        plan: z.enum(['solo', 'business', 'firm']),
+        expectedMonthly: PerCurrencyAmountSchema,
+        limits: z.object({ businesses: z.number().int(), partners: z.number().int(), documentsPerMonth: z.number().int(), scansPerMonth: z.number().int() }),
+      }),
+    ),
+  })
+  .openapi('BillingPilot');
+
+export const PilotWelcomeSeenSchema = z.object({ welcomeSeenAt: z.string().datetime() }).openapi('PilotWelcomeSeen');
+
 export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
@@ -754,6 +793,8 @@ export const BillingOverviewSchema = z
     pendingChange: z.union([z.object({ plan: z.string(), since: z.string().datetime() }), z.null()]).optional(),
     /** MUT-734: where the person may move from the plan they pay for (both empty when no change is possible now). Additive since 1.157.0-mut734. */
     planChange: z.object({ canUpgradeTo: z.array(z.string()), canDowngradeTo: z.array(z.string()) }).optional(),
+    /** MUT-752 (ADR-296): the free pilot, else null. Additive since 1.162.0-mut752. */
+    pilot: z.union([BillingPilotSchema, z.null()]).optional(),
   })
   .openapi('BillingOverview');
 
@@ -2243,7 +2284,7 @@ export const OperatorBillingGrantListSchema = z
 
 /** MUT-462 (14A): coverage for the person's own profiles; the account in the path is who it covers. */
 export const OperatorCreateBillingGrantRequestSchema = z
-  .object({ tier: BillingTierSchema, reason: z.string().trim().min(1).max(200), expiresAt: z.string().datetime().optional() })
+  .object({ tier: BillingTierSchema, reason: z.string().trim().min(1).max(200), expiresAt: z.string().datetime().optional(), ...PilotGrantFields })
   .strict()
   .openapi('OperatorCreateBillingGrantRequest');
 

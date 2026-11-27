@@ -2527,6 +2527,10 @@ export interface EntitlementGrantRecord {
   grantedBy: string;
   createdAt: Date;
   revokedAt: Date | null;
+  /** MUT-752 (ADR-296): set = a pilot grant (billing/pilot.ts); a pilot always has `expiresAt`. */
+  cohort: string | null;
+  /** MUT-752: the accountant who referred the pilot tester; null otherwise (or once that account is deleted). */
+  referredByUserId: string | null;
 }
 
 /** A subscription as coverage sees it: with the paying person (null while the customer is unlinked). */
@@ -2568,6 +2572,10 @@ export interface CreateGrantInput {
   reason: string;
   expiresAt: Date | null;
   grantedBy: string;
+  /** MUT-752: a pilot's cohort (needs `expiresAt`: StateConflict PILOT_NEEDS_EXPIRY). Absent = not a pilot. */
+  cohort?: string | null | undefined;
+  /** MUT-752: the referring accountant (needs `cohort`: StateConflict REFERRAL_NEEDS_PILOT; ForeignKeyViolation if unknown). */
+  referredByUserId?: string | null | undefined;
   at: Date;
   /** Written in the same transaction (MUT-358 §2.6: one row per profile the grant reaches). */
   audit: AuditEventInput[];
@@ -2802,6 +2810,12 @@ export interface BillingRepository {
   setActiveBusinesses(userId: string, organizationIds: readonly string[], at: Date, audit: AuditEventInput[]): Promise<boolean>;
   /** MUT-731 (Basel Q7): the one-time Solo trial's dates; null for an unknown user. */
   paidTrialOf(userId: string): Promise<PaidTrialRecord | null>;
+  /** MUT-752 (ADR-296 P6): the person holds an unrevoked, unexpired pilot grant (a cohort, not ACCOUNTANT) at `at`. */
+  hasLivePilot(userId: string, at: Date): Promise<boolean>;
+  /** MUT-752 (ADR-296): when the person closed the pilot Welcome; null = not yet (or an unknown user). */
+  pilotWelcomeSeenOf(userId: string): Promise<Date | null>;
+  /** MUT-752: records the Welcome closed (first time only; later calls keep the first date). Null for an unknown user. */
+  markPilotWelcomeSeen(userId: string, at: Date): Promise<Date | null>;
   /** MUT-731: records that the web onboarding step showed the trial (first time only; later calls keep the first date). */
   markPaidTrialOffered(userId: string, at: Date): Promise<PaidTrialRecord | null>;
   /** MUT-702 Part B: records the Solo trial used when its trialing subscription first mirrors (first time only). */
