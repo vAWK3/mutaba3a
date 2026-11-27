@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-371: The portal-selfservice QA API keeps STARTER_PLAN and OPEN_SIGNUP off (Switch rollout, 2026-11-27)
+**Status**: Open (2026-11-27)
+- **What:** dev (`server/.env.example`) runs the production target with every switch on. `qa/support/selfservice-live.mjs` turns on all of them except `STARTER_PLAN` and `OPEN_SIGNUP`. Several recorded flows still expect the 14-day trial step or a waiting sign-up: `signup.create`, `signup.review-declined`, `operator.signups-approve` and `-decline`, `mail.mail-directional-art`, and the two `malafat-delegation` sign-ins (`passTrialWelcome`).
+- **Why it's acceptable:** both switches have their own unit and route tests, and the portal's Starter states run on the FakeApi (`portal/starter.spec.ts`). The QA API just doesn't cover them end to end yet.
+- **Fix:** with or before stage 2 of the Switch rollout (`docs/operations/before-release.md`), re-spec those flows for Starter: no trial step, signup opens at once, and approve and decline answer `SIGNUP_REVIEW_RETIRED`. Then turn both switches on in `selfservice-live.mjs`.
+
 ### TD-370: Pilot: no reminder before the end, no "last step reached" (MUT-752, MUT-757)
 **Status**: Open (2026-11-27)
 - **What:** nothing mails a pilot tester before the grant ends (eng review D3 deferred the day-45 and day-55 mails), and plan slice S5's "last step reached" is not recorded (only first scan and first invoice, from usage events).

@@ -35,6 +35,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Switch rollout: Terraform switches, the unclaimed sweep job, the staged order, dev and QA defaults (Basel)
+
+Infra and docs only; no production change. Basel chose a staged switch-on at release time. Target state:
+- **On:** STARTER_PLAN, PLAN_CHECKOUT, OPEN_SIGNUP, PAID_BUSINESS_CAPS, PAID_HARD_CAPS, ACCOUNTANT_PROVISIONING, TWO_FACTOR_ISSUING_GATE_ENABLED, MALAFAT_SIGN_IN, MALAFAT_DELEGATION.
+- **Off:** INVOICING_FOR_ALL, and ACCOUNTANT_PLAN until MUT-747.
+- **Removed:** PORTAL_LEGACY_REDIRECT, tracked in MUT-779.
+
+### Added
+- **Terraform variables:** `accountant_provisioning`, `malafat_sign_in` and `malafat_delegation` (bool, default false). Each sends only `"true"` to Cloud Run, as `open_signup` does. All three are listed, commented and off, in `production.tfvars.example`.
+- **Scheduler job:** `google_cloud_scheduler_job.accountant_unclaimed_sweep` (MUT-767, ADR-300). It is created only with `accountant_provisioning`, runs daily at 10:00 Jerusalem, posts to `/jobs/v1/accountants/unclaimed-sweep` with the job token, and pauses with the other jobs.
+- **Terraform tests:** the three switches in `tests/starter_plan.tftest.hcl`, and `tests/accountant_unclaimed_sweep.tftest.hcl` (142 pass).
+- **Rollout doc:** `docs/operations/before-release.md` "Switch rollout (Basel, 2026-11-27)", six stages. Each stage lists what must be live, the operator commands, the tfvars lines and the check. Stages 4 and 5 are marked waiting for UI. Stage 6 notes that MAL-1539 and MAL-1541 are still "Idea". A pointer item under `## server` makes `make release server` print it. The live catalog run is recorded as done on 2026-11-27, with nothing to change.
+- **Config test:** `config.test.ts` checks that `server/.env.example` boots with the target switches on, and with INVOICING_FOR_ALL and ACCOUNTANT_PLAN off.
+
+### Changed
+- **Dev defaults:** `server/.env.example` turns on STARTER_PLAN, PLAN_CHECKOUT, OPEN_SIGNUP, PAID_BUSINESS_CAPS, PAID_HARD_CAPS, TWO_FACTOR_ISSUING_GATE_ENABLED and MALAFAT_SIGN_IN (with the stub's origin template). ACCOUNTANT_PLAN is now off. The stale duplicate STARTER_PLAN block is gone.
+- **QA defaults:** `qa/support/selfservice-live.mjs` turns on PLAN_CHECKOUT, PAID_BUSINESS_CAPS, PAID_HARD_CAPS, TWO_FACTOR_ISSUING_GATE_ENABLED and ACCOUNTANT_PROVISIONING. STARTER_PLAN and OPEN_SIGNUP stay off until the trial and review flows are re-specced (TD-371).
+- **before-release items:** "Turning the Malafat switches on needs a code change first" now points to the new variables. The MUT-764/767 item names the variable and the job.
+- The root `.env.example` is unchanged: it holds no server switches.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Docs: the free 2-month pilot in the offer and the runbook (MUT-760, epic MUT-751)
 
 ### Added

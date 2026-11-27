@@ -590,6 +590,24 @@ variable "plan_checkout" {
   default     = false
 }
 
+variable "accountant_provisioning" {
+  description = "MUT-764..767 (ADR-292, 294, 295, 300): sets ACCOUNTANT_PROVISIONING=true: an operator-approved accountant creates a customer's account (POST /v1/accountant/customers), with the claim code, fresh links, the activation Checkout (also needs plan_checkout) and the daily unclaimed-sweep job (reminders, removal at 60 days). false (default) = those routes answer 404 and no sweep job exists; the operator can still approve an accountant ahead. Turn on only after the portal desk and claim page are live, TD-361 is settled in Stripe test mode and the restricted key allows Customers search (docs/operations/before-release.md, Switch rollout stage 5)."
+  type        = bool
+  default     = false
+}
+
+variable "malafat_sign_in" {
+  description = "MUT-595 (ADR-254 D1): sets MALAFAT_SIGN_IN=true: Sign in with Malafat (GET /v1/self-service says malafatSignIn: true; the portal and phone doors show). false (default) = its routes answer 404. Turn on only after Malafat lists this server's callback in MTB3A_SIGN_IN_REDIRECT_URIS and releases it (MAL-1539)."
+  type        = bool
+  default     = false
+}
+
+variable "malafat_delegation" {
+  description = "MUT-593 (ADR-254 D10): sets MALAFAT_DELEGATION=true: Malafat acts as each person with a delegated token, Connected apps and the operator's per-firm switch answer. false (default) = delegated tokens answer 401 and those routes 404. Turn on only after Malafat publishes its JWKS (MAL-1541) and its client is registered (npm run oauth:client -- register); each firm still needs the operator's per-firm switch."
+  type        = bool
+  default     = false
+}
+
 variable "solo_trial_offer_since" {
   description = "MUT-731 (ADR-284, Basel Q7): accounts created at or after this RFC 3339 instant are offered the one-time 14-day Solo trial in web onboarding (SOLO_TRIAL_OFFER_SINCE). Empty (default) = the step is off, until Solo can be bought (MUT-702 Part B)."
   type        = string

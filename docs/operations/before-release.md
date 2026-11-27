@@ -6,15 +6,16 @@ record the date where the item says.
 
 ## server
 
+- **Switch rollout (Basel, 2026-11-27):** the feature switches go on one stage per release, in the order of the "Switch rollout" section at the end of this file. Before each server release, check which stage is next and whether everything it needs is live. Delete this item when stage 6 is done.
 - **MUT-752 (API 1.162.0-mut752, ADR-296): pilot grants and `pilot` on Billing.** Migration `20261127210000_mut752_pilot_grants` (additive: three nullable columns, one key, two CHECKs every old row passes; merging it restarts the shared dev API). No new env. After the deploy, a pilot is `npm run billing:grant -- --email <tester> --tier BUSINESS --reason "pilot <accountant>" --cohort <slug> --accountant <accountant email>` (runbook `docs/operations/pilot-runbook.md`). Delete this item after the release.
 - **MUT-733 (API 1.159.0-mut733, ADR-293): paid plans' monthly caps after one gift, dark.** No migration. The deploy adds no env: `paid_hard_caps` defaults off (Solo and Business are counted, never refused, as today). **Turn it on only after:** `plan_checkout` on, MUT-734's plan change live (a subscriber at the cap must be able to upgrade), and the phone build that shows the gift live in both stores. To undo: `paid_hard_caps = false`. Delete this item after the release.
-- **MUT-764 (API 1.158.0-mut764, ADR-292): an accountant creates a customer's account, dark.** No migration of its own (MUT-763's `20261127150000_mut763_accountant_provisioning` must be applied first). Leave `ACCOUNTANT_PROVISIONING` unset (off) in production; there is no Terraform variable for it yet, so add one (default false) with its Cloud Run env before the pilot. The operator can approve the partner ahead of time (Operator console, `PUT /v1/operator/accounts/{id}/accountant-provisioning`). **MUT-765/766 (API 1.160.0, 1.161.0; ADR-294, ADR-295), same switch:** the claim code, fresh links and the activation Checkout (also needs `plan_checkout`). Before turning the switch on: one activation in Stripe test mode to settle TD-361 (does Checkout store an email on a customer with none?), and the restricted key must allow Customers search. **MUT-767 (API 1.170.0, ADR-300):** add a daily Cloud Scheduler job `POST /jobs/v1/accountants/unclaimed-sweep` with the job token (like the usage prune) before the switch goes on; the hourly account purge must be running. Delete this item after the release.
+- **MUT-764 (API 1.158.0-mut764, ADR-292): an accountant creates a customer's account, dark.** No migration of its own (MUT-763's `20261127150000_mut763_accountant_provisioning` must be applied first). Leave `ACCOUNTANT_PROVISIONING` off in production until "Switch rollout" stage 5 (Terraform `accountant_provisioning`, default false). The operator can approve the partner ahead of time (Operator console, `PUT /v1/operator/accounts/{id}/accountant-provisioning`). **MUT-765/766 (API 1.160.0, 1.161.0; ADR-294, ADR-295), same switch:** the claim code, fresh links and the activation Checkout (also needs `plan_checkout`). Before turning the switch on: one activation in Stripe test mode to settle TD-361 (does Checkout store an email on a customer with none?), and the restricted key must allow Customers search. **MUT-767 (API 1.170.0, ADR-300):** the daily Cloud Scheduler job `POST /jobs/v1/accountants/unclaimed-sweep` comes with `accountant_provisioning = true` (Terraform creates it only then); the hourly account purge must be running. Delete this item after the release.
 - **MUT-734 (API 1.157.0-mut734, ADR-291): change plan, dark.** Migration `20261127180000_mut734_plan_changes` (additive: one new table; merging it restarts the shared dev API). The deploy adds no env: plan changes need `plan_checkout`, and `paid_business_caps` defaults off. **Before turning `paid_business_caps` on** (with the pricing release): `billing:uncovered` and Operator › Usage for Solo/Business/Firm payers over their count (they will be asked to pick). The restricted live key needs Write on Subscription Schedules. To undo: `paid_business_caps = false`. Delete this item after the release.
 - **MUT-750 slice A (API 1.156.0-mut750, ADR-290): the Israeli VAT follows plan changes and address moves.** No migration, no new env. Nothing changes for anyone until plan Checkouts sell (`plan_checkout`): only Solo/Business/Firm subscriptions are re-taxed, and the legacy Freelancer plan keeps Stripe Tax. The webhook endpoint already receives `customer.updated`. Delete this item after the release.
 - **MUT-737 (API 1.155.0-mut737, ADR-289): open sign-up, dark.** No migration. The deploy adds no env: `open_signup` defaults to false (and Terraform refuses it without `starter_plan`). **Order to turn it on:** (1) `starter_plan = true` (the MUT-731 item), released; (2) `npm --prefix server run signups:release` (dry run: who is still waiting), then `-- --apply` (each opens on Starter and gets the ready mail once; exit 1 lists failures, re-run is safe); (3) with `plan_checkout` and the portal's `SOLO_TRIAL_CHECKOUT` (plan Q2: all together), `open_signup = true` in `production.tfvars`, `make release server`; (4) run `signups:release -- --apply` once more for any sign-up redeemed between (2) and (3). To undo: `open_signup = false` (new webmail sign-ups wait for review again). Delete this item after the release.
 - **MUT-742 (API 1.148.0-mut742, ADR-287): jurisdiction and pack version on every issued document.** Migration `20261127140000_mut742_issuing_jurisdiction` (additive: two columns on `issued_documents` with constant defaults `IL` and `1.0.0`, a CHECK added `NOT VALID` then validated, `issuer_details.vatIdScheme`, `vatId` and `customers.taxId` widened to 32; no row of any table is rewritten and no INSERT-only trigger fires; merging it restarts the shared dev API and needs one `prisma generate`). The deploy adds no env. **Rollback hazard (read before rolling the API back past it):** the columns stay and keep their defaults, so an older API image still issues, stamped `IL` and `1.0.0`; that is correct only while Israel is the only live country (`INVOICING_JURISDICTIONS=IL`), so never roll back past this migration once a second country has issued a document. Nothing else needs undoing: no table was added, so the retention sweep and erase of an older image miss nothing. Delete this item after the release.
 - **MUT-740 (API 1.147.0-mut740, ADR-287 D1/D4): the issuer's country.** Migration `20261127130000_mut740_issuer_country` (additive: `issuer_details.country` NOT NULL DEFAULT 'IL' with a CHECK; merging it restarts the shared dev API; a rollback leaves the column). The deploy adds no env: `invoicing_jurisdictions` defaults to `"IL"`, so nothing changes today. Before turning `invoicing_for_all` on, deploy this and the web with it (the portal's Business details asks for the country). A shipped phone build sends no country: the server keeps `IL`, so it still saves. An Israeli issuer re-saving details now needs a number with a valid check digit (a legacy invalid one is refused until corrected). Delete this item after the release.
-- **MUT-702 Part B (API 1.146.0-mut702b, ADR-288): buying Solo, Business and Firm, dark.** Migration `20261127120000_mut702b_provider` (two columns with defaults, additive; merging it restarts the shared dev API). The deploy adds no env: `plan_checkout` defaults to false, so only the Freelancer Checkout sells. **Before turning it on (Basel):** (1) the live Stripe key's scopes add Write on Products, Prices and Tax Rates (and keep Customers, Checkout Sessions and Customer portal); (2) Stripe Tax's head office in the live account (Barmajiyat's UK address), and Barmajiyat's Israeli VAT file open (ADR-286, MUT-749) before the first Israeli charge; (3) the catalog: `STRIPE_SECRET_KEY=<rk_live_…> npm --prefix server run billing:plans` (dry run), then `-- --apply --live`, then the dry run again must say nothing to do; then `npm --prefix server run billing:product-tiers`; (4) in the Customer Portal settings, let customers edit their billing address; (5) with MUT-703 (offers per plan): `plan_checkout = true` in `production.tfvars`, `make release server`; the plan changes only the service env (`PLAN_CHECKOUT=true`). Then Starter (the MUT-731 item) and the Solo trial (`solo_trial_offer_since`, the portal's `SOLO_TRIAL_CHECKOUT`). To undo: `plan_checkout = false`. Delete this item after the release.
+- **MUT-702 Part B (API 1.146.0-mut702b, ADR-288): buying Solo, Business and Firm, dark.** Migration `20261127120000_mut702b_provider` (two columns with defaults, additive; merging it restarts the shared dev API). The deploy adds no env: `plan_checkout` defaults to false, so only the Freelancer Checkout sells. **Before turning it on (Basel):** (1) the live Stripe key's scopes add Write on Products, Prices and Tax Rates (and keep Customers, Checkout Sessions and Customer portal); (2) Stripe Tax's head office in the live account (Barmajiyat's UK address), and Barmajiyat's Israeli VAT file open (ADR-286, MUT-749) before the first Israeli charge; (3) the catalog: `STRIPE_SECRET_KEY=<rk_live_…> npm --prefix server run billing:plans` (dry run), then `-- --apply --live`, then the dry run again must say nothing to do (**done 2026-11-27: the live catalog was already right, nothing changed**); then `npm --prefix server run billing:product-tiers`; (4) in the Customer Portal settings, let customers edit their billing address; (5) with MUT-703 (offers per plan): `plan_checkout = true` in `production.tfvars`, `make release server`; the plan changes only the service env (`PLAN_CHECKOUT=true`). Then Starter (the MUT-731 item) and the Solo trial (`solo_trial_offer_since`, the portal's `SOLO_TRIAL_CHECKOUT`). To undo: `plan_checkout = false`. Delete this item after the release.
 - **MUT-731 (API 1.145.0-mut731, ADR-284): the free Starter plan, dark.** Migration `20261126120000_mut731_starter` (additive, nullable; merging it restarts the shared dev API). The deploy adds no env: `starter_plan` and `solo_trial_offer_since` default off, so nothing changes. **Order to turn Starter on (brief §5):** (1) this API with both off; (2) the web release (it reads only additive fields); (3) the phone build that parses `PLAN_LIMIT` live in both stores (released phones treat an unknown 409 as terminal); (4) `npm --prefix server run billing:reconcile` so every lapsed subscription has `endedReason` and `trialEnd` (a null reason reads as a deliberate cancel: read-only); (5) a dry look: `billing:uncovered` and Operator › Usage for who moves to Starter and who will be asked to pick a business; check `MONTHLY_SUMMARY_DAILY_SENDS` against the Starter people the summary now reaches (Q8); (6) with MUT-702 Part B and MUT-705: `starter_plan = true` in `production.tfvars`, `make release server`, plan changes only the service env (`STARTER_PLAN=true`). The Solo trial: set `solo_trial_offer_since` to the release instant only once Checkout sells Solo with `trial: true` (TD-344) and the portal's `SOLO_TRIAL_CHECKOUT` is on. To undo: `starter_plan = false` (everyone returns to today's states; nothing to migrate back). Delete this item after the release.
 - **MUT-736 (API 1.143.0-mut736, ADR-282): invoicing for everyone; the Tax Authority connection on paid plans.** No migration, nothing refused today (no plan resolves to Starter before MUT-731). The deploy adds no env: `invoicing_for_all` defaults to false, so issuing still follows the operator's per-person grant. **To open invoicing to everyone (Basel's call; Q6: before Starter):** set `invoicing_for_all = true` in `production.tfvars` and `make release server`; check the plan changes only `google_cloud_run_v2_service.api` (new env `INVOICING_FOR_ALL=true`). Check after: a person with no grant sees Invoicing under You › Profiles on a business profile, and `/v1/me` lists `invoicing` (a shipped phone build then shows issuing). MUT-710's two-step gate still applies where it is on. To undo (the kill switch): set it back to false and apply; people with the grant keep issuing. Release the web with it (step 5's Upgrade reads only additive fields). Delete this item after the release.
 
@@ -58,7 +59,7 @@ record the date where the item says.
 - **MUT-595 (API 1.112.0-mut595): Sign in with Malafat ships dark.** api-v0.17.0 (2026-11-13) migrated `20261112160000_mut595_malafat_sign_in` (additive); it is off in production (`GET /v1/self-service` answers `malafatSignIn: false`). To open it: Malafat lists `https://app.mtb3a.com/v1/auth/malafat/callback` in `MTB3A_SIGN_IN_REDIRECT_URIS` and releases (MAL-1539), then set `MALAFAT_SIGN_IN=true` here and release; the portal (MUT-596) and phone (MUT-597) doors follow `GET /v1/self-service`.malafatSignIn. Delete this item when it's open, and record the date on MUT-595.
 
 - **MUT-596 (API 1.113.0-mut596, ADR-254): the portal's Malafat screens follow the switches, with nothing to set.** api-v0.17.0 (2026-11-13) migrated `20261112180000_mut596_password_chosen` (additive: `users.passwordChosen`, no backfill: existing accounts read as having chosen theirs). The portal's Sign in with Malafat button shows only while `MALAFAT_SIGN_IN=true` (the MUT-595 item), Connected apps and a firm's members only where Malafat access is on (the MUT-593 item). Left from the deploy check: confirm in the live portal that Change password still asks for the current one (the switch itself reads off). Delete this item when Sign in with Malafat is open, and record the date on MUT-596.
-- **Turning the Malafat switches on needs a code change first (found in the 0.1.22 release prep):** `MALAFAT_SIGN_IN` and `MALAFAT_DELEGATION` have no Terraform variable, so "set it here" in the MUT-595 and MUT-593 items can't be done by a tfvars edit yet. Add the two variables (default false) and their Cloud Run env wiring before the pilot.
+- **The Malafat switches are Terraform variables now:** `malafat_sign_in` and `malafat_delegation` (default false) in `production.tfvars` send `MALAFAT_SIGN_IN=true` / `MALAFAT_DELEGATION=true` to Cloud Run, so "set it here" in the MUT-595 and MUT-593 items is a tfvars line. When to set them: "Switch rollout", stage 6, below.
 - **MUT-593 (API 1.109.0-mut593, ADR-254): Malafat's delegated access ships dark.** api-v0.17.0 (2026-11-13) migrated `20261112120000_mut593_delegated_access` (additive). Leave `MALAFAT_DELEGATION` unset (off) in production until the pilot. For the pilot with Sader's office: (1) once Malafat publishes its JWKS (MAL-1541), register it with `MUTABA3A_ADMIN_TOKEN=… npm run oauth:client -- register --url "$URL" --name Malafat --jwks-uri <https URL> --redirect-uri <Malafat's callback>` and give Malafat the `clientId`; (2) set `MALAFAT_DELEGATION=true` and release; (3) turn the firm's switch on in the operator console (`POST /v1/operator/organizations/{id}/malafat-delegation`). If Malafat's key is ever compromised: `npm run oauth:client -- disable --url "$URL" --client-id <id>`. Delete this item when the pilot firm is on, and record the date on MUT-593.
 
 - **MUT-558 (0.1.20): accountant access is live with the global switches on** since api-v0.16.0 (2026-11-07; `ACCOUNTANT_ACCESS`, `SHARE_LINKS`, `PERIOD_DOWNLOADS` = `true`; `ACCOUNTANT_PLAN` stays off, accountants are free). The privacy policy that covers it (MUT-382, Last updated November 7, 2026) is live since web-v0.3.4 (2026-11-13), so `accountant_access` may now be granted beyond Basel's own account. Delete this item once the first grant to someone else is made, and record the date on MUT-558.
@@ -143,3 +144,114 @@ record the date where the item says.
 - MUT-291's carry-over is merged and `config/hosts.json` is at stage `live`, so the next `make release web` turns on the old app's carry-over screen. **Release the server first**: `/carry-over/receive` ships in the API image. With web first, every carry-over falls back to the file after 10 s (TD-232). Then `DEPLOYMENT.md` §5a step 6 (the day-7 check, then stage `redirect`). The same order holds for any later change to the free app's Dexie version. Keep the `mutaba3a.netlify.app` site name reserved for as long as a build trusts it (TD-231). Delete this item once the day-7 check passes, and record the date on MUT-291.
 - MUT-402 ships the outlined MTB3A logotype (`src/assets/brand/wordmark.svg`). Attach Thmanyah's written OK for the outlined logotype to MUT-401 (Basel reports they confirmed it on 2026-10-22; brand-v2 decision 4 keeps this a guardrail, not a blocker). Delete this item and record the date on MUT-402.
 - MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. `make release web` now waits for the live document and checks it (`npm run release:oauth-client`); it printed ✓ for web-v0.3.4 on 2026-11-13. Left: in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.
+
+## Switch rollout (Basel, 2026-11-27)
+
+Target: **on** `STARTER_PLAN`, `PLAN_CHECKOUT`, `OPEN_SIGNUP`, `PAID_BUSINESS_CAPS`, `PAID_HARD_CAPS`, `ACCOUNTANT_PROVISIONING`, `TWO_FACTOR_ISSUING_GATE_ENABLED`, `MALAFAT_SIGN_IN`, `MALAFAT_DELEGATION`; **off** `INVOICING_FOR_ALL` and `ACCOUNTANT_PLAN` (until MUT-747); **removed** `PORTAL_LEGACY_REDIRECT` (its own ticket). One stage per server release, in this order. Each switch is one line in the git-ignored `server/infrastructure/terraform/production.tfvars`, then `make release server`; the plan must change only `google_cloud_run_v2_service.api`'s env (stage 5 also adds one Scheduler job). To undo a stage, set its lines back to `false` and release.
+
+This section isn't printed by `make release` (only `## server` and `## web` are); the first item under `## server` points here. The facts below come from the items above, ADR-284, 288, 289, 291–300 and the plans in `.claude/designs` and `docs/designs`. As of 2026-11-27 production runs API 1.141.0 (`api-v0.21.0`) and web `web-v0.4.0`: none of the code these switches turn on is released yet.
+
+**WAITING FOR UI** marks a stage that needs screens that aren't built yet.
+
+### Stage 1: `STARTER_PLAN` + `PLAN_CHECKOUT` (MUT-731, MUT-702 Part B; ADR-284, ADR-288)
+
+- **Live first:**
+  - The API with MUT-731 (1.145.0), MUT-702 Part B (1.146.0) and MUT-750 slice A (1.156.0), released with both switches off. Their migrations: `20261126120000_mut731_starter` and `20261127120000_mut702b_provider`.
+  - The web release with the portal's Starter notices, business pick and plan Subscribe step. These are built on main but not in `web-v0.4.0`.
+  - The phone build that parses `PLAN_LIMIT`, live in both stores. Released phones treat an unknown 409 as terminal. The Flutter checkout (0.2.1+25) handles it; confirm that build is live.
+  - MUT-703 (offers per plan) and MUT-705 (the portal's plan picker): the MUT-702 Part B and MUT-731 items above turn the switches on "with" them. Both are Backlog in Jira.
+- **Operator steps (Basel):**
+  1. The live restricted key adds Write on Products, Prices and Tax Rates, and keeps Customers, Checkout Sessions and Customer portal.
+  2. Stripe Tax's head office in the live account is Barmajiyat's UK address. Barmajiyat's Israeli VAT file must be open before the first Israeli charge (ADR-286, MUT-749; Backlog).
+  3. ~~The catalog: `npm --prefix server run billing:plans -- --apply --live`~~ **Done 2026-11-27, nothing to change.** The run found the Israeli VAT rate, the 3 products and all 12 prices already right.
+  4. `npm --prefix server run billing:product-tiers`.
+  5. In the Customer Portal settings, let customers edit their billing address.
+  6. `npm --prefix server run billing:reconcile`, so every lapsed subscription has `endedReason` and `trialEnd`. A null reason reads as a deliberate cancel, which stays read-only.
+  7. A dry look: run `npm run billing:uncovered` and open Operator › Usage to see who moves to Starter and who will be asked to pick a business. Check `monthly_summary_daily_sends` against the Starter people the summary now reaches.
+- **tfvars:** `plan_checkout = true` and `starter_plan = true`. Leave `solo_trial_offer_since` unset. The Solo trial waits until Checkout sells Solo with `trial: true` (TD-344) and the portal's `SOLO_TRIAL_CHECKOUT` is on. It is `false` in `SoloTrialStep.tsx` today.
+- **Check:**
+  - `GET /v1/billing` lists the Solo, Business and Firm `plans`.
+  - `GET /v1/self-service` says `starterPlan: true`.
+  - An account with nothing covering it reads ACTIVE on Starter (`/v1/me` `plan.current`).
+  - A fourth document in a month on Starter answers 409 `PLAN_LIMIT`.
+  - A Subscribe from the portal reaches Stripe's page in the address's currency. An Israeli address shows VAT on top.
+
+### Stage 2: `OPEN_SIGNUP` (MUT-737, ADR-289)
+
+- **Live first:**
+  - Stage 1 released. Terraform and the server refuse `open_signup` without `starter_plan`.
+  - The API with MUT-737 (1.155.0).
+  - The MUT-737 item above turns it on with `plan_checkout` and the portal's `SOLO_TRIAL_CHECKOUT` (plan Q2: all together), so the Solo trial in stage 1 is its prerequisite.
+- **Operator steps:**
+  1. `npm --prefix server run signups:release` (dry run: who is still waiting).
+  2. `npm --prefix server run signups:release -- --apply`. Each person opens on Starter and gets the ready mail once. Exit 1 lists failures; a re-run is safe.
+  3. After the release, run `signups:release -- --apply` once more for any sign-up redeemed in between.
+- **tfvars:** `open_signup = true`.
+- **Check:**
+  - A new webmail sign-up opens ACTIVE on Starter with no review.
+  - The operator's approve and decline answer 409 `SIGNUP_REVIEW_RETIRED`.
+  - No hourly review digest arrives.
+
+### Stage 3: `TWO_FACTOR_ISSUING_GATE_ENABLED` (MUT-710, ADR-274 D10)
+
+- **Live first:**
+  - The portal screens that turn two-step sign-in on. They are built on main but not in `web-v0.4.0`, so the next web release carries them.
+  - The phone build that turns it on, live in both stores. The Flutter checkout has it; confirm that build is live.
+  - Every person who issues (sader@, review@) has turned two-step sign-in on. Otherwise they get 403 `TWO_FACTOR_SETUP_REQUIRED`.
+- **Operator steps:** none besides the check above (see the MUT-710 item, point 2).
+- **tfvars:** `two_factor_issuing_gate_enabled = true`.
+- **Check:**
+  - sader@ issues a document after signing in with the second step.
+  - An issuer without two-step sign-in gets 403 `TWO_FACTOR_SETUP_REQUIRED` on `PUT /v1/issuer` and sees the portal's prompt.
+
+### Stage 4: `PAID_BUSINESS_CAPS` + `PAID_HARD_CAPS` (MUT-734, MUT-733; ADR-291, ADR-293). **WAITING FOR UI**
+
+- **Live first:**
+  - Stage 1 (`plan_checkout`).
+  - The API with MUT-734 (1.157.0; migration `20261127180000_mut734_plan_changes`) and MUT-733 (1.159.0).
+  - **Change plan in the portal:** the Change-plan pane, the scheduled line with Undo, and "Move to Starter instead". The MUT-734 plan calls these "left for the UI half"; not built. A subscriber at the cap must be able to upgrade.
+  - **The gift screens:** the portal's gift notice and held-request retry (MUT-733's portal slice; not built), and the phone build with the gift sheet live in both stores (MUT-706; Backlog). Older phone builds would show a hard cap where a gift was due.
+- **Operator steps:**
+  1. The live restricted key adds Write on Subscription Schedules.
+  2. Before `paid_business_caps`: `npm run billing:uncovered` and Operator › Usage for Solo, Business and Firm payers over their count. They will be asked to pick.
+- **tfvars:** `paid_business_caps = true` and `paid_hard_caps = true`.
+- **Check:**
+  - A Solo payer's second business answers 409 `PLAN_LIMIT` `businesses`.
+  - A Solo or Business payer at the document cap gets 409 `PLAN_LIMIT` with `gift: 'available'` once. After the gift the meter lifts until the 1st.
+  - Firm is never refused.
+
+### Stage 5: `ACCOUNTANT_PROVISIONING` (MUT-763..767; ADR-292, 294, 295, 300). **WAITING FOR UI**
+
+- **Live first:**
+  - Stage 1 (`plan_checkout`, for the activation Checkout).
+  - The API with MUT-764..767 (1.158.0 to 1.170.0) and MUT-763's migration `20261127150000_mut763_accountant_provisioning`.
+  - **The accountant screens:** the portal desk (MUT-768, In Progress) and the public claim page with the code field. The plan's order is migrate → server (switch off) → portal desk → switch on for the partner → widen. Phone surfaces are a later follow-up (plan T10/DT8), not part of this stage.
+- **Operator steps:**
+  1. One activation in Stripe test mode to settle TD-361: does Checkout store an email on a customer that has none?
+  2. The live restricted key allows Customers search.
+  3. The hourly account purge is running. It deletes what the sweep expires at day 60.
+  4. Approve the partner accountant ahead in the Operator console (`PUT /v1/operator/accounts/{id}/accountant-provisioning`; this works while the switch is off).
+- **tfvars:** `accountant_provisioning = true`. The plan also adds `google_cloud_scheduler_job.accountant_unclaimed_sweep` (`mutaba3a-accountant-unclaimed-sweep`, daily 10:00 Jerusalem, `POST /jobs/v1/accountants/unclaimed-sweep` with the job token).
+- **Check:**
+  - The approved accountant's Add customer creates an account and shows the code once.
+  - The customer gets the `customer-setup` mail.
+  - `gcloud scheduler jobs run mutaba3a-accountant-unclaimed-sweep --location=europe-west1` answers 200.
+
+### Stage 6: `MALAFAT_SIGN_IN` + `MALAFAT_DELEGATION` (MUT-595, MUT-593; ADR-254)
+
+- **Malafat's side is still "Idea" in Jira:** MAL-1539 (the tenant OAuth server's userinfo and MTB3A's redirect URIs) and MAL-1541 (each lawyer's connection: the token store, `private_key_jwt`, the generated MTB3A client). This stage waits for both.
+- **Live first:**
+  - Malafat lists `https://app.mtb3a.com/v1/auth/malafat/callback` in `MTB3A_SIGN_IN_REDIRECT_URIS` and releases it (MAL-1539).
+  - Malafat publishes its JWKS (MAL-1541).
+  - The portal's Malafat screens are in the API image already (MUT-596).
+  - The phone's Sign in with Malafat and Connected apps (MUT-597, In Review), live in both stores.
+- **Operator steps:**
+  1. Register Malafat's client: `MUTABA3A_ADMIN_TOKEN=… npm run oauth:client -- register --url "$URL" --name Malafat --jwks-uri <https URL> --redirect-uri <Malafat's callback>`, and give Malafat the `clientId`.
+  2. After the release, turn the pilot firm (Sader's office) on in the operator console (`POST /v1/operator/organizations/{id}/malafat-delegation`).
+- **tfvars:** `malafat_sign_in = true` and `malafat_delegation = true`.
+- **Check:**
+  - `GET /v1/self-service` says `malafatSignIn: true`, and the portal shows Sign in with Malafat.
+  - A lawyer of the pilot firm signs in through Malafat.
+  - Connected apps lists Malafat.
+  - Change password still asks for the current password (MUT-596 item).
+  - If Malafat's key is ever compromised: `npm run oauth:client -- disable --url "$URL" --client-id <id>`.
