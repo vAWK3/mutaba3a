@@ -102,6 +102,12 @@ export const ERROR_CODES = {
   ACCOUNTANT_PLAN_REQUIRED: 402,
   /** MUT-764 (accountant channel): creating a customer's account needs the operator's approval, which this person doesn't have (or was withdrawn). */
   ACCOUNTANT_NOT_APPROVED: 403,
+  /** MUT-765: a provisioned account's claim code is wrong; `details.triesLeft`. The fifth wrong try locks it (CLAIM_CODE_LOCKED). */
+  CLAIM_CODE_WRONG: 403,
+  /** MUT-765: the claim code took five wrong tries and no longer works; the accountant issues a new one. */
+  CLAIM_CODE_LOCKED: 403,
+  /** MUT-765 (ACCT-10): a setup action on a customer who has already claimed their account; only the read grant remains. */
+  CUSTOMER_CLAIMED: 403,
   /**
    * MUT-559 (ADR-245, D4): an accountant invite accepted by someone else: neither the invited address nor a colleague
    * on the same business domain (webmail, disposable and relay domains never match). `details.maskedEmail` names the

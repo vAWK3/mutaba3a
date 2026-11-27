@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.158.0-mut764
+  version: 1.160.0-mut765
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, SIGNUP_REVIEW_RETIRED, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, CLAIM_CODE_WRONG, CLAIM_CODE_LOCKED, CUSTOMER_CLAIMED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, SIGNUP_REVIEW_RETIRED, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -796,6 +796,9 @@ components:
                 - SUBSCRIPTION_LAPSED
                 - ACCOUNTANT_PLAN_REQUIRED
                 - ACCOUNTANT_NOT_APPROVED
+                - CLAIM_CODE_WRONG
+                - CLAIM_CODE_LOCKED
+                - CUSTOMER_CLAIMED
                 - INVITE_EMAIL_MISMATCH
                 - SHARE_LINK_REFUSED
                 - FEATURE_NOT_ENABLED
@@ -1494,6 +1497,21 @@ components:
                     - email
               required:
                 - method
+            claim:
+              type: object
+              properties:
+                accountantName:
+                  type: string
+                  nullable: true
+                businessName:
+                  type: string
+                  nullable: true
+                codeLocked:
+                  type: boolean
+              required:
+                - accountantName
+                - businessName
+                - codeLocked
           required:
             - state
             - email
@@ -1528,6 +1546,27 @@ components:
           pattern: ^[A-Za-z0-9_-]{43}$
       required:
         - token
+    SetupLinkClaimCodeResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          enum:
+            - true
+      required:
+        - ok
+    SetupLinkClaimCodeRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+        claimCode:
+          type: string
+          pattern: ^\s*\d{3}\s?\d{3}\s*$
+      required:
+        - token
+        - claimCode
     SetupLinkTwoFactor:
       type: object
       properties:
@@ -1598,6 +1637,9 @@ components:
           type: string
           minLength: 8
           maxLength: 20
+        claimCode:
+          type: string
+          pattern: ^\s*\d{3}\s?\d{3}\s*$
       required:
         - token
         - password
@@ -2046,6 +2088,105 @@ components:
         - profileName
         - defaultCurrency
         - timezone
+      additionalProperties: false
+    ProvisionedCustomers:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProvisionedCustomerRow"
+        nextBefore:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - items
+        - nextBefore
+    ProvisionedCustomerRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        profile:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+          required:
+            - id
+            - name
+        provisionedAt:
+          type: string
+          format: date-time
+        state:
+          type: string
+          enum:
+            - awaiting_claim
+            - link_expired
+            - code_locked
+            - claimed
+        link:
+          type: object
+          nullable: true
+          properties:
+            expiresAt:
+              type: string
+              format: date-time
+            mailStatus:
+              type: string
+              nullable: true
+              enum:
+                - PENDING
+                - SENT
+                - FAILED
+                - null
+          required:
+            - expiresAt
+            - mailStatus
+      required:
+        - userId
+        - email
+        - displayName
+        - profile
+        - provisionedAt
+        - state
+        - link
+    ProvisionedLink:
+      type: object
+      properties:
+        claimCode:
+          type: string
+          pattern: ^\d{6}$
+        email:
+          type: string
+        linkExpiresAt:
+          type: string
+          format: date-time
+        mailSent:
+          type: boolean
+      required:
+        - email
+        - linkExpiresAt
+        - mailSent
+    ProvisionChangeEmailRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+      required:
+        - email
       additionalProperties: false
     IntegrationStatusResponse:
       type: object
@@ -18802,6 +18943,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/account-setup/claim-code:
+    post:
+      tags:
+        - Sessions
+      summary: Check the claim code of an account an accountant created, before the password step (MUT-765)
+      description: "For a valid link whose check answered `claim`. The code the accountant said; spaces are ignored. A wrong one is counted (403 CLAIM_CODE_WRONG, `details.triesLeft`); the fifth locks it (403 CLAIM_CODE_LOCKED: the accountant issues a new link and code). The redeem checks it again. 409 CONFLICT reason NO_CLAIM_CODE for a link that carries none. Additive since 1.160.0-mut765."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupLinkClaimCodeRequest"
+      responses:
+        "200":
+          description: The code is right
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupLinkClaimCodeResponse"
+        "403":
+          description: CROSS_SITE_REQUEST, CLAIM_CODE_WRONG (details.triesLeft) or CLAIM_CODE_LOCKED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT reason NO_CLAIM_CODE — this link needs no code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "410":
+          description: SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/account-setup/two-factor:
     post:
       tags:
@@ -18872,7 +19063,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/SetupLinkRedeemResponse"
         "403":
-          description: "CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED"
+          description: "CROSS_SITE_REQUEST; CLAIM_CODE_WRONG or CLAIM_CODE_LOCKED (MUT-765: a link whose check answered `claim` needs `claimCode`); TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED"
           content:
             application/json:
               schema:
@@ -19677,6 +19868,159 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: "RATE_LIMITED: the daily limit, details.limit CREATE_PER_DAY or LOOKUP_PER_DAY, with details.max and Retry-After"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Accountants
+      summary: The customers you created and where each one is in claiming their account (MUT-765)
+      description: "Newest first; `limit` up to 500 (default 100), then `before` = the previous `nextBefore`. `state`: awaiting_claim, link_expired, code_locked (five wrong codes; issue a new link), or claimed (only the read access remains). 403 ACCOUNTANT_NOT_APPROVED; 404 while the feature is off. Additive since 1.160.0-mut765."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+            format: date-time
+          required: false
+          name: before
+          in: query
+      responses:
+        "200":
+          description: The customers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionedCustomers"
+        "403":
+          description: ACCOUNTANT_NOT_APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The feature is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant/customers/{userId}/link:
+    post:
+      tags:
+        - Accountants
+      summary: Send the customer a fresh setup link with a new claim code (MUT-765)
+      description: "Resend and New code are this one action: the old link and code stop working, a fresh 14-day link is mailed and the new code is in this answer only (a replay of the same Idempotency-Key returns the rest without it). Only while the customer has not claimed. Additive since 1.160.0-mut765."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: A fresh link was mailed; the claim code is in this answer only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionedLink"
+        "403":
+          description: "ACCOUNTANT_NOT_APPROVED, or CUSTOMER_CLAIMED: the customer has claimed the account, so only your read access remains"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No customer you created by this id, or the feature is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT reason EMAIL_TAKEN: another account has that address"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, or VALIDATION_FAILED (details.reason ADDRESS_REFUSED for a throwaway or relay address)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED details.limit REISSUE_PER_DAY: 5 fresh links a day per customer, with Retry-After"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant/customers/{userId}/email:
+    put:
+      tags:
+        - Accountants
+      summary: "Change the customer’s address: the old link and code die, the old address is told (MUT-765)"
+      description: The account moves to the new address; a fresh link goes there with a new code (in this answer only), and the old address gets a short notice that its link no longer works. Only while the customer has not claimed. Additive since 1.160.0-mut765.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisionChangeEmailRequest"
+      responses:
+        "200":
+          description: A fresh link was mailed; the claim code is in this answer only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionedLink"
+        "403":
+          description: "ACCOUNTANT_NOT_APPROVED, or CUSTOMER_CLAIMED: the customer has claimed the account, so only your read access remains"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No customer you created by this id, or the feature is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT reason EMAIL_TAKEN: another account has that address"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, or VALIDATION_FAILED (details.reason ADDRESS_REFUSED for a throwaway or relay address)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED details.limit REISSUE_PER_DAY: 5 fresh links a day per customer, with Retry-After"
           content:
             application/json:
               schema:

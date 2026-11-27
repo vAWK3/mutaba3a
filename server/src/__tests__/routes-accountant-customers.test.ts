@@ -86,11 +86,11 @@ describe('POST /v1/accountant/customers (MUT-764)', () => {
 
     // The link goes to the customer's inbox, in their language, and nowhere else.
     const [mail] = h.transport.list({ to: 'samer@cafe-nour.ps' });
-    expect(mail).toMatchObject({ template: 'finish-setup', locale: 'ar' });
+    expect(mail).toMatchObject({ template: 'customer-setup', locale: 'ar' });
     expect(mail!.text).toMatch(/http:\/\/localhost\/setup#[A-Za-z0-9_-]{43}/);
     expect(mail!.text).not.toContain(out.claimCode);
     // Nothing about the customer reaches the accountant's inbox.
-    expect(h.transport.list({ to: accountant.email }).filter((m) => m.template === 'finish-setup')).toEqual([]);
+    expect(h.transport.list({ to: accountant.email }).filter((m) => m.template === 'customer-setup')).toEqual([]);
   });
 
   it('never puts the setup link or its token in the response, and the code only in the first one', async () => {

@@ -130,6 +130,10 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'DELETE /v1/clients/:profileId': 'open',
   // MUT-764 (accountant channel): the accountant never pays, so creating a customer's account is never gated by their own billing; the customer's plan is theirs.
   'POST /v1/accountant/customers': 'open',
+  // MUT-765: the same rule for the list and the setup actions.
+  'GET /v1/accountant/customers': 'open',
+  'POST /v1/accountant/customers/:userId/link': 'open',
+  'PUT /v1/accountant/customers/:userId/email': 'open',
   // MUT-575: the client books list reads only who shared what with the person; reading a client is gated per profile.
   'GET /v1/clients': 'open',
   // MUT-560 (ADR-247): seeing and revoking who can read a profile is privacy, never paid; making a link is a write on

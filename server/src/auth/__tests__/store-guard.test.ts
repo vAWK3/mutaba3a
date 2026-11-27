@@ -207,6 +207,8 @@ describe('STORE_ACCESS', () => {
       'passkeys.recordUse',
       // MUT-763: the operator's approval of an accountant, the origin of a provisioned account and its setup link (create and approvalOf are class `provision`).
       // MUT-764: the operator's list of unclaimed accounts.
+      'provision.claimOf',
+      'provision.failClaimCode',
       'provision.listUnclaimed',
       'provision.originOf',
       'provision.setApproval',

@@ -97,6 +97,8 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/account-setup/check',
       // MUT-710 (ADR-274): the second step of a sign-in or setup link already begun. Its credential is the challenge token
       // the first step returned; it creates no account.
+      // MUT-765: a provisioned link's claim code, checked before the password; it creates no account.
+      'POST /v1/account-setup/claim-code',
       'POST /v1/account-setup/two-factor',
       // MUT-559 (ADR-245): the accountant invite's check, and signing up from it.
       'POST /v1/accountant-invites/check',

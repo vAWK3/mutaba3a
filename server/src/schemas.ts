@@ -1672,6 +1672,12 @@ export const SetupLinkCheckResponseSchema = z
       termsVersion: TermsVersionSchema,
       /** MUT-710 (D11): the person's second step, which redeeming this link asks for; null when two-step sign-in is off. */
       twoFactor: z.object({ method: z.enum(['totp', 'email']) }).nullable().optional(),
+      /**
+       * MUT-765 (ADR-294): present only on the link of an account an accountant created. The page names who set it up
+       * and for which business, and asks for the claim code first (POST /v1/account-setup/claim-code); `codeLocked`
+       * after five wrong codes (ask the accountant for a new one). Additive since 1.160.0-mut765.
+       */
+      claim: z.object({ accountantName: z.string().nullable(), businessName: z.string().nullable(), codeLocked: z.boolean() }).optional(),
     }),
     z.object({
       state: z.enum(['expired', 'used', 'superseded', 'invalid']),
@@ -1711,8 +1717,14 @@ export const SetupLinkRedeemRequestSchema = z
     challengeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
     code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
     recoveryCode: z.string().min(8).max(20).optional(),
+    /** MUT-765: required on the link of an account an accountant created (the check's `claim`): the six digits he said. */
+    claimCode: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
   })
   .openapi('SetupLinkRedeemRequest');
+
+/** MUT-765: the claim code alone, checked before the password step. */
+export const SetupLinkClaimCodeRequestSchema = z.object({ token: SetupTokenSchema, claimCode: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/) }).openapi('SetupLinkClaimCodeRequest');
+export const SetupLinkClaimCodeResponseSchema = z.object({ ok: z.literal(true) }).openapi('SetupLinkClaimCodeResponse');
 
 /** MUT-710 (D11): what a setup link's second step needs, from POST /v1/account-setup/two-factor (the TWO_FACTOR_REQUIRED details). */
 export const SetupLinkTwoFactorResponseSchema = z
@@ -1787,6 +1799,49 @@ export const ProvisionedCustomerSchema = z
   .openapi('ProvisionedCustomer');
 
 export const ProvisionExistingAddressSchema = z.object({ status: z.literal('exists') }).openapi('ProvisionExistingAddress');
+
+/** MUT-765: a fresh link and code for a customer who has not claimed yet (the old ones stop working). */
+export const ProvisionedLinkSchema = z
+  .object({
+    /** Six digits, in the first answer only (a replay of the same Idempotency-Key never carries it). */
+    claimCode: z.string().regex(/^\d{6}$/).optional(),
+    email: z.string(),
+    linkExpiresAt: z.string().datetime(),
+    mailSent: z.boolean(),
+  })
+  .openapi('ProvisionedLink');
+
+export const ProvisionChangeEmailRequestSchema = z.object({ email: z.string().trim().max(254).email() }).strict().openapi('ProvisionChangeEmailRequest');
+
+export const ProvisionCustomerParamSchema = z.object({ userId: z.string().uuid().openapi({ param: { name: 'userId', in: 'path' } }) });
+
+/** MUT-765: the desk's view of one customer an accountant created. */
+export const ProvisionedCustomerRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    displayName: z.string(),
+    profile: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+    provisionedAt: z.string().datetime(),
+    /**
+     * awaiting_claim: the link works; link_expired: ask for a new one; code_locked: five wrong codes, issue a new one;
+     * claimed: the customer set a password (only the read grant remains, no setup action).
+     */
+    state: z.enum(['awaiting_claim', 'link_expired', 'code_locked', 'claimed']),
+    /** Null once claimed. */
+    link: z.object({ expiresAt: z.string().datetime(), mailStatus: z.enum(['PENDING', 'SENT', 'FAILED']).nullable() }).nullable(),
+  })
+  .openapi('ProvisionedCustomerRow');
+
+export const ProvisionedCustomersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  /** The `nextBefore` of the previous page. */
+  before: z.string().datetime().optional(),
+});
+
+export const ProvisionedCustomersSchema = z
+  .object({ items: z.array(ProvisionedCustomerRowSchema), nextBefore: z.string().datetime().nullable() })
+  .openapi('ProvisionedCustomers');
 
 const ProvisionLimit = z.number().int().min(1).max(1000);
 

@@ -198,5 +198,108 @@ export function describeLedgerStoreAccountantProvisionContract(name: string, mak
         expect(await store.provision.listUnclaimed({ limit: 1 })).toHaveLength(1);
       });
     });
+
+    // MUT-765: the accountant's setup actions while the customer has not claimed, and the claim code's wrong tries.
+    describe('reissue, change of address and the claim code (MUT-765)', () => {
+      const reissueAudit = (action: string) => (ctx: { organizationId: string }): AuditEventInput[] => [
+        { organizationId: ctx.organizationId, actorType: 'USER', actorId: null, action, entityType: 'user', entityId: null, metadata: {}, requestId: null },
+      ];
+      const reissueInput = (accountantUserId: string, customerUserId: string, over: Record<string, unknown> = {}) => ({
+        accountantUserId,
+        customerUserId,
+        setupLink: { tokenDigest: `r-${unique()}${unique()}`, expiresAt: at(60 * 24 * 14) },
+        claimCodeDigestFor: (email: string) => `rc-${email}`,
+        at: at(30),
+        auditFor: reissueAudit('accountant.customer_link_reissued'),
+        ...over,
+      });
+
+      it('makes a fresh link with a fresh code, cancels the old one and audits on the business profile', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const input = provisionInput(a.userId);
+        const c = created(await store.provision.create(input));
+        const next = reissueInput(a.userId, c.user.id);
+        const r = await store.provision.reissue(next);
+        expect(r).toMatchObject({ kind: 'issued', email: input.email, previousEmail: input.email });
+        expect(await store.accountSetup.findByDigest(input.setupLink.tokenDigest)).toMatchObject({ cancelledAt: at(30) });
+        expect(await store.provision.setupLinkOf(c.user.id)).toMatchObject({ tokenDigest: next.setupLink.tokenDigest, claimCodeDigest: `rc-${input.email}`, claimCodeAttempts: 0, mailStatus: 'PENDING' });
+        expect((await store.audit.listByOrganization(c.organization.id, 50)).map((e) => e.action)).toContain('accountant.customer_link_reissued');
+        // The link the account was created with is not a reissue.
+        expect(await store.provision.countReissuesSince(c.user.id, at(0))).toBe(1);
+        expect(await store.provision.countReissuesSince(c.user.id, at(31))).toBe(0);
+      });
+
+      it('moves the account to a new address, refuses one another account holds, and writes nothing then', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const c = created(await store.provision.create(provisionInput(a.userId)));
+        const other = await store.users.create(userInput('taken'));
+        const before = await store.provision.setupLinkOf(c.user.id);
+        expect(await store.provision.reissue(reissueInput(a.userId, c.user.id, { email: other.user.email }))).toEqual({ kind: 'email_taken' });
+        expect((await store.provision.setupLinkOf(c.user.id))?.tokenDigest).toBe(before?.tokenDigest);
+
+        const fresh = `moved-${unique()}@cafe-${unique()}.ps`;
+        const r = await store.provision.reissue(reissueInput(a.userId, c.user.id, { email: fresh, auditFor: reissueAudit('accountant.customer_email_changed') }));
+        expect(r).toMatchObject({ kind: 'issued', email: fresh, previousEmail: c.user.email });
+        expect((await store.users.getById(c.user.id))?.email).toBe(fresh);
+        // The code is bound to the new address.
+        expect((await store.provision.setupLinkOf(c.user.id))?.claimCodeDigest).toBe(`rc-${fresh}`);
+        expect(await store.users.findByEmail(c.user.email)).toBeNull();
+      });
+
+      it('refuses another accountant, an account nobody provisioned, and a claimed customer', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const b = await accountant(store);
+        const c = created(await store.provision.create(provisionInput(a.userId)));
+        expect(await store.provision.reissue(reissueInput(b.userId, c.user.id))).toEqual({ kind: 'not_found' });
+        const plain = await store.users.create(userInput('plain'));
+        expect(await store.provision.reissue(reissueInput(a.userId, plain.user.id))).toEqual({ kind: 'not_found' });
+        await store.users.setPassword(c.user.id, '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', at(40));
+        expect(await store.provision.reissue(reissueInput(a.userId, c.user.id))).toEqual({ kind: 'claimed' });
+      });
+
+      it('counts wrong claim codes up to five, then counts nothing; a link with no code counts nothing', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const input = provisionInput(a.userId);
+        created(await store.provision.create(input));
+        const tries: Array<number | null> = [];
+        for (let i = 0; i < 6; i++) tries.push(await store.provision.failClaimCode(input.setupLink.tokenDigest));
+        expect(tries).toEqual([1, 2, 3, 4, 5, null]);
+        expect(await store.provision.claimOf(input.setupLink.tokenDigest)).toMatchObject({ claimCodeDigest: input.claimCodeDigest, claimCodeAttempts: 5 });
+        expect(await store.provision.claimOf('no-such-digest')).toBeNull();
+        expect(await store.provision.failClaimCode('no-such-digest')).toBeNull();
+      });
+
+      it('records the mail status of the link', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const input = provisionInput(a.userId);
+        const c = created(await store.provision.create(input));
+        await store.provision.setMailStatus(input.setupLink.tokenDigest, 'FAILED');
+        expect((await store.provision.setupLinkOf(c.user.id))?.mailStatus).toBe('FAILED');
+        await store.provision.setMailStatus(input.setupLink.tokenDigest, 'SENT');
+        expect((await store.provision.setupLinkOf(c.user.id))?.mailStatus).toBe('SENT');
+      });
+
+      it('lists an accountant’s customers newest first, claimed or not, with the profile and the newest link', async () => {
+        const store = await makeStore();
+        const a = await accountant(store);
+        const b = await accountant(store);
+        const first = created(await store.provision.create(provisionInput(a.userId, { at: at(10) })));
+        const second = created(await store.provision.create(provisionInput(a.userId, { at: at(20) })));
+        created(await store.provision.create(provisionInput(b.userId, { at: at(15) })));
+        await store.users.setPassword(first.user.id, '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', at(40));
+
+        const rows = await store.provision.customersOf(a.userId, { limit: 10 });
+        expect(rows.map((r) => r.userId)).toEqual([second.user.id, first.user.id]);
+        expect(rows[0]).toMatchObject({ claimed: false, profile: { id: second.organization.id, name: 'Café Nour' }, link: { claimCodeAttempts: 0, mailStatus: 'PENDING', usedAt: null } });
+        expect(rows[1]?.claimed).toBe(true);
+        expect((await store.provision.customersOf(a.userId, { limit: 10, before: at(20) })).map((r) => r.userId)).toEqual([first.user.id]);
+        expect(await store.provision.customersOf(a.userId, { limit: 1 })).toHaveLength(1);
+      });
+    });
   });
 }

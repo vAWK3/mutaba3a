@@ -64,6 +64,8 @@ const vars = {
   'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
   'plan-change-scheduled': { plan: 'solo', changesOn: { year: 2026, month: 12, day: 15 }, manageLink: 'https://portal.example.test/?billing=true' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
+  'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: 'https://portal.example.test/setup#tok_ABC123def', validDays: 14 },
+  'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },

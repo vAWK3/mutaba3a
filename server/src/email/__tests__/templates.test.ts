@@ -34,6 +34,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
   'plan-change-scheduled': { plan: 'solo', changesOn: { year: 2026, month: 12, day: 15 }, manageLink: 'https://portal.example.test/?billing=true' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
+  'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: LINK, validDays: 14 },
+  'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },
@@ -80,6 +82,7 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'offer-renewing-soon': ['₪290', mailDay({ year: 2027, month: 11, day: 12 }, 'en'), mailDay({ year: 2027, month: 11, day: 12 }, 'ar')],
   // MUT-559 (ADR-245): the last day an accountant invite works, a calendar day, never a money date.
   'accountant-invite': [mailDay({ year: 2026, month: 11, day: 20 }, 'en'), mailDay({ year: 2026, month: 11, day: 20 }, 'ar')],
+  'customer-setup': ['14'],
   // MUT-618 (ADR-256 D8): the code itself and its ten minutes; a code, never an amount or a date.
   'sign-in-code': ['482913', '10'],
   // MUT-710 (ADR-274 D5): the same as the sign-in code.
@@ -311,6 +314,8 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'two-factor-changed': { en: 'Two-step sign-in is on for your MTB3A account', ar: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة' },
   'tax-authority-reconnect': { en: 'Your MTB3A connection to the Tax Authority ends within 6 days', ar: 'ينتهي ربط متابعة بسلطة الضرائب خلال 6 أيام' },
   'plan-change-scheduled': { en: 'Your MTB3A plan changes to Solo on December 15, 2026', ar: 'تتغيّر خطتك في متابعة إلى «مستقل» يوم 15 كانون الأول 2026' },
+  'customer-setup': { en: 'Hadi Khatib set up “Café Nour” for you on MTB3A', ar: 'Hadi Khatib أعدّ لك «Café Nour» في متابعة' },
+  'customer-setup-cancelled': { en: 'Your MTB3A setup link no longer works', ar: 'رابط إعداد حسابك في متابعة لم يعد يعمل' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];

@@ -1,6 +1,8 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { setupLinkOrigin, setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
+import { grantAudit } from '../accountants/grants.js';
+import { claimContextOf, claimOfLink, isClaimCodeLocked, verifyClaimCode } from '../accountants/claim.js';
 import { defaultDisplayName, signupAccountOutcome, signupLinkState } from '../auth/self-service.js';
 import { personalProfileFor } from '../personal-profile.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
@@ -18,6 +20,8 @@ import {
   ErrorEnvelopeSchema,
   SetupLinkCheckRequestSchema,
   SetupLinkCheckResponseSchema,
+  SetupLinkClaimCodeRequestSchema,
+  SetupLinkClaimCodeResponseSchema,
   SetupLinkRedeemRequestSchema,
   SetupLinkRedeemResponseSchema,
   SetupLinkTwoFactorResponseSchema,
@@ -118,14 +122,58 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
         const { link, person } = found;
         // MUT-710 (D11): the method only; the email code is mailed on POST /v1/account-setup/two-factor, never here (every page load checks).
         const second = await twoFactor.stateOf(store, person.id);
+        // MUT-765: a provisioned link names who set it up and asks for the claim code first.
+        const claim = await claimOfLink(store, link);
+        const context = claim ? await claimContextOf(store, person) : null;
         return c.json(
-          { state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), termsVersion: terms.version, twoFactor: second ? { method: second.method } : null },
+          {
+            state,
+            email: person.email,
+            locale: person.locale,
+            purpose: link.purpose,
+            expiresAt: link.expiresAt.toISOString(),
+            termsVersion: terms.version,
+            twoFactor: second ? { method: second.method } : null,
+            ...(claim && context ? { claim: { accountantName: context.accountantName, businessName: context.business?.name ?? null, codeLocked: isClaimCodeLocked(claim) } } : {}),
+          },
           200,
         );
       }
       // MUT-368 (D2): a dead link names what it was for, to its holder only; an unknown token names nothing.
       const purpose = state === 'valid' || state === 'invalid' ? null : found.link?.purpose ?? null;
       return c.json({ state: refusalOf(state), ...(purpose ? { purpose } : {}) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/account-setup/claim-code',
+      tags: ['Sessions'],
+      summary: 'Check the claim code of an account an accountant created, before the password step (MUT-765)',
+      description:
+        'For a valid link whose check answered `claim`. The code the accountant said; spaces are ignored. A wrong one is counted (403 CLAIM_CODE_WRONG, `details.triesLeft`); the fifth locks it (403 CLAIM_CODE_LOCKED: the accountant issues a new link and code). The redeem checks it again. 409 CONFLICT reason NO_CLAIM_CODE for a link that carries none. Additive since 1.160.0-mut765.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: SetupLinkClaimCodeRequestSchema } } } },
+      responses: {
+        200: { description: 'The code is right', content: { 'application/json': { schema: SetupLinkClaimCodeResponseSchema } } },
+        403: errorResponse('CROSS_SITE_REQUEST, CLAIM_CODE_WRONG (details.triesLeft) or CLAIM_CODE_LOCKED'),
+        409: errorResponse('CONFLICT reason NO_CLAIM_CODE — this link needs no code'),
+        410: errorResponse('SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address'),
+      },
+    }),
+    async (c) => {
+      const now = await guard(c);
+      const body = c.req.valid('json');
+      const found = await lookUp(body.token);
+      const state = stateOf(found, now);
+      if (state !== 'valid' || found.kind !== 'person' || !found.link || !found.person) throw unusable(refusalOf(state === 'valid' ? 'invalid' : state));
+      const claim = await claimOfLink(store, found.link);
+      if (!claim) throw new ApiError('CONFLICT', 'This link needs no code', { reason: 'NO_CLAIM_CODE' });
+      await verifyClaimWithLog(found.person, claim, body.claimCode);
+      return c.json({ ok: true as const }, 200);
     },
   );
 
@@ -171,7 +219,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       responses: {
         200: { description: 'Password set; sign in with POST /v1/sessions', content: { 'application/json': { schema: SetupLinkRedeemResponseSchema } } },
         409: errorResponse('TERMS_VERSION_STALE — acceptedTermsVersion is missing or not the current terms; details.current names it'),
-        403: errorResponse('CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED'),
+        403: errorResponse('CROSS_SITE_REQUEST; CLAIM_CODE_WRONG or CLAIM_CODE_LOCKED (MUT-765: a link whose check answered `claim` needs `claimCode`); TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED'),
         410: errorResponse('SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid'),
         422: errorResponse('Validation failed (the password is 12 to 128 characters)'),
         429: errorResponse('Too many attempts from this address'),
@@ -191,17 +239,40 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     },
   );
 
-  type RedeemBody = { token: string; password: string; challengeToken?: string | undefined; code?: string | undefined; recoveryCode?: string | undefined; termsLocale?: 'en' | 'ar' | undefined; clientRelease?: string | undefined; displayName?: string | undefined; defaultCurrency?: string | undefined; timezone?: string | undefined };
+  /** MUT-765: a lock is logged (an alert source: brute force or a confused customer); the code is never logged. */
+  async function verifyClaimWithLog(person: UserRecord, claim: Awaited<ReturnType<typeof claimOfLink>> & object, typed: string): Promise<void> {
+    try {
+      await verifyClaimCode(store, settings.pepper, claim, person.email, typed);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'CLAIM_CODE_LOCKED') logger.warn({ userId: person.id, event: 'claim_code_locked' }, 'claim code locked');
+      throw err;
+    }
+  }
+
+  /** MUT-765: `accountant.customer_claimed` on the business profile his grant reads, in the redeem's transaction. */
+  async function claimedAudit(c: Context<AppEnv>, person: UserRecord): Promise<AuditEventInput[]> {
+    const { accountantUserId, business } = await claimContextOf(store, person);
+    const grant = accountantUserId && business ? await store.accountantGrants.findActive(accountantUserId, business.id) : null;
+    return grant ? [grantAudit(grant, 'accountant.customer_claimed', person.id, c.get('requestId'))] : [];
+  }
+
+  type RedeemBody = { token: string; password: string; claimCode?: string | undefined; challengeToken?: string | undefined; code?: string | undefined; recoveryCode?: string | undefined; termsLocale?: 'en' | 'ar' | undefined; clientRelease?: string | undefined; displayName?: string | undefined; defaultCurrency?: string | undefined; timezone?: string | undefined };
   /** MUT-367 (D22): the account's status after the redeem; PENDING_REVIEW signs in to 403 ACCOUNT_UNDER_REVIEW. */
   type Redeemed = { email: string; status: 'ACTIVE' | 'PENDING_REVIEW' };
   const redeemedStatus = (status: UserRecord['status']): Redeemed['status'] => (status === 'PENDING_REVIEW' ? 'PENDING_REVIEW' : 'ACTIVE');
 
   async function redeemPersonLink(c: Context<AppEnv>, link: PersonSetupLinkRecord, person: UserRecord, body: RedeemBody): Promise<Redeemed> {
+    // MUT-765: the claim code first (a provisioned link only), before the second step and the slow hash.
+    const claim = await claimOfLink(store, link);
+    if (claim) {
+      if (!body.claimCode) throw new ApiError('VALIDATION_FAILED', 'This link needs the code your accountant gave you', { fields: ['claimCode'] });
+      await verifyClaimWithLog(person, claim, body.claimCode);
+    }
     await secondStepFor(c, link, person, body);
     const tokenDigest = sessionDigest(settings.pepper, body.token);
     // Hash before claiming, so the slow part never runs inside the transaction.
     const passwordHash = await passwordHasher.hash(body.password);
-    const audit = await passwordSetAudit(c, person, link);
+    const audit = [...(await passwordSetAudit(c, person, link)), ...(claim ? await claimedAudit(c, person) : [])];
     // The setup page is the portal: a cookie surface.
     const acceptance = termsAcceptanceOf(terms, body.termsLocale ?? person.locale, 'cookie', body.clientRelease);
     const termsAudit = await termsAcceptedAudit(store, person, acceptance, c.get('requestId'));

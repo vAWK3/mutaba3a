@@ -5,6 +5,7 @@ import { UsageCapReached } from '../usage/cap-reached.js';
 import { usageEvent } from '../usage/event.js';
 import { MemoryUsage } from './memory-usage.js';
 import { randomUUID } from 'node:crypto';
+import { CLAIM_CODE_MAX_ATTEMPTS } from '../auth/claim-code.js';
 import { KeyedQueue } from './keyed-queue.js';
 import { handsOverArchive, retentionDateOf, retentionSweepMetadata } from '../issuing/retention.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
@@ -1070,7 +1071,90 @@ export class MemoryLedgerStore implements LedgerStore {
         })
         .sort((a, b) => b.provisionedAt.getTime() - a.provisionedAt.getTime())
         .slice(0, limit),
+    reissue: async (input) => {
+      const person = this.people.get(input.customerUserId);
+      const origin = this.provisionOrigins.get(input.customerUserId);
+      if (!person || !origin || origin.accountantUserId !== input.accountantUserId) return { kind: 'not_found' };
+      const grant = this.provisionGrantOf(input.customerUserId, input.accountantUserId);
+      const organization = grant ? this.orgs.get(grant.organizationId) : undefined;
+      if (!grant || !organization) return { kind: 'not_found' };
+      if (person.passwordHash !== null) return { kind: 'claimed' };
+      const email = input.email ?? person.email;
+      if (email !== person.email && [...this.people.values()].some((u) => u.email === email)) return { kind: 'email_taken' };
+      this.assertSetupDigestFree(input.setupLink.tokenDigest);
+      const previousEmail = person.email;
+      if (email !== person.email) Object.assign(person, { email, emailVerifiedAt: null, updatedAt: input.at });
+      this.cancelOpenSetupLinks(person.id, input.at);
+      const link = this.storeSetupLink(person.id, { tokenDigest: input.setupLink.tokenDigest, purpose: 'SETUP', expiresAt: input.setupLink.expiresAt }, input.at, true);
+      this.provisionedLinks.set(link.id, { claimCodeDigest: input.claimCodeDigestFor(email), claimCodeAttempts: 0, mailStatus: 'PENDING' });
+      this.pushEvents(input.auditFor({ organizationId: organization.id, grant: { ...grant }, previousEmail }), input.at);
+      return { kind: 'issued', email, previousEmail, displayName: person.displayName, locale: person.locale, organization: { ...organization } };
+    },
+    failClaimCode: async (tokenDigest) => {
+      const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === tokenDigest);
+      const extra = link ? this.provisionedLinks.get(link.id) : undefined;
+      if (!extra || extra.claimCodeDigest === null || extra.claimCodeAttempts >= CLAIM_CODE_MAX_ATTEMPTS) return null;
+      extra.claimCodeAttempts += 1;
+      return extra.claimCodeAttempts;
+    },
+    claimOf: async (tokenDigest) => {
+      const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === tokenDigest);
+      if (!link) return null;
+      const extra = this.provisionedLinks.get(link.id);
+      return { tokenDigest, purpose: link.purpose, claimCodeDigest: extra?.claimCodeDigest ?? null, claimCodeAttempts: extra?.claimCodeAttempts ?? 0, mailStatus: extra?.mailStatus ?? null, expiresAt: link.expiresAt };
+    },
+    setMailStatus: async (tokenDigest, status) => {
+      const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === tokenDigest);
+      const extra = link ? this.provisionedLinks.get(link.id) : undefined;
+      if (extra) extra.mailStatus = status;
+    },
+    countReissuesSince: async (userId, since) => {
+      const createdAt = this.provisionOrigins.get(userId)?.provisionedAt.getTime() ?? -Infinity;
+      return [...this.setupLinks.values()].filter((l) => l.userId === userId && l.createdAt.getTime() >= since.getTime() && l.createdAt.getTime() > createdAt).length;
+    },
+    customersOf: async (accountantUserId, { limit, before }) =>
+      [...this.provisionOrigins.entries()]
+        .filter(([, origin]) => origin.accountantUserId === accountantUserId && (!before || origin.provisionedAt.getTime() < before.getTime()))
+        .sort(([, a], [, b]) => b.provisionedAt.getTime() - a.provisionedAt.getTime())
+        .slice(0, limit)
+        .flatMap(([userId, origin]) => {
+          const person = this.people.get(userId);
+          if (!person) return [];
+          const grant = this.provisionGrantOf(userId, accountantUserId);
+          const organization = grant ? this.orgs.get(grant.organizationId) : undefined;
+          const newest = [...this.setupLinks.values()].filter((l) => l.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+          const extra = newest ? this.provisionedLinks.get(newest.id) : undefined;
+          return [
+            {
+              userId,
+              email: person.email,
+              displayName: person.displayName,
+              locale: person.locale,
+              provisionedAt: origin.provisionedAt,
+              claimed: person.passwordHash !== null,
+              profile: organization ? { id: organization.id, name: organization.name } : null,
+              link: newest
+                ? {
+                    tokenDigest: newest.tokenDigest,
+                    purpose: newest.purpose,
+                    claimCodeDigest: extra?.claimCodeDigest ?? null,
+                    claimCodeAttempts: extra?.claimCodeAttempts ?? 0,
+                    mailStatus: extra?.mailStatus ?? null,
+                    expiresAt: newest.expiresAt,
+                    usedAt: newest.usedAt,
+                    cancelledAt: newest.cancelledAt,
+                    createdAt: newest.createdAt,
+                  }
+                : null,
+            },
+          ];
+        }),
   };
+
+  /** MUT-765: the grant an accountant got when he created this customer: his, on a profile the customer owns. */
+  private provisionGrantOf(customerUserId: string, accountantUserId: string): AccountantGrantRecord | undefined {
+    return [...this.accountantGrantMap.values()].find((g) => g.accountantUserId === accountantUserId && g.status === 'ACTIVE' && this.orgs.get(g.organizationId)?.ownerUserId === customerUserId);
+  }
 
   /** MUT-559: a PENDING grant with this digest, unexpired at `at`; what accept and signup may claim. */
   /**
