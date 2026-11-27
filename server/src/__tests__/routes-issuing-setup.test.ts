@@ -205,7 +205,7 @@ describe('invoicing setup (MUT-646)', () => {
  */
 describe('the issuer’s country (MUT-740)', () => {
   // A hypothetical second country with its own pack (MUT-741: a live country must have one), taking tax IDs as typed.
-  const JO_PACK = { ...IL_PACK, country: 'JO', taxId: { normalize: (raw: string): string | null => raw, scheme: 'JO_TAX_ID' } };
+  const JO_PACK = { ...IL_PACK, country: 'JO', taxId: { ...IL_PACK.taxId, normalize: (raw: string): string | null => raw, scheme: 'JO_TAX_ID' } };
   let unregister: () => void;
   beforeAll(() => {
     unregister = registerPackForTests(JO_PACK);

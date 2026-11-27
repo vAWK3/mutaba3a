@@ -4917,3 +4917,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Pack | `jurisdictions/__tests__/il-pack.contract.test.ts` | `taxId.scheme` is `IL_TAX_ID` |
 | Existing | the MUT-741 golden hashes, uniform file, retention sweep and erase tests | unchanged behaviour |
 | QA | none re-recorded | no user-visible change (additive API fields) |
+
+## MUT-743 (server piece) — the rules read
+
+| Layer | File | Covers |
+|---|---|---|
+| Pack | `jurisdictions/__tests__/il-pack.contract.test.ts` | each dealer type's `issues` equals what the dealer rule accepts; the drawer's order, defaults and entry types; the per-type form flags; languages, tax-ID mask, per-line VAT exemption, clearance kind; the pack version is still 1.0.0 |
+| Builder | `issuing/__tests__/rules.test.ts` | Israel's rules; not live or no pack gives `live: false` and no rules; a pack with fewer dealer types and no clearance is served as is |
+| Route | `__tests__/routes-issuing-rules.test.ts` | the default country, the issuer's country, `?country=`, a malformed country (422), the invoicing gate (404), an accountant's read, `Cache-Control` |
+| Route matrices | `route-security.test.ts`, `accountant-route-matrix.test.ts` | the new route is listed and gated |
+| QA | none yet | no screen changes in this piece; the portal piece extends `portal.invoicing.country-not-live` and re-runs the setup and issue flows |

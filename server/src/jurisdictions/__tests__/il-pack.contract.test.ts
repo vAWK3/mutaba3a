@@ -52,6 +52,51 @@ describe('IL pack: today\'s Israeli rules, unchanged', () => {
   });
 });
 
+describe('IL pack: what the clients read (MUT-743)', () => {
+  const ALL = ['TAX_INVOICE', 'PAYMENT_REQUEST', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
+
+  it('each dealer type issues exactly the document types the dealer rule accepts (one table, no disagreement)', () => {
+    expect(IL_PACK.dealer.types.map((d) => d.value)).toEqual(['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT']);
+    for (const dealer of IL_PACK.dealer.types) {
+      for (const docType of ISSUED_DOC_TYPES) {
+        expect(dealer.issues.includes(docType), `${dealer.value} ${docType}`).toBe(IL_PACK.dealer.refusal(dealer.value, docType) === null);
+      }
+    }
+  });
+
+  it('the issue drawer\'s order, defaults and entry types are today\'s (the clients hard-code exactly these)', () => {
+    const by = Object.fromEntries(IL_PACK.dealer.types.map((d) => [d.value, d]));
+    expect(by.LICENSED!.issues).toEqual(ALL);
+    expect(by.COMPANY!.issues).toEqual(ALL);
+    expect(by.EXEMPT!.issues).toEqual(['RECEIPT', 'PAYMENT_REQUEST']);
+    expect(by.EXEMPT!.defaultType).toBe('RECEIPT');
+    expect(by.LICENSED!.defaultType).toBe('TAX_INVOICE');
+    expect(by.EXEMPT!.entryTypes).toEqual({ owed: ['PAYMENT_REQUEST'], received: ['RECEIPT'] });
+    expect(by.NONPROFIT!.entryTypes).toEqual({ owed: ['TAX_INVOICE', 'PAYMENT_REQUEST'], received: ['TAX_INVOICE_RECEIPT', 'RECEIPT'] });
+    expect(by.EXEMPT!.exemptFromVat).toBe(true);
+    expect(IL_PACK.dealer.types.filter((d) => d.exemptFromVat).map((d) => d.value)).toEqual(['EXEMPT']);
+    expect(by.LICENSED!.labelKey).toBe('IL.LICENSED');
+  });
+
+  it('what each document type asks of the form: a payment, a due date, a client', () => {
+    const flags = (pick: 'takesPayment' | 'hasDueDate' | 'needsCustomer') => ISSUED_DOC_TYPES.filter((t) => IL_PACK.documentTypes[t][pick]).sort();
+    expect(flags('takesPayment')).toEqual(['RECEIPT', 'TAX_INVOICE_RECEIPT']);
+    expect(flags('hasDueDate')).toEqual(['PAYMENT_REQUEST', 'TAX_INVOICE']);
+    expect(flags('needsCustomer')).toEqual(['CREDIT_NOTE', 'PAYMENT_REQUEST', 'TAX_INVOICE', 'TAX_INVOICE_RECEIPT']);
+  });
+
+  it('languages, the tax-ID mask, per-line VAT exemption and the clearance kind', () => {
+    expect(IL_PACK.languages).toEqual({ available: ['he', 'ar', 'en'], default: 'he' });
+    expect(IL_PACK.taxId).toMatchObject({ scheme: 'IL_TAX_ID', pattern: '^\\d{9}$', maxLength: 9 });
+    expect(IL_PACK.vat.perLineExemption).toBe(true);
+    expect(IL_PACK.clearance?.kind).toBe('IL_ALLOCATION');
+  });
+
+  it('the pack version is unchanged: nothing that decides a document changed (MUT-742 stamps it)', () => {
+    expect(IL_PACK.version).toBe('1.0.0');
+  });
+});
+
 describe('registry', () => {
   it('finds Israel; refuses a country with no pack; the default pack is the default country\'s', () => {
     expect(packFor('IL')).toBe(IL_PACK);

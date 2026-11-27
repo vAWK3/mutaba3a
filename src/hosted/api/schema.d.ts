@@ -14949,6 +14949,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/issuing/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the invoicing screens show and ask for, for the profile’s country
+         * @description MUT-743 (ADR-287): the business types, document types (and what each form asks), currency, document languages, tax-ID mask, per-line VAT exemption and clearance of the issuer’s jurisdiction pack, so the portal and the phone stop hard-coding Israel. `country` (optional) asks about a country before any details are saved; absent, it is the issuer details’ country, else the default. A country that is not live answers `live: false` with `rules: null` (clients show "not available yet"). A 404 means invoicing is off or does not apply to this profile, never "no rules". Display data only: the server keeps refusing what the pack refuses. Cacheable for five minutes. Since 1.149.0-mut743.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description MUT-743: ISO 3166-1 alpha-2. Absent: the issuer details’ country, or the default country before they are saved. Lets the setup ask about a country before anything is saved. */
+                    country?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The rules */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingRules"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/issuing/setup/intro-seen": {
         parameters: {
             query?: never;
@@ -32595,6 +32682,68 @@ export interface components {
                 key: string;
             }[];
         };
+        /** @description MUT-743 (ADR-287): what the clients show and ask for in the invoicing setup and the issue drawer, from the issuer’s jurisdiction pack. Since 1.149.0-mut743. */
+        IssuingRules: {
+            country: string;
+            /** @description False when invoicing is not available for this country yet (it is not on INVOICING_JURISDICTIONS or has no pack): `rules` is null and clients show "not available yet". */
+            live: boolean;
+            /** @description The jurisdiction pack’s version; null when not live. */
+            rulesVersion: string | null;
+            rules: {
+                /** @description The currency documents are issued in and what an amount is shown in. */
+                currency: {
+                    base: string;
+                    issuing: string[];
+                };
+                /** @description Document languages offered (a subset of he, ar, en) and the one a new business starts with. */
+                languages: {
+                    available: string[];
+                    default: string;
+                };
+                /** @description How a typed tax number is masked: the regular expression (source) and the longest length. The server’s check is the authority (422 VAT_ID_INVALID). */
+                taxId: {
+                    scheme: string;
+                    pattern: string;
+                    maxLength: number;
+                };
+                /** @description Whether one line of a document may be marked VAT-exempt. */
+                vat: {
+                    perLineExemption: boolean;
+                };
+                /** @description Each document type and what its form asks of the person. */
+                documentTypes: {
+                    type: components["schemas"]["IssuedDocType"];
+                    vatBearing: boolean;
+                    takesPayment: boolean;
+                    hasDueDate: boolean;
+                    needsCustomer: boolean;
+                }[];
+                /** @description The business types offered, in the order shown (a subset of the closed DealerType list). */
+                dealerTypes: {
+                    value: components["schemas"]["DealerType"];
+                    /** @description The key the client looks its label up by (the copy stays in the client’s own translations): `<country>.<value>`. */
+                    labelKey: string;
+                    /** @description The document types this business type may issue, in the order shown. */
+                    issues: components["schemas"]["IssuedDocType"][];
+                    exemptFromVat: boolean;
+                    defaultType: components["schemas"]["IssuedDocType"];
+                    /** @description What an entry already recorded may become: an Owed one, a Received one. */
+                    entryTypes: {
+                        owed: components["schemas"]["IssuedDocType"][];
+                        received: components["schemas"]["IssuedDocType"][];
+                    };
+                }[];
+                /** @description The tax authority’s pre-issue clearance (Israel: IL_ALLOCATION); null where the country has none. */
+                clearance: {
+                    kind: string;
+                } | null;
+            } | null;
+        };
+        /**
+         * @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know.
+         * @enum {string}
+         */
+        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
         IssuingSettings: {
             counters: components["schemas"]["IssuingCounter"][];
         };
@@ -32604,11 +32753,6 @@ export interface components {
             next: number;
             hasDocuments: boolean;
         };
-        /**
-         * @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know.
-         * @enum {string}
-         */
-        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
         StartingNumberRequest: {
             start: number;
         };
