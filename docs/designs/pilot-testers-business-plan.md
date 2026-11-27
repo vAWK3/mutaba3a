@@ -254,6 +254,9 @@ Built without Basel (approved plan, away); each takes the conservative reading w
 - **P8 (MUT-757):** the chip comes from the pilot grant that ends last (a revoke is an end), with the first grant's start for "time to first scan". The console derives "Pilot · ends", "N days left" and "Ended" from `endsAt`; the server sends no wording.
 - **P9 (MUT-757, S5):** no new recording. First scan and first invoice are read from the usage events MUT-735 already writes (as the payer); any issued document counts as the first invoice, since an exempt dealer issues receipts only. "Last step reached" is not built (TD-370).
 
+- **P10 (MUT-758):** the events are tagged by the `pilot_` prefix and never carry the cohort (free text; the contract allows only closed lists and counts). Timing is `hours_since_start` from `pilot.startedAt`; the 90% event names the line, not the number.
+- **P11 (MUT-758):** the server sends nothing to PostHog (ADR-090). It adds `pilot.startedAt`, `firstScanAt` and `firstInvoiceAt` to `GET /v1/billing`, so web and phone send each "first" event once, across devices. The Flutter copy of `events.json` moves with MUT-756. The PostHog insight (time to first scan and invoice) is built once events arrive.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

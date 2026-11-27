@@ -527,8 +527,19 @@ async function pilotView(store: LedgerStore, userId: string, owned: Awaited<Retu
     now,
   );
   if (!pilot) return null;
-  const welcomeSeenAt = await store.billing.pilotWelcomeSeenOf(userId);
-  return { cohort: pilot.cohort, endsAt: pilot.endsAt.toISOString(), welcomeSeenAt: welcomeSeenAt?.toISOString() ?? null, pricesExpected: PILOT_PRICES_EXPECTED, plans: pilotPlansOf(PILOT_PRICES) };
+  // MUT-758 (ADR-298): the start and the first scan and invoice, so web and phone send "first" events once, with timing.
+  const [welcomeSeenAt, firsts] = await Promise.all([store.billing.pilotWelcomeSeenOf(userId), store.usage.firstEventsOf([userSubjectKey(userId)], ['SCAN', 'DOCUMENT_ISSUED'])]);
+  const firstOf = (kind: 'SCAN' | 'DOCUMENT_ISSUED') => firsts.find((f) => f.kind === kind)?.firstAt.toISOString() ?? null;
+  return {
+    cohort: pilot.cohort,
+    startedAt: pilot.startedAt.toISOString(),
+    endsAt: pilot.endsAt.toISOString(),
+    welcomeSeenAt: welcomeSeenAt?.toISOString() ?? null,
+    firstScanAt: firstOf('SCAN'),
+    firstInvoiceAt: firstOf('DOCUMENT_ISSUED'),
+    pricesExpected: PILOT_PRICES_EXPECTED,
+    plans: pilotPlansOf(PILOT_PRICES),
+  };
 }
 
 /**

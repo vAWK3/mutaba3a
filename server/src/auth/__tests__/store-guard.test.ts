@@ -245,7 +245,6 @@ describe('STORE_ACCESS', () => {
       'twoFactor.pruneChallenges',
       // MUT-735 (ADR-281): the usage reports, the prune job and account closure's purge.
       'usage.byProfile',
-      'usage.firstEventsOf',
       'usage.people',
       'usage.prune',
       'usage.purgeSubject',

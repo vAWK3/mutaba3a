@@ -5042,3 +5042,12 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Store | `store-contract-operator.ts` (memory and Prisma) | filter keeps running, revoked and ended pilots, not plain or ACCOUNTANT grants; grants with the accountant; cursor paging under the filter |
 | Store | `store-contract-usage.ts` (memory and Prisma) | `firstEventsOf`: first per payer and kind, other kinds and quiet payers absent, empty input |
 | QA | with the console UI | Pilot filter, chip and ticks on the Accounts rows |
+
+## MUT-758 (server half) — pilot analytics contract (2026-11-27, ADR-298)
+
+| Layer | File | Covers |
+|---|---|---|
+| Contract | `scripts/__tests__/analytics-taxonomy.test.ts` | 2.13.0 pinned; the six pilot events with their emitters; their properties exactly (no cohort) |
+| Rule | `billing/__tests__/pilot.test.ts` | `startedAt` is the first pilot grant's, revoked included, plain grants ignored |
+| Route | `__tests__/billing-pilot.test.ts` | `pilot.startedAt`, `firstScanAt` (first of several), `firstInvoiceAt` null until the first document |
+| Client | with MUT-753/755/756 | each event fires once in a production-gate test and never in dev or QA |

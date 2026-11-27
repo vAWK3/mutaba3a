@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Pilot analytics contract and the pilot's start and firsts on Billing (MUT-758 server, epic MUT-751, ADR-298, API 1.172.0-mut758)
+
+Server and contract only; web and phone emitting the events is UI work (MUT-753/755/756). No migration.
+
+### Added
+- `docs/analytics/events.json` 2.13.0: `pilot_billing_opened`, `pilot_plans_viewed`, `pilot_contact_tapped`, `pilot_first_scan_saved`, `pilot_first_invoice_issued`, `pilot_usage_near_cap` (portal, ios, android); pinned in `analytics-taxonomy.test.ts`.
+- `GET /v1/billing` `pilot.startedAt`, `pilot.firstScanAt`, `pilot.firstInvoiceAt`.
+
+### Changed
+- `store.usage.firstEventsOf` is `sessionOnly` (the billing route reads the person's own subject).
+
 ## [Unreleased] - 2026-11-27 — Operator Pilot filter, chip data and first-scan / first-invoice ticks (MUT-757 server, epic MUT-751, ADR-297, API 1.171.0-mut757)
 
 Server only; the console's filter, chip and ticks are UI work for later. No migration.

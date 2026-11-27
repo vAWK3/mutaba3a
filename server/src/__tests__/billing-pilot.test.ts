@@ -96,8 +96,11 @@ describe('MUT-752 GET /v1/billing pilot', () => {
     expect(billing.currentPlan).toBe('business');
     expect(billing.pilot).toEqual({
       cohort: 'dec-2026',
+      startedAt: grant.createdAt,
       endsAt: grant.expiresAt,
       welcomeSeenAt: null,
+      firstScanAt: null,
+      firstInvoiceAt: null,
       pricesExpected: true,
       plans: [
         { plan: 'solo', expectedMonthly: { ILS: 3900, USD: 1200 }, limits: { businesses: 1, partners: 0, documentsPerMonth: 50, scansPerMonth: 100 } },
@@ -175,6 +178,25 @@ describe('MUT-752 GET /v1/billing pilot', () => {
     const pilot = (await tester.billing()).pilot;
     expect(pilot.endsAt).toBe(extended.expiresAt);
     expect(pilot.welcomeSeenAt).toBe(seen);
+  });
+});
+
+describe('MUT-758 the pilot’s first scan and first invoice on GET /v1/billing', () => {
+  it('reads them from the usage events as the payer: the first of each kind, null until then', async () => {
+    const h = harness();
+    const tester = await signedIn(h);
+    await adminGrant(h, { ...PILOT, userId: tester.id });
+    const record = (kind: 'SCAN' | 'DOCUMENT_ISSUED', at: Date) =>
+      h.store.usage.record(
+        { subjectKey: `user:${tester.id}`, plan: 'business', door: 'PORTAL', actorUserId: tester.id, occurredAt: at, month: '2026-10', organizationId: null, kind, detail: kind === 'SCAN' ? 'LIBRARY' : 'TAX_INVOICE', entityKey: `${kind}-${at.getTime()}` },
+        null,
+      );
+    const scanAt = new Date(h.clock.now.getTime() + 60_000);
+    await record('SCAN', scanAt);
+    await record('SCAN', new Date(scanAt.getTime() + 60_000));
+    expect((await tester.billing()).pilot).toMatchObject({ firstScanAt: scanAt.toISOString(), firstInvoiceAt: null });
+    await record('DOCUMENT_ISSUED', new Date(scanAt.getTime() + 120_000));
+    expect((await tester.billing()).pilot.firstInvoiceAt).toBe(new Date(scanAt.getTime() + 120_000).toISOString());
   });
 });
 
