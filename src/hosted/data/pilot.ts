@@ -18,6 +18,11 @@ export function billingPilotOf(billing: Partial<Pick<BillingOverview, 'pilot'>> 
   return ((billing?.pilot ?? null) as BillingPilot | null) ?? null;
 }
 
+/** MUT-758: `days_left` as the contract counts it: whole days until the end, rounded down, never negative. */
+export function pilotDaysLeftFloor(endsAt: string, now: Date): number {
+  return Math.max(0, Math.floor((new Date(endsAt).getTime() - now.getTime()) / 86_400_000));
+}
+
 /** MUT-753 (ADR-330): the pilot that ended lately, or null (none, or a server older than 1.200.0). */
 export function billingPilotEndedOf(billing: Partial<Pick<BillingOverview, 'pilotEnded'>> | null | undefined): BillingPilotEnded | null {
   return ((billing?.pilotEnded ?? null) as BillingPilotEnded | null) ?? null;

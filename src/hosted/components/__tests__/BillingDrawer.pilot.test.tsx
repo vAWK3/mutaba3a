@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { ORG_B, emptyProfileRoutes, me, ok, profile, renderPortal, stubApi } from '../../__tests__/harness';
 import type { BillingEntitlement, BillingOverview } from '../../api/client';
 import type { BillingPilot } from '../../data/pilot';
+
+const { trackPilotEvent } = vi.hoisted(() => ({ trackPilotEvent: vi.fn() }));
+vi.mock('../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../analytics/portalAnalytics')>()), trackPilotEvent }));
 
 /**
  * MUT-753 (plan T2, design review 1A, 2A, 2B, interaction states): the Pilot panel in Billing through the real
@@ -52,6 +55,37 @@ function portal(billing: BillingOverview, entitlement: BillingEntitlement, local
   stubApi({ 'GET /v1/me': () => ok(me(profiles, locale)), 'GET /v1/billing': () => ok(billing), ...emptyProfileRoutes() });
   return renderPortal(`/p/${ORG_B}?billing=true`);
 }
+
+beforeEach(() => trackPilotEvent.mockClear());
+
+/** MUT-758 (ADR-298, contract 2.13.0): the panel's pilot events, through portalAnalytics (release-only, opt-in). */
+describe('Billing: the pilot events (MUT-758)', () => {
+  const sent = (event: string) => trackPilotEvent.mock.calls.filter((c) => (c as unknown[])[0] === event).map((c) => (c as unknown[])[1] ?? {});
+
+  it('opening Billing counts once with the days left (rounded down), the plans viewed, and a line at 90%', async () => {
+    const endsAt = new Date(Date.now() + 20.6 * DAY).toISOString();
+    portal(overview({ pilot: pilot({ endsAt }), usage: businessUsage(225, 31) }), ent('ACTIVE', 'OPERATOR', endsAt));
+    await screen.findByTestId('pilot-plans');
+    expect(sent('pilot_billing_opened')).toEqual([{ days_left: 20 }]);
+    expect(sent('pilot_plans_viewed')).toEqual([{}]);
+    expect(sent('pilot_usage_near_cap')).toEqual([{ limit: 'documents' }]);
+    expect(trackPilotEvent.mock.calls.every((c) => !JSON.stringify(c).includes('dec-2026'))).toBe(true);
+  });
+
+  it('Write to us counts a tap', async () => {
+    const { user } = portal(overview({ pilot: pilot(), usage: businessUsage(1, 1) }), ent('ACTIVE', 'OPERATOR', iso(50)));
+    const link = await screen.findByRole('link', { name: 'Write to us' });
+    link.addEventListener('click', (e) => e.preventDefault());
+    await user.click(link);
+    expect(sent('pilot_contact_tapped')).toEqual([{}]);
+  });
+
+  it('nothing is counted for someone not on a pilot', async () => {
+    portal(overview({ usage: businessUsage(225, 31) }), ent('ACTIVE', 'STARTER'));
+    await screen.findByRole('dialog', { name: 'Billing' });
+    expect(trackPilotEvent.mock.calls.filter((c) => String((c as unknown[])[0]).startsWith('pilot_'))).toEqual([]);
+  });
+});
 
 describe('Billing: the Pilot panel (MUT-753)', () => {
   it('status, limits, the plans with Expected prices, and one Write to us, in that order (1A)', async () => {

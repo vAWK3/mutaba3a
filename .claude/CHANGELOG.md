@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-758 web half: the six pilot events (contract 2.13.0, ADR-298)
+
+### Added
+- `trackPilotEvent` and `PilotEvent` (`src/hosted/analytics/portalAnalytics.ts`, through `trackPortal`: release-only via the telemetry gate, opt-in, contract-guarded). The Pilot panel sends `pilot_billing_opened` (`days_left`, rounded down, `pilotDaysLeftFloor`), `pilot_plans_viewed` (first time the plans come into view), `pilot_usage_near_cap` (`limit`, a line at 90%), once per opening, and `pilot_contact_tapped`; the milestones send `pilot_first_scan_saved` / `pilot_first_invoice_issued` (`hours_since_start`) at the same moment as the card. No cohort is ever sent.
+
+### Technical
+- Tests: `BillingDrawer.pilot.test.tsx` (the pilot events), `PilotMilestones.test.tsx`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.201.0-mut777, ADR-333, migration)
 
 ### Added

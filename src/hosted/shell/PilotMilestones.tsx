@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import { CloseIcon } from '../../components/ui/drawer/DrawerFrame';
 import { useT } from '../../lib/i18n/core';
 import { Scene } from '../components/Scene';
-import { firstsReached, nextFirstsMemory, readFirstsMemory, writeFirstsMemory, type PilotFirst } from '../data/pilot';
+import { trackPilotEvent } from '../analytics/portalAnalytics';
+import { firstsReached, hoursSinceStart, nextFirstsMemory, readFirstsMemory, writeFirstsMemory, type PilotFirst } from '../data/pilot';
 import { usePilot } from '../data/pilotQueries';
 import { useMe } from '../session/me';
 
@@ -42,7 +43,13 @@ export function PilotMilestones() {
     const memory = readFirstsMemory(userId);
     const reached = firstsReached(pilot, memory);
     writeFirstsMemory(userId, nextFirstsMemory(pilot, memory));
-    if (reached.length > 0) reach(reached);
+    if (reached.length === 0) return;
+    reach(reached);
+    // MUT-758 (ADR-298): the same moment is the "first" event, with the hours from the pilot's start.
+    for (const first of reached) {
+      const hours = hoursSinceStart(pilot, first);
+      trackPilotEvent(first === 'scan' ? 'pilot_first_scan_saved' : 'pilot_first_invoice_issued', hours === null ? {} : { hours_since_start: hours });
+    }
   }, [pilot, userId, reach]);
   return <MilestoneCard />;
 }

@@ -1,11 +1,14 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ORG_B, emptyProfileRoutes, me, ok, profile, renderPortal, stubApi } from '../../__tests__/harness';
 import type { BillingEntitlement, BillingOverview } from '../../api/client';
 import { BILLING_KEY } from '../../data/billingQueries';
 import { firstsReached, hoursSinceStart, NO_FIRSTS_MEMORY, nextFirstsMemory, readFirstsMemory, writeFirstsMemory, type BillingPilot } from '../../data/pilot';
 import { resetPilotWelcomeOffer } from '../../session/pilotWelcomeOffer';
 import { usePilotMilestones } from '../PilotMilestones';
+
+const { trackPilotEvent } = vi.hoisted(() => ({ trackPilotEvent: vi.fn() }));
+vi.mock('../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../analytics/portalAnalytics')>()), trackPilotEvent }));
 
 /** Pilot milestones: the first scan and the first invoice, celebrated once, when this browser saw them happen. */
 
@@ -51,6 +54,7 @@ describe('the milestone card', () => {
   beforeEach(() => {
     resetPilotWelcomeOffer();
     usePilotMilestones.setState({ queue: [] });
+    trackPilotEvent.mockClear();
   });
 
   function portal(locale: 'en' | 'ar' = 'en') {
@@ -75,6 +79,10 @@ describe('the milestone card', () => {
     const card = await screen.findByTestId('milestone-scan');
     expect(card).toHaveTextContent('First scan saved');
     expect(card.querySelector('[data-scene="milestone-first-scan"]')).not.toBeNull();
+    // MUT-758: the first scan is counted once, with the hours since the pilot's start.
+    const firsts = trackPilotEvent.mock.calls.filter((c) => (c as unknown[])[0] === 'pilot_first_scan_saved');
+    expect(firsts).toHaveLength(1);
+    expect((firsts[0] as unknown[])[1]).toEqual({ hours_since_start: expect.any(Number) });
 
     await user.click(within(card).getByRole('button', { name: 'Close' }));
     expect(screen.queryByTestId('milestone-scan')).not.toBeInTheDocument();
