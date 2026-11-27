@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path d="M18 132h124" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="26" y="116" width="26" height="16" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><rect x="52" y="100" width="26" height="32" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><rect x="78" y="84" width="26" height="48" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><rect x="104" y="68" width="26" height="64" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(117.00 132.00) scale(1.0000) translate(-117.00 -132.00)"/><circle id="nuqta" cx="117" cy="60.00" r="8" fill="#E89960"/><g id="dots"><circle cx="93.44" cy="32.72" r="3.00" fill="#795DBA"/>
+<circle cx="143.68" cy="46.08" r="3.00" fill="#F4F2FB" stroke="#795DBA" stroke-width="2"/>
+<circle cx="133.20" cy="23.28" r="3.00" fill="#E89960"/></g>
+</svg>

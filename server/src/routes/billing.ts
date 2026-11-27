@@ -9,7 +9,6 @@ import {
   accountantCatalogFrom,
   accountantCheckoutRefusalOf,
   ALL_ACCOUNTANT_LOOKUP_KEYS,
-  ALL_GA_LOOKUP_KEYS,
   checkoutRefusalOf,
   planAccountantCheckout,
   type AccountantCatalog,
@@ -29,22 +28,24 @@ import {
   israelVatPercent,
   soloTrialOpen,
   type PlanCatalogs,
+  type SubscriptionState,
 } from '../billing/checkout.js';
 import type { BillingProvider } from '../billing/provider.js';
 import { planChangeView } from '../billing/plan-change.js';
 import { PILOT_PRICES, PILOT_PRICES_EXPECTED, pilotEndedOf, pilotOf, pilotPlansOf } from '../billing/pilot.js';
 import { giftAvailable, giftCovers, giftUntil, NO_GIFT } from '../usage/gift.js';
 import { stripeProvider } from '../billing/stripe/provider.js';
-import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
-import { offerOrNothing } from '../billing/offer-read.js';
-import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } from '../billing/comeback.js';
+import { catalogFor, comebackIdsOf, firstAmountsOf, firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferCatalogs, type OfferEntry } from '../billing/offer.js';
+import { launchOfferFor, offerOrNothing } from '../billing/offer-read.js';
+import { comebackPlanOf, comebackRefusalOf, comebackSubscriptionRefusalOf, lapsedTierOf, type ComebackOffer } from '../billing/comeback.js';
+import { listPriceOf } from '../billing/retention.js';
 import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
 import { entitlementsWithFactsFor } from '../billing/coverage.js';
 import { businessCapView as viewOf } from '../billing/business-cap.js';
 import { profilePlanSubscriptions, trialTimelineOf } from '../billing/entitlement.js';
 import { currentPlanOf, PLAN_LIMITS, PLAN_NAMES, type PlanName } from '../billing/plans.js';
 import { accountantPlanSubscriptions, resolveAccountantPlan } from '../billing/accountant-plan.js';
-import { catalogOf, catalogOrNothing, NO_CATALOG, yearlySwitchLine } from '../billing/yearly-switch-line.js';
+import { catalogOf, catalogOrNothing, NO_CATALOG, planCatalogsOrNothing, yearlySwitchLine } from '../billing/yearly-switch-line.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
 import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
@@ -142,6 +143,10 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         '(never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. ' +
         '`comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back ' +
         'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. ' +
+        'MUT-703 (PLAN_CHECKOUT on): `offer` describes the plans’ launch offer (its `firstYear` is Solo’s, for older portals) and each ' +
+        '`plans[]` item carries its own `launch` (first year per currency while the coupon runs) and `comeback` (while it is open to this ' +
+        'person: the first month back on that plan, monthly only); `comeback` names the plan the mail offered (`plan`, the lapsed plan, Solo ' +
+        'for a legacy Freelancer lapse) and its `percentOff`; `yearlySwitch.plan` is the subscription’s plan, whose saving it shows. ' +
         '`currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, ' +
         'a subscription, or the running trial, which is business); null when nothing covers them. ' +
         '`pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, ' +
@@ -162,12 +167,14 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       // MUT-565 (ADR-251): everything below is the profile plan's; the Accountant plan has its own field.
       const subscriptions = profilePlanSubscriptions(summary.subscriptions);
       const shown = currentSubscription(subscriptions, now);
-      const offer = options.checkout ? await offerOrNothing(options.checkout, offers, catalog, now, false, options.logger, c.get('requestId')) : null;
-      const comeback = options.checkout ? await comebackFor(store, user.id, subscriptions, now, offers, options.checkout, options.logger, false) : null;
-      const accountantPlan = options.accountantAccess ? await accountantPlanView(store, user.id, summary, now, options.checkout, options.logger, c.get('requestId')) : null;
-      const yearlySwitch = shown && options.plan ? await yearlySwitchLine(store, user.id, options.plan, shown, catalog, now, options.logger, c.get('requestId')) : null;
+      const requestId = c.get('requestId');
+      // MUT-703: the plan catalogs (cached) price every plan's offers; the legacy catalog keeps pricing ₪29 payers'.
+      const catalogs: OfferCatalogs = { legacy: catalog, plans: provider && options.checkout ? await planCatalogsOrNothing(options.checkout, options.logger, requestId) : null };
+      const shownOffers = options.checkout ? await offersView(store, user.id, subscriptions, now, offers, options.checkout, catalogs, provider !== null, options.logger, requestId) : null;
+      const accountantPlan = options.accountantAccess ? await accountantPlanView(store, user.id, summary, now, options.checkout, options.logger, requestId) : null;
+      const yearlySwitch = shown && options.plan ? await yearlySwitchLine(store, user.id, options.plan, shown, catalogs, now, options.logger, requestId) : null;
       const [plans, billingAddress] = provider
-        ? await Promise.all([plansView(provider, options.logger, c.get('requestId')), summary.account ? addressOrNothing(provider, summary.account.stripeCustomerId, options.logger, c.get('requestId')) : null])
+        ? await Promise.all([plansView(catalogs.plans, shownOffers), summary.account ? addressOrNothing(provider, summary.account.stripeCustomerId, options.logger, requestId) : null])
         : [[], null];
       return c.json(
         {
@@ -178,9 +185,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           catalog: { ILS: amountsOf(catalog.ILS), USD: amountsOf(catalog.USD) },
           countries: countriesView(options.countries),
           coveredProfileIds: owned.profiles.map((p) => p.id),
-          offer: offer ? offerView(offer, offerEligible(offer, subscriptions, offer.interval), catalog) : null,
+          offer: shownOffers?.offer ? offerView(shownOffers.offer, offerEligible(shownOffers.offer, subscriptions, shownOffers.offer.interval), shownOffers.offerCatalog) : null,
           yearlySwitch,
-          comeback: comeback ? { id: comeback.id, firstMonth: comeback.firstMonth, listMonth: comeback.listMonth, firstYear: comeback.firstYear, listYear: comeback.listYear } : null,
+          comeback: shownOffers?.comeback ? comebackView(shownOffers.comeback) : null,
           accountantPlan,
           // MUT-702 (ADR-275): provider-neutral, from the same entitlements the gate reads.
           currentPlan: currentPlanOf(owned.entitlements),
@@ -222,8 +229,11 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         'MUT-702 Part B (ADR-288, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by ' +
         'Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe ' +
         'Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open ' +
-        'profile-plan Checkouts are expired. No offers apply until MUT-703. `trial: true` (Solo only) carries the one-time 14-day Solo ' +
-        'trial with a card required, for an account web onboarding offered it to that never used it.',
+        'profile-plan Checkouts are expired. `trial: true` (Solo only) carries the one-time 14-day Solo ' +
+        'trial with a card required, for an account web onboarding offered it to that never used it. MUT-703: a yearly plan Checkout by ' +
+        'someone who never had a subscription that took money carries the plans’ launch coupon while it runs; otherwise a monthly one by ' +
+        'someone the come-back is open to carries the plans’ come-back coupon. `expectedOffer` and OFFER_ENDED as above. No offer on the ' +
+        'Solo trial or on an accountant’s activation.',
       security: SESSION_ONLY,
       request: { body: { required: true, content: { 'application/json': { schema: CheckoutSessionRequestSchema } } } },
       responses: { 200: { description: 'The Checkout page', content: { 'application/json': { schema: BillingRedirectSchema } } }, ...refusedResponses },
@@ -275,7 +285,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           // MUT-534 (D13, D14): otherwise the come-back offer, on the mirror's facts and Stripe's own list (R7), from a fresh coupon.
           if (!applied) {
             const back = await comebackFor(store, user.id, profileSubscriptions, now, offers, checkout, options.logger, true);
-            const usedInStripe = back !== null && inStripe.some((s) => s.offerId === back.id && !NEVER_PAID.has(s.status));
+            // MUT-703: any come-back, legacy or the plans', uses it up.
+            const usedInStripe = back !== null && inStripe.some((s) => s.offerId !== null && s.offerId !== undefined && COMEBACK_IDS.has(s.offerId) && !NEVER_PAID.has(s.status));
             if (back && !usedInStripe) applied = comebackApplied(back, plan.currency, body.interval);
           }
           // DD4: the drawer showed an offer that no longer applies: no silent full price, the person decides again.
@@ -445,7 +456,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       description:
         'MUT-777 (ADR-333): the tester’s one yes, given when they join the pilot (the Welcome), to being watched and recorded in later ' +
         'watched sessions. Stored on the person with its instant; `GET /v1/billing` `pilot.watchConsentAt` and the operator’s Accounts row show it. ' +
-        'Idempotent: the first yes is kept. No yes: the pilot works the same, unwatched. PostHog session replay stays off. Additive since 1.201.0-mut777.',
+        'Idempotent: the first yes is kept. No yes: the pilot works the same, unwatched. PostHog session replay stays off. Additive since 1.214.0-mut777.',
       security: SESSION_ONLY,
       responses: {
         200: { description: 'Recorded', content: { 'application/json': { schema: PilotWatchConsentSchema } } },
@@ -601,8 +612,8 @@ function starterView(store: LedgerStore, userId: string, owned: Awaited<ReturnTy
 }
 
 
-/** MUT-534: the come-back offer's ids, as a subscription's `offerId` names them. */
-const COMEBACK_IDS: ReadonlySet<string> = new Set(OFFERS.filter((e) => e.kind === 'comeback').map((e) => e.id));
+/** MUT-534, MUT-703: every come-back offer's id (legacy and the plans'), as a subscription's `offerId` names them. */
+const COMEBACK_IDS: ReadonlySet<string> = comebackIdsOf(OFFERS);
 
 /** MUT-534: a Checkout that never took money doesn't use the come-back offer up (R7). */
 const NEVER_PAID: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expired']);
@@ -611,11 +622,73 @@ const NEVER_PAID: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expir
  * MUT-534 (D12, D13): the come-back offer this person may have now, or null. Nothing to read for someone who never had a
  * plan end (GET /v1/billing is polled); otherwise their facts, the rule (the job's record opens it) and the coupon.
  */
-async function comebackFor(store: LedgerStore, userId: string, subscriptions: readonly BillingSubscriptionRecord[], now: Date, offers: readonly OfferEntry[], checkout: CheckoutGateway, logger: Pick<Logger, 'warn'>, fresh: boolean): Promise<ComebackOffer | null> {
+async function comebackFor(
+  store: LedgerStore,
+  userId: string,
+  subscriptions: readonly BillingSubscriptionRecord[],
+  now: Date,
+  offers: readonly OfferEntry[],
+  checkout: CheckoutGateway,
+  logger: Pick<Logger, 'warn'>,
+  fresh: boolean,
+  plan: PlanName | null = null,
+): Promise<ComebackOffer | null> {
+  if (!(await comebackOpen(store, userId, subscriptions, now, offers))) return null;
+  return comebackOfferOrNothing(checkout, offers, logger, { fresh, plan });
+}
+
+/** MUT-534 (D13): whether the come-back is open to this person now (any plan: the rule is per person, §13 Q8). */
+async function comebackOpen(store: LedgerStore, userId: string, subscriptions: readonly BillingSubscriptionRecord[], now: Date, offers: readonly OfferEntry[]): Promise<boolean> {
   // Review: the subscriptions in hand settle most refusals; only someone they let through costs the other reads.
-  if (comebackSubscriptionRefusalOf(subscriptions, COMEBACK_IDS, now)) return null;
-  if (comebackRefusalOf(await comebackFactsOf(store, userId, now, offers, { subscriptions }), now, { requireOffered: true })) return null;
-  return comebackOfferOrNothing(checkout, offers, logger, { fresh });
+  if (comebackSubscriptionRefusalOf(subscriptions, comebackIdsOf(offers), now)) return false;
+  return comebackRefusalOf(await comebackFactsOf(store, userId, now, offers, { subscriptions }), now, { requireOffered: true }) === null;
+}
+
+type PlanOffers = {
+  /** GET `offer`: the plans' launch offer while plans are on sale (priced on Solo), else the legacy one. */
+  offer: Offer | null;
+  offerCatalog: Catalog;
+  /** GET `comeback`: the plan the mail named (the lapsed plan), else the legacy one. */
+  comeback: ComebackOffer | null;
+  /** Per plan on sale: its launch and come-back (empty while plans aren't on sale). */
+  launches: Partial<Record<PlanName, Offer | null>>;
+  comebacks: Partial<Record<PlanName, ComebackOffer | null>>;
+};
+
+/**
+ * MUT-525, MUT-534, MUT-703: every offer GET /v1/billing shows, from cached coupon reads. Without plans on sale, the
+ * legacy launch and come-back as before; with them, each plan's launch and (while it is open to this person) come-back.
+ */
+async function offersView(
+  store: LedgerStore,
+  userId: string,
+  subscriptions: readonly BillingSubscriptionRecord[],
+  now: Date,
+  offers: readonly OfferEntry[],
+  checkout: CheckoutGateway,
+  catalogs: OfferCatalogs,
+  planSales: boolean,
+  logger: Pick<Logger, 'warn' | 'error'>,
+  requestId: string,
+): Promise<PlanOffers> {
+  if (!planSales) {
+    const [offer, comeback] = await Promise.all([offerOrNothing(checkout, offers, catalogs.legacy, now, false, logger, requestId), comebackFor(store, userId, subscriptions, now, offers, checkout, logger, false)]);
+    return { offer, offerCatalog: catalogs.legacy, comeback, launches: {}, comebacks: {} };
+  }
+  const launches: PlanOffers['launches'] = {};
+  for (const plan of PLAN_NAMES) launches[plan] = await launchOfferFor(checkout, offers, plan, 'year', catalogs, now, false, logger, requestId);
+  const comebacks: PlanOffers['comebacks'] = {};
+  let comeback: ComebackOffer | null = null;
+  if (await comebackOpen(store, userId, subscriptions, now, offers)) {
+    for (const plan of PLAN_NAMES) comebacks[plan] = await comebackOfferOrNothing(checkout, offers, logger, { plan });
+    const named = comebackPlanOf(lapsedTierOf(subscriptions));
+    comeback = named ? (comebacks[named] ?? null) : null;
+  }
+  return { offer: launches.solo ?? null, offerCatalog: catalogFor(catalogs, 'solo'), comeback, launches, comebacks };
+}
+
+function comebackView(offer: ComebackOffer) {
+  return { id: offer.id, firstMonth: offer.firstMonth, listMonth: offer.listMonth, firstYear: offer.firstYear, listYear: offer.listYear, percentOff: offer.percentOff, plan: offer.plan };
 }
 
 /** MUT-534 (D8): the come-back amounts for this Checkout's currency and interval; null where it has none. */
@@ -695,7 +768,8 @@ function subscriptionView(sub: BillingSubscriptionRecord & { tier: Exclude<Billi
     currentPeriodEnd: sub.currentPeriodEnd.toISOString(),
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
     // MUT-525 DD3: a list price renews at the catalog's amount, which the drawer names; a founder price never shows one.
-    renewsAtListPrice: sub.priceLookupKey !== null && ALL_GA_LOOKUP_KEYS.includes(sub.priceLookupKey),
+    // MUT-703: any plan's list price.
+    renewsAtListPrice: listPriceOf(sub.priceLookupKey) !== null,
     // MUT-534 (review): which offer it carried, so the drawer never calls a come-back subscription a launch offer.
     offer: sub.offerId ? { id: sub.offerId, kind: COMEBACK_IDS.has(sub.offerId) ? ('comeback' as const) : ('launch' as const) } : null,
     pause: sub.pausedFrom ? { from: sub.pausedFrom.toISOString(), until: sub.pauseResumesAt?.toISOString() ?? null } : null,
@@ -837,7 +911,16 @@ async function planSale(
   return startPlanCheckout(c, store, checkout, { payer: user, actor: user, unclaimed: false }, body, returnUrl, now, options, provider);
 }
 
-export type PlanSaleBody = { interval: BillingInterval; country: string; buyer: 'person' | 'business'; plan: PlanName; address?: { country: string; line1: string; city: string; postalCode: string } | undefined; trial?: boolean | undefined };
+export type PlanSaleBody = {
+  interval: BillingInterval;
+  country: string;
+  buyer: 'person' | 'business';
+  plan: PlanName;
+  address?: { country: string; line1: string; city: string; postalCode: string } | undefined;
+  trial?: boolean | undefined;
+  /** MUT-703: the offer the drawer showed; one that no longer applies is 409 OFFER_ENDED, no Checkout. */
+  expectedOffer?: string | undefined;
+};
 
 /**
  * MUT-766 (eng SC-1, R4): the one plan-Checkout core. `payer` is whose subscription it is (their mirror, their
@@ -878,36 +961,89 @@ export async function startPlanCheckout(
   const plan = planCheckout(input, person, options.countries, catalogs[body.plan]);
   if (!plan.ok) throw refusalError(plan.code);
   const linked = summary.account?.stripeCustomerId ?? null;
-  const { url } = await viaStripe(
+  const offers = options.offers ?? OFFERS;
+  const { url, applied } = await viaStripe(
     async () => {
       // R5: an unclaimed account's customer carries no email until the claim sets the verified one.
       const customer = linked ?? (await checkout.findOrCreateCustomer(who.unclaimed ? { ...personOf(payer), email: null } : personOf(payer)));
       // Review: the mirror can be late, so Stripe's own word decides before money moves.
       const inStripe = profilePlanSubscriptions(await checkout.subscriptionsOf(customer));
-      const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: [...person.subscriptions, ...inStripe] }, options.countries);
+      const everSubscribed = [...person.subscriptions, ...inStripe];
+      const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: everSubscribed }, options.countries);
       if (stillRefused) throw refusalError(stillRefused);
-      return provider.startCheckout({ customer, address, params: plan.params });
+      // MUT-703 (§3.4): the offer is decided only now, on the mirror and Stripe together, from fresh coupon reads.
+      const facts = { who, body, catalogs, currency: plan.currency, everSubscribed, inStripe, profileSubscriptions, now };
+      const applied = await planOfferFor(store, checkout, facts, offers, options.logger, c.get('requestId'));
+      // DD4: the drawer showed an offer that no longer applies: no silent full price, the person decides again.
+      if (body.expectedOffer && applied?.id !== body.expectedOffer) {
+        throw new ApiError('CONFLICT', CONFLICT_MESSAGES.OFFER_ENDED, { reason: 'OFFER_ENDED', offer: body.expectedOffer });
+      }
+      const final = applied ? planCheckout({ ...input, offer: applied }, person, options.countries, catalogs[body.plan]) : plan;
+      if (!final.ok) throw refusalError(final.code);
+      return { ...(await provider.startCheckout({ customer, address, params: final.params })), applied };
     },
     payer,
     linked,
     options.logger,
   );
-  const metadata = { plan: body.plan, interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: null, trial: body.trial === true, seller: provider.seller, ...(actor.id !== payer.id ? { payerUserId: payer.id } : {}) };
+  const metadata = { plan: body.plan, interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: applied?.id ?? null, trial: body.trial === true, seller: provider.seller, ...(actor.id !== payer.id ? { payerUserId: payer.id } : {}) };
   await auditOn(store, owned.profiles, actor, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
   return url;
 }
 
-/** MUT-702 Part B: GET /v1/billing `plans`. A provider failure hides them (empty) rather than failing the read. */
-async function plansView(provider: BillingProvider, logger: Pick<Logger, 'warn'>, requestId: string) {
-  let catalogs: PlanCatalogs;
-  try {
-    catalogs = await provider.catalogs();
-  } catch (err) {
-    if (!(err instanceof StripeGatewayError)) throw err;
-    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'plan catalogs unavailable; plans hidden');
-    return [];
+/**
+ * MUT-703 (§3.4, ADR-300 d2): the offer a plan Checkout carries: the launch on a yearly Checkout by someone who never had
+ * a subscription that took money, else the come-back while it is open to them (the plans' is monthly only). None on the
+ * Solo trial or on an accountant's activation of a customer (the customer buying for themselves later follows the rule).
+ */
+async function planOfferFor(
+  store: LedgerStore,
+  checkout: CheckoutGateway,
+  facts: {
+    who: { payer: UserRecord; actor: UserRecord };
+    body: PlanSaleBody;
+    catalogs: PlanCatalogs;
+    currency: 'ILS' | 'USD';
+    everSubscribed: readonly SubscriptionState[];
+    inStripe: readonly SubscriptionState[];
+    profileSubscriptions: readonly BillingSubscriptionRecord[];
+    now: Date;
+  },
+  offers: readonly OfferEntry[],
+  logger: Pick<Logger, 'warn' | 'error'>,
+  requestId: string,
+): Promise<AppliedOffer | null> {
+  const { who, body, catalogs, currency, now } = facts;
+  if (who.actor.id !== who.payer.id || body.trial) return null;
+  const catalog = catalogs[body.plan];
+  if (body.interval === 'year') {
+    const offer = await launchOfferFor(checkout, offers, body.plan, 'year', { legacy: NO_CATALOG, plans: catalogs }, now, true, logger, requestId);
+    const launch = offerEligible(offer, facts.everSubscribed, 'year') ? appliedOffer(offer!, catalog, currency, 'year') : null;
+    if (launch) return launch;
   }
-  return PLAN_NAMES.map((plan) => ({ plan, catalog: { ILS: amountsOf(catalogs[plan].ILS), USD: amountsOf(catalogs[plan].USD) }, limits: { ...PLAN_LIMITS[plan] } }));
+  const back = await comebackFor(store, who.payer.id, facts.profileSubscriptions, now, offers, checkout, logger, true, body.plan);
+  const usedInStripe = back !== null && facts.inStripe.some((s) => s.offerId !== null && s.offerId !== undefined && COMEBACK_IDS.has(s.offerId) && !NEVER_PAID.has(s.status));
+  return back && !usedInStripe ? comebackApplied(back, currency, body.interval) : null;
+}
+
+/**
+ * MUT-702 Part B: GET /v1/billing `plans`. A provider failure hides them (empty) rather than failing the read. MUT-703:
+ * each with its launch (first year per currency) and come-back (while open to this person).
+ */
+async function plansView(catalogs: PlanCatalogs | null, offers: PlanOffers | null) {
+  if (!catalogs) return [];
+  return PLAN_NAMES.map((plan) => {
+    const launch = offers?.launches[plan] ?? null;
+    const back = offers?.comebacks[plan] ?? null;
+    const yearly = back && back.firstYear.ILS === null && back.firstYear.USD === null ? null : back;
+    return {
+      plan,
+      catalog: { ILS: amountsOf(catalogs[plan].ILS), USD: amountsOf(catalogs[plan].USD) },
+      limits: { ...PLAN_LIMITS[plan] },
+      launch: launch ? { id: launch.id, firstYear: firstAmountsOf(launch, catalogs[plan]) } : null,
+      comeback: back ? { id: back.id, firstMonth: back.firstMonth, listMonth: back.listMonth, firstYear: yearly ? back.firstYear : null, listYear: yearly ? back.listYear : null } : null,
+    };
+  });
 }
 
 /** MUT-702 Part B: the saved billing address for the prefill; null when there is none or Stripe can't be asked. */

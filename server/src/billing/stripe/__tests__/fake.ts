@@ -434,6 +434,8 @@ export class FakePlanGateway implements PlanGateway {
   readonly switches: SwitchInput[] = [];
   readonly retaxes: RetaxInput[] = [];
   readonly planChanges: Array<SwitchInput & { plan: string }> = [];
+  /** MUT-703: each preview's input (whether it dropped the running discount). */
+  readonly previews: SwitchInput[] = [];
   readonly downgrades: ScheduleDowngradeInput[] = [];
   readonly released: string[] = [];
   readonly calls: string[] = [];
@@ -460,6 +462,7 @@ export class FakePlanGateway implements PlanGateway {
       billingCycleAnchor: new Date('2026-10-02T09:00:00Z'),
       price: { id: 'price_ils_m', currency: 'ils', productId: FAKE_FREELANCER_PRODUCT, unitAmount: 2900, taxBehavior: 'exclusive' },
       couponIds: [],
+      discountIds: [],
       pause: null,
       automaticTax: true,
       taxRateIds: [],
@@ -524,7 +527,7 @@ export class FakePlanGateway implements PlanGateway {
   }
 
   async applyCoupon(subscriptionId: string, couponId: string): Promise<void> {
-    this.written(`coupon:${subscriptionId}:${couponId}`, (plan) => Object.assign(plan, { discounted: true, couponIds: [...plan.couponIds, couponId] }), subscriptionId);
+    this.written(`coupon:${subscriptionId}:${couponId}`, (plan) => Object.assign(plan, { discounted: true, couponIds: [...plan.couponIds, couponId], discountIds: [...plan.discountIds, `di_${couponId}`] }), subscriptionId);
   }
 
   /** MUT-533 (D5): what `retryPayment` answers, and the invoices it was asked to pay. */
@@ -568,6 +571,7 @@ export class FakePlanGateway implements PlanGateway {
 
   async previewYearlySwitch(input: SwitchInput): Promise<{ amountDue: number; currency: string; renewsOn: Date | null }> {
     this.calls.push(`preview:${input.subscriptionId}:${input.yearlyPriceId}`);
+    this.previews.push(input);
     this.failing();
     return { amountDue: this.amountDue, currency: this.previewCurrency, renewsOn: this.renewsOn };
   }

@@ -102,6 +102,32 @@ describe('runRenewalMail (MUT-525 DD8)', () => {
     expect(h.outbox.list({ to: user.email })).toHaveLength(1);
   });
 
+  it('MUT-703 (AC1): a launch-offer Business subscription is due too, and the mail names Business at its own yearly price', async () => {
+    const h = harness();
+    const { user, subscriptionId } = await h.subscriber({ offerId: 'launch-plans-2026' });
+    h.stripe.set(subscriptionId, { ...(h.stripe.get(subscriptionId) as RenewalFacts), unitAmount: 89000, lookupKey: 'business_list_yearly_ils' });
+    const { summary } = await h.run();
+    expect(summary).toMatchObject({ checked: 1, sent: 1, skipped: { notListPrice: 0 } });
+    const [mail] = h.outbox.list({ to: user.email });
+    expect(mail!.text).toContain('Plan: Business, yearly');
+    expect(mail!.text).toContain('New price: ₪890 a year, plus VAT where it applies');
+  });
+
+  it('MUT-703: in Arabic the plan is named too', async () => {
+    const h = harness();
+    const { user, subscriptionId } = await h.subscriber({ locale: 'ar', offerId: 'launch-plans-2026' });
+    h.stripe.set(subscriptionId, { ...(h.stripe.get(subscriptionId) as RenewalFacts), unitAmount: 249000, lookupKey: 'firm_list_yearly_ils' });
+    await h.run();
+    expect(h.outbox.list({ to: user.email })[0]!.text).toContain('«مؤسسة»، سنويًا');
+  });
+
+  it('MUT-703: the legacy mail still names Freelancer', async () => {
+    const h = harness();
+    const { user } = await h.subscriber();
+    await h.run();
+    expect(h.outbox.list({ to: user.email })[0]!.text).toContain('Plan: Freelancer, yearly');
+  });
+
   it('writes Arabic to an Arabic reader', async () => {
     const h = harness();
     const { user } = await h.subscriber({ locale: 'ar' });

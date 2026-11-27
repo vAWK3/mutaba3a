@@ -4,6 +4,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { currentSubscription, type Catalog, type PlanCatalogs } from '../billing/checkout.js';
 import { profilePlanSubscriptions } from '../billing/entitlement.js';
 import { changeView, planChangeOf, type PlanChangeCurrent, type PlanChangeDecision, type PlanChangeTarget } from '../billing/plan-change.js';
+import { OFFERS, offerOfCoupon, type OfferEntry } from '../billing/offer.js';
 import { PLAN_LIMITS, planOfLookupKey, TIER_OF, type PlanName } from '../billing/plans.js';
 import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import type { LivePlan, PlanGateway } from '../billing/stripe/plan-gateway.js';
@@ -38,6 +39,8 @@ export interface BillingPlanChangeRouteOptions {
   logger: Pick<Logger, 'warn' | 'error' | 'info'>;
   mailer: Mailer;
   settings: Pick<SessionSettings, 'portalOrigin'>;
+  /** MUT-703: names the running offer an upgrade ends (`offerEnds`). Defaults to offers.json. */
+  offers?: readonly OfferEntry[];
 }
 
 /** A preview is good for 15 minutes (plan §4 PREVIEW_EXPIRED); a browser clock a minute ahead is fine. */
@@ -59,6 +62,11 @@ const PreviewSchema = z
       /** Echo it on the confirm so the amount charged is the one shown. */
       prorationAt: z.string().datetime(),
       limits: LimitsSchema,
+      /**
+       * MUT-703 (§13 Q7): the running offer this upgrade ends (the amount above is without it); null when nothing runs.
+       * A downgrade keeps a running offer to its own end. Additive since 1.210.0-mut703.
+       */
+      offerEnds: z.object({ id: z.string(), kind: z.enum(['launch', 'stay', 'comeback']) }).nullable().optional(),
     }),
     z.object({
       kind: z.enum(['downgrade', 'to_starter']),
@@ -166,10 +174,22 @@ export function billingPlanChangeRoutes(store: LedgerStore, options: BillingPlan
     return { price: interval === 'month' ? prices.month : prices.year, interval, currency };
   }
 
+  /** MUT-703 (§3.7, §13 Q7): an upgrade drops a running discount; the preview prices it without and names it. */
+  function offerEndsOf(live: LivePlan) {
+    if (!live.discounted) return null;
+    for (const couponId of live.couponIds) {
+      const offer = offerOfCoupon(options.offers ?? OFFERS, couponId);
+      if (offer) return offer;
+    }
+    options.logger.warn({ subscriptionId: live.id, couponIds: live.couponIds }, 'an upgrade drops a discount that is none of offers.json');
+    return null;
+  }
+
   async function previewUp(user: UserRecord, ctx: Awaited<ReturnType<typeof contextOf>>, target: PlanName, at: Date) {
     const { price } = targetPrice(ctx.live, ctx.catalogs, target);
+    const dropDiscounts = ctx.live.discounted;
     return viaStripe(
-      () => ctx.plan.previewYearlySwitch({ subscriptionId: ctx.live.id, customer: ctx.live.customer, itemId: ctx.live.itemId, yearlyPriceId: price.id, prorationDate: at, taxRates: ctx.live.taxRateIds }),
+      () => ctx.plan.previewYearlySwitch({ subscriptionId: ctx.live.id, customer: ctx.live.customer, itemId: ctx.live.itemId, yearlyPriceId: price.id, prorationDate: at, taxRates: ctx.live.taxRateIds, dropDiscounts }),
       user,
       ctx.customer,
       options.logger,
@@ -184,7 +204,8 @@ export function billingPlanChangeRoutes(store: LedgerStore, options: BillingPlan
       summary: 'Preview a plan change (MUT-734)',
       description:
         'Up a rank: Stripe’s proration charged now, tax included, at `prorationAt`. Down (or to Starter): from the paid period’s end, no refund; past the target’s business count the ' +
-        'person picks which businesses stay active (`mustChoose`). The interval is kept. Additive since 1.157.0-mut734.',
+        'person picks which businesses stay active (`mustChoose`). The interval is kept. Additive since 1.157.0-mut734. MUT-703: an upgrade ends a running offer ' +
+        '(a stay offer or a come-back month): `offerEnds` names it and `amountDue` is without it; a downgrade keeps it to its own end.',
       security: SESSION_ONLY,
       request: { body: { required: true, content: { 'application/json': { schema: PreviewRequestSchema } } } },
       responses: { 200: { description: 'The preview', content: { 'application/json': { schema: PreviewSchema } } }, ...changeResponses },
@@ -201,7 +222,7 @@ export function billingPlanChangeRoutes(store: LedgerStore, options: BillingPlan
       if (decision.kind === 'upgrade') {
         const at = ctx.live.clockNow ?? now;
         const preview = await previewUp(user, ctx, target as PlanName, at);
-        return c.json({ kind: 'upgrade' as const, plan: target, amountDue: preview.amountDue, currency: preview.currency, prorationAt: at.toISOString(), limits: PLAN_LIMITS[target] }, 200);
+        return c.json({ kind: 'upgrade' as const, plan: target, amountDue: preview.amountDue, currency: preview.currency, prorationAt: at.toISOString(), limits: PLAN_LIMITS[target], offerEnds: offerEndsOf(ctx.live) }, 200);
       }
       const cap = PLAN_LIMITS[target].businesses;
       return c.json(
@@ -251,7 +272,8 @@ export function billingPlanChangeRoutes(store: LedgerStore, options: BillingPlan
         if (again.amountDue !== body.expectedAmountDue) throw refuse('AMOUNT_CHANGED');
         const { price } = targetPrice(ctx.live, ctx.catalogs, target);
         const result = await viaStripe(
-          () => ctx.plan.changePlan({ subscriptionId: ctx.live.id, customer: ctx.live.customer, itemId: ctx.live.itemId, yearlyPriceId: price.id, prorationDate: prorationAt, taxRates: ctx.live.taxRateIds, plan: target }),
+          // MUT-703 (§13 Q7): the running discount goes in the same update, as the preview said.
+          () => ctx.plan.changePlan({ subscriptionId: ctx.live.id, customer: ctx.live.customer, itemId: ctx.live.itemId, yearlyPriceId: price.id, prorationDate: prorationAt, taxRates: ctx.live.taxRateIds, plan: target, dropDiscounts: ctx.live.discounted }),
           user,
           ctx.customer,
           options.logger,
@@ -275,7 +297,8 @@ export function billingPlanChangeRoutes(store: LedgerStore, options: BillingPlan
         if (!ctx.live.price) throw refuse('PRICES_NOT_SET');
         const currentPriceId = ctx.live.price.id;
         await viaStripe(
-          () => ctx.plan.scheduleDowngrade({ subscriptionId: ctx.live.id, currentPriceId, targetPriceId: price.id, interval, periodEnd: decision.effectiveAt, plan: target, taxRates: ctx.live.taxRateIds }),
+          // MUT-703 (spike S2): the running discount is carried into both phases, so it runs to its own end.
+          () => ctx.plan.scheduleDowngrade({ subscriptionId: ctx.live.id, currentPriceId, targetPriceId: price.id, interval, periodEnd: decision.effectiveAt, plan: target, taxRates: ctx.live.taxRateIds, discountIds: ctx.live.discountIds }),
           user,
           ctx.customer,
           options.logger,
