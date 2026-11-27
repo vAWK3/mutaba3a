@@ -159,7 +159,13 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   - The API with MUT-731 (1.145.0), MUT-702 Part B (1.146.0) and MUT-750 slice A (1.156.0), released with both switches off. Their migrations: `20261126120000_mut731_starter` and `20261127120000_mut702b_provider`.
   - The web release with the portal's Starter notices, business pick and plan Subscribe step. These are built on main but not in `web-v0.4.0`.
   - The phone build that parses `PLAN_LIMIT`, live in both stores. Released phones treat an unknown 409 as terminal. The Flutter checkout (0.2.1+25) handles it; confirm that build is live.
-  - MUT-703 (offers per plan) and MUT-705 (the portal's plan picker): the MUT-702 Part B and MUT-731 items above turn the switches on "with" them. Both are Backlog in Jira.
+  - **MUT-703 (API `1.210.0-mut703`, ADR-340): offers on Solo, Business and Firm.** No migration, no new env. `offers.json` names three new coupons on the plans' products: launch 50% off the first year until 21 Feb 2027, stay 50% for 2 months, come-back 67% off the first month (monthly only). The legacy Freelancer coupons stay as they are. Until the coupons exist the plans simply have no offer (warned), so the API can go out before step 1–2 below, but all of it comes before `plan_checkout = true`.
+    1. The live restricted key adds **Write on Coupons** (it has Read only, ADR-237).
+    2. `STRIPE_SECRET_KEY=<rk_live_…> npm --prefix server run billing:plans` (dry run: it lists the three coupons to create), then `-- --apply --live`, then the dry run again must say "nothing to do". A coupon of another shape already under one of the ids stops the run (exit 2, "give the spec a new id"); nothing is written.
+    3. Release the web with the picker's offer lines (MUT-705 + MUT-703's UI half).
+    4. Check: `GET /v1/billing` for a never-subscribed account lists `plans[].launch` with the first-year amounts (Solo ₪195 / $60, Business ₪445 / $135, Firm ₪1,245 / $375); a yearly Business Checkout in the sandbox reaches Stripe's page with the launch line; `npm --prefix server run billing:renewal-mail -- --dry-run` counts plan subscriptions.
+    5. Before 21 Feb 2027 nothing to do: the coupon stops on its own. To end it early, list it in `RETIRED_COUPON_IDS` (`server/src/scripts/stripe-plans.ts`) and run the script.
+  - MUT-705 (the portal's plan picker): the MUT-702 Part B and MUT-731 items above turn the switches on "with" it. Backlog in Jira.
 - **Operator steps (Basel):**
   1. The live restricted key adds Write on Products, Prices and Tax Rates, and keeps Customers, Checkout Sessions and Customer portal.
   2. Stripe Tax's head office in the live account is Barmajiyat's UK address. Barmajiyat's Israeli VAT file must be open before the first Israeli charge (ADR-286, MUT-749; Backlog).

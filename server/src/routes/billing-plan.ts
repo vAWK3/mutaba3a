@@ -2,9 +2,11 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { currentSubscription, type Catalog } from '../billing/checkout.js';
 import { profilePlanSubscriptions } from '../billing/entitlement.js';
-import { OFFERS, stayEntryOf, type OfferEntry } from '../billing/offer.js';
+import { catalogFor, OFFERS, productsOf, stayEntryFor, type OfferEntry } from '../billing/offer.js';
+import { catalogOfKey, offerCatalogsOf } from '../billing/yearly-switch-line.js';
 import {
   cycleBoundaryAfter,
+  listPriceOf,
   pauseCountsSince,
   pauseOptionsOf,
   stayOfferOf,
@@ -37,7 +39,7 @@ import {
   YearlySwitchRequestSchema,
   YearlySwitchResultSchema,
 } from '../schemas.js';
-import { auditOn, catalogOf, limit, refusedResponses, requireCheckout, SESSION_ONLY, viaStripe } from './billing.js';
+import { auditOn, limit, refusedResponses, requireCheckout, SESSION_ONLY, viaStripe } from './billing.js';
 
 /**
  * MUT-531 (plan §2.5, D1–D4, R2, ADR-238): changing one's own plan from Billing. Person-level and signed in only, like
@@ -104,7 +106,7 @@ const conflictResponses = {
   409: {
     ...refusedResponses[409],
     description:
-      'CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ' +
+      'CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED (MUT-703: a plan change waits; undo it first), DISCOUNTED, ' +
       'TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED ' +
       '(the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it)',
   },
@@ -115,9 +117,10 @@ const retentionResponses = {
   409: {
     ...refusedResponses[409],
     description:
-      'CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), ' +
+      'CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), ' +
       'NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE ' +
-      '(`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)',
+      '(`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). ' +
+      'MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first.',
   },
 } as const;
 
@@ -138,13 +141,18 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
     const { live, paidInvoices, catalog } = await viaStripe(
       async () => {
         const live = await plan.planOf(shown.stripeSubscriptionId);
-        return { live, paidInvoices: await plan.paidInvoiceCount(live.id, { fresh: true }), catalog: await catalogOf(checkout) };
+        // MUT-703: the subscription's own plan's catalog (Solo, Business, Firm or the legacy Freelancer).
+        return { live, paidInvoices: await plan.paidInvoiceCount(live.id, { fresh: true }), catalog: catalogOfKey(await offerCatalogsOf(checkout), live.lookupKey) };
       },
       user,
       customer,
       options.logger,
     );
-    const decision = yearlySwitchOf({ status: live.status, priceLookupKey: live.lookupKey, cancelAtPeriodEnd: live.cancelAtPeriodEnd }, { paidInvoices, discounted: live.discounted, paused: live.paused }, catalog);
+    const decision = yearlySwitchOf(
+      { status: live.status, priceLookupKey: live.lookupKey, cancelAtPeriodEnd: live.cancelAtPeriodEnd },
+      { paidInvoices, discounted: live.discounted, paused: live.paused, scheduled: live.managedBySchedule },
+      catalog,
+    );
     if (!decision.ok) throw notAvailable(decision.refusal);
     return { plan, live, decision };
   }
@@ -248,14 +256,18 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
     return { pause, stay };
   }
 
-  /** D11, ADR-237 D5: a coupon or catalog Stripe can't give us means no stay step, never a blocked cancel. */
+  /**
+   * D11, ADR-237 D5: a coupon or catalog Stripe can't give us means no stay step, never a blocked cancel. MUT-703: the
+   * stay entry of the subscription's own plan (the legacy coupon for ₪29 payers, the plans' for Solo, Business, Firm).
+   */
   async function stayOf(subject: RetentionSubject, events: readonly RetentionEventFact[], fresh: boolean, requestId: string) {
-    const entry = stayEntryOf(offers);
+    const plan = listPriceOf(subject.priceLookupKey)?.plan ?? null;
+    const entry = plan ? stayEntryFor(offers, plan) : null;
     const checkout = options.checkout;
-    if (!entry || !checkout) return stayOfferOf(subject, events, null, NO_CATALOG);
+    if (!plan || !entry || !checkout) return stayOfferOf(subject, events, null, NO_CATALOG);
     try {
-      const [catalog, coupon] = await Promise.all([catalogOf(checkout), checkout.couponById(entry.couponId, { fresh })]);
-      const decision = stayOfferOf(subject, events, coupon, catalog);
+      const [catalogs, coupon] = await Promise.all([offerCatalogsOf(checkout), checkout.couponById(entry.couponId, { fresh })]);
+      const decision = stayOfferOf(subject, events, coupon, catalogFor(catalogs, plan), productsOf(entry.plans, catalogs));
       if (!decision.ok && decision.refusal === 'NO_COUPON') options.logger.warn({ couponId: entry.couponId, requestId }, 'stay offer coupon missing or not stay-shaped; no stay step');
       return decision;
     } catch (err) {
@@ -532,6 +544,8 @@ function subjectOf(live: LivePlan): RetentionSubject {
     discounted: live.discounted,
     currentPeriodEnd: live.currentPeriodEnd,
     billingCycleAnchor: live.billingCycleAnchor,
+    // MUT-703: a list price on a schedule is a MUT-734 change waiting (founder prices never get this far).
+    scheduled: live.managedBySchedule,
   };
 }
 
