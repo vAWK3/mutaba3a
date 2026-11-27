@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-774 portal half: each client's balance on the clients list; the ledger-empty scene
+
+### Added
+- Clients list: one Balance column (wireframe A) from `GET /v1/customer-balances` (`api.customerBalances`, `useCustomerBalances` under the profile's `summary` scope): one line per currency stacked, never summed; "Client in credit · <amount>" below zero, "Settled" at zero, "—" with no movement (`ClientBalance`, `src/hosted/components/ledger/ClientBalance.tsx`). The other columns stay.
+- The ledger card's empty state shows the `ledger-empty` scene (drop-in).
+
+### Technical
+- Tests: `src/hosted/pages/__tests__/clientBalances.test.tsx`, `LedgerCard.test.tsx` (no movements). The test harness's `emptyProfileRoutes` answers `/v1/customer-balances`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-770: CodeReveal, the Activating poll and motion, live regions, ar/en strings (accountant channel, portal)
 
 Plan `docs/designs/accountant-channel.md` (DR-5, DR-8, DR-11; DT5, DT6). Shared parts the desk (MUT-768) and `/setup` (MUT-769) use.

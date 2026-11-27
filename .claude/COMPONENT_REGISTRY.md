@@ -2616,3 +2616,8 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `server/src/jurisdictions/il/index.ts` | `IL_PACK` | the registry |
 | `server/src/jurisdictions/il/documents.ts` | `IL_DOCUMENT_TYPES`, `IL_DOC_TYPE_CODES` | the uniform file, tests |
 | `server/src/issuing/issuer-pack.ts` | `issuerPackOf(store, organizationId)` | documents-due and customers routes, cancel |
+
+## MUT-774 — client balances on the clients list
+
+- `ClientBalance` (`src/hosted/components/ledger/ClientBalance.tsx`): one client balance in one currency (owes / "Client in credit · …" / "Settled"), the ledger card's words. `useCustomerBalances(profileId)` (`src/hosted/data/statementQueries.ts`) groups `GET /v1/customer-balances` by client.
+

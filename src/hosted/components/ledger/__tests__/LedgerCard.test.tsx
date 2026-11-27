@@ -37,6 +37,22 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe('LedgerCard with no movements (MUT-774)', () => {
+  it('a client with no movements shows the ledger-empty scene and one line', async () => {
+    stubApi({ [`GET /v1/customers/${C}/statement`]: () => ok(page([], { closingBalance: '0.00' })) });
+    renderCard();
+    const empty = await screen.findByTestId('ledger-empty');
+    expect(empty.querySelector('[data-scene="ledger-empty"]')).not.toBeNull();
+    expect(empty).toHaveTextContent('No movements yet');
+  });
+
+  it('no currency at all (a client never charged) is the same empty state', async () => {
+    stubApi({});
+    renderCard({ currencies: [] });
+    expect((await screen.findByTestId('ledger-empty')).querySelector('[data-scene="ledger-empty"]')).not.toBeNull();
+  });
+});
+
 describe('LedgerCard (MUT-664)', () => {
   it('asks for the first currency newest first, shows each line with its tags and what is due, and a month row', async () => {
     const api = stubApi({
