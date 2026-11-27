@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-750 slice A (UI): price, VAT and total before Checkout
+
+### Added
+- `PriceLinesCard` (wireframe mut-750a A) under the billing address on the plan Subscribe step: Price, VAT 18% and Total for an Israeli address, the price alone elsewhere, announced when the country or interval changes. `priceLinesOf` / `vatRateOf` in `data/billingPlans.ts` (the rate from `GET /v1/billing.vatRate`; Stripe's half-up rounding).
+- i18n `hosted.billing.vat.{price,line,total}` (ar + en). FakeApi sends `vatRate` with plans on sale.
+
+### Technical
+- Tests: `data/__tests__/billingPlans.vat.test.ts`, two cases in `BillingDrawer.plans.test.tsx`. QA: `portal.plans.vat-lines-israel`, `portal.plans.no-vat-abroad`.
+
 ## [Unreleased] - 2026-11-27 — MUT-705: the three-plan picker, plan-aware billing, cap prompts and usage (portal)
 
 Why: Billing named one plan ("Freelancer") and only Starter had meters or cap prompts. Now every surface reads the person's own plan from `GET /v1/billing` / `/v1/me` (server halves MUT-702, 731, 733, 734 already on main).

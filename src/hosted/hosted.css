@@ -2085,3 +2085,10 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-keep-row:has(input:disabled) { cursor: default; }
 .hp-keep-name { display: grid; min-inline-size: 0; }
 .hp-keep-off { font-size: var(--text-label); color: var(--muted); }
+
+/* MUT-750 slice A (wireframe mut-750a A): price, VAT and total before Checkout, one line each. */
+.hp-price-lines { display: grid; gap: var(--space-1-5); background: var(--surface-2); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+.hp-price-line { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+.hp-price-total { font-weight: var(--weight-semibold); }
+.hp-price-line + .hp-price-total { border-block-start: 1px solid var(--divider); padding-block-start: var(--space-1-5); }
+.hp-price-per { font-weight: var(--weight-normal); color: var(--muted); font-size: var(--text-label); }

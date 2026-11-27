@@ -67,7 +67,8 @@ import { activeBusinessesOf, billingStarterOf, planUsageOf, recommendedPlanOf, s
 import { PickActiveBusinesses, ReadOnlyBusinesses } from './BusinessChecklist';
 import { PlanMeters } from './PlanMeters';
 import { BillingAddressFields, PlanRow } from './BillingPlanPicker';
-import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, savedAddressOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
+import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, priceLinesOf, savedAddressOf, vatRateOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
+import { PriceLinesCard } from './PriceLinesCard';
 import { ContinueFreeOnStarter, PickActiveBusiness, StarterBilling } from './StarterPlan';
 
 /**
@@ -1143,6 +1144,9 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
           />
           <ContactUs />
         </div>
+      ) : form.plan && pair && currency && !applied ? (
+        // MUT-750 slice A (wireframe mut-750a A): the price, VAT and total under the address that decides them.
+        <PriceLinesCard lines={priceLinesOf(pair[interval], form.address.country, vatRateOf(billing))} currency={currency} interval={interval} />
       ) : (
         pair &&
         currency && (

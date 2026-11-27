@@ -1585,6 +1585,11 @@
         "title": "Active businesses",
         "count": "{chosen} of {cap}",
         "choose": "Choose which businesses stay active"
+      },
+      "vat": {
+        "price": "Price",
+        "line": "VAT {percent}%",
+        "total": "Total"
       }
     },
     "selfService": {

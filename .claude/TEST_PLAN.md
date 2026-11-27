@@ -5077,3 +5077,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/components/__tests__/CodeReveal.test.tsx` | 3+3 groups, spaced aria-label, LTR in ar and en, stagger order, Copy → Copied → Copy after 2 s, a failed copy, the claim-code spec values and the reduced-motion still in CSS |
 | Unit | `src/hosted/components/__tests__/Activating.test.tsx` | `activatingPhase`; the poll every 4 s, late at 2 min, active when paid, late on a late reload; `hopEnd`; loop → finish the hop → resolve; -rtl key frames; reduced motion shows the scene; the activating spec values; the polite live region in ar and en |
 | Guard | `src/styles/__tests__/direction.test.ts`, `brand.test.ts` | the two `dir` sites; the Copy pill's contrast |
+
+## MUT-750 slice A (UI) — price, VAT and total before Checkout (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/data/__tests__/billingPlans.vat.test.ts` | 3900 → 702 / 4602; yearly 39000 → 7020; half-up 8925 → 1607; Jordan, no rate, no country → price alone; `vatRateOf` |
+| Portal | `BillingDrawer.plans.test.tsx` | Israel monthly and yearly lines; Jordan price only |
+| QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.vat-lines-israel` (en + ar), `portal.plans.no-vat-abroad` |
