@@ -108,7 +108,7 @@ run "paid_business_caps_on" {
   }
 }
 
-# MUT-733 (ADR-292): the paid hard caps ship off.
+# MUT-733 (ADR-293): the paid hard caps ship off.
 run "paid_hard_caps_off_by_default" {
   command = apply
 

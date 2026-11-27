@@ -13,7 +13,7 @@ import { userSubjectKey } from '../usage/subject.js';
 import { SESSION_ONLY } from './billing.js';
 
 /**
- * MUT-733 (ADR-292): the account's once-ever over-cap gift. A Solo or Business payer whose monthly meter is at its cap
+ * MUT-733 (ADR-293): the account's once-ever over-cap gift. A Solo or Business payer whose monthly meter is at its cap
  * (with PAID_HARD_CAPS on) takes it here after the refusal said `gift: 'available'`; the held request is then retried
  * and that meter has no cap until the 1st of the next Jerusalem month. A partner acting on the owner's business takes
  * the owner's gift (Q3: the same business): `organizationId` names it. Person-level, never billing-gated.
@@ -45,7 +45,7 @@ export function billingGiftRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       description:
         'Only after a 409 PLAN_LIMIT that said `gift: "available"`: the meter must be at its cap this month on a Solo or Business plan with PAID_HARD_CAPS on ' +
         '(409 GIFT_NOT_AVAILABLE otherwise). Once per account, ever, for one meter (409 GIFT_USED after; a repeat for the same meter in the same month answers 200). ' +
-        'Audited `billing.over_cap_gift`. Additive since 1.158.0-mut733.',
+        'Audited `billing.over_cap_gift`. Additive since 1.159.0-mut733.',
       security: SESSION_ONLY,
       request: { body: { required: true, content: { 'application/json': { schema: GiftRequestSchema } } } },
       responses: {

@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-27 — Paid plans' monthly caps: one gift, then hard (MUT-733 server half, ADR-292, API 1.158.0-mut733)
+## [Unreleased] - 2026-11-27 — Paid plans' monthly caps: one gift, then hard (MUT-733 server half, ADR-293, API 1.159.0-mut733)
 
 Epic MUT-701. Plan `.claude/designs/mut-733-over-cap-gift-plan.md` (approved with defaults). Server only; the gift message on the portal and phone, the usage lines and the analytics come with the UI half (and MUT-706). Dark behind `PAID_HARD_CAPS`. No migration (the gift columns exist since MUT-735).
 
@@ -41,6 +41,20 @@ Epic MUT-701. Plan `.claude/designs/mut-733-over-cap-gift-plan.md` (approved wit
 
 ### Unchanged
 - Starter's caps; a receipt for a payment on an issued document is never refused; Issue all passes the refusal's details (now with `gift`).
+
+---
+
+## [Unreleased] - 2026-11-27 — Accountant creates a customer's account (MUT-764 server half, epic MUT-762, ADR-292, API 1.158.0-mut764)
+
+Plan `docs/designs/accountant-channel.md` (eng T3, T7; R2, R3). Server only, dark behind `ACCOUNTANT_PROVISIONING` (off). No migration (MUT-763's columns). The portal desk and drawers wait for Basel's wireframe pick (MUT-768/769).
+
+### Added
+- `POST /v1/accountant/customers` (session, Idempotency-Key): an operator-approved accountant creates the customer's passwordless account, business profile and his ACTIVE read grant in one call; the setup link (14 days) goes to the customer's inbox only; the 6-digit claim code is in the first 201 only (a replay never carries it); `mailSent`. 403 `ACCOUNTANT_NOT_APPROVED`; 404 while the flag is off; 422 `ADDRESS_REFUSED` for throwaway/relay addresses.
+- Daily limits per accountant per UTC day (50 creations, 100 existing-address attempts; 429 `RATE_LIMITED` with `details.limit`, `max`, Retry-After), counted from `users.provisionedByUserId` and audit rows.
+- An address with an account answers 200 `{ status: "exists" }`, creates nothing, audited `accountant.customer_lookup_existing`.
+- Operator console: `GET/PUT/DELETE /v1/operator/accounts/{userId}/accountant-provisioning` (approve with limits, withdraw keeping the limits, today's counts; audited `accountant.provisioning_approved/withdrawn`), `GET /v1/operator/provisioned-accounts` (unclaimed, newest first, with the accountant and whether a subscription is active).
+- `store.provision.countCreatedSince`, `countLookupsSince`, `listUnclaimed`; `setApproval` writes its audit rows in the same transaction.
+- `ACCOUNTANT_PROVISIONING` in `server/.env.example` (dev on).
 
 ---
 

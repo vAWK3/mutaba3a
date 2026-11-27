@@ -126,7 +126,7 @@ export function currentPlanOf(entitlements: readonly CoveringFact[]): AnyPlanNam
 export const HARD_CAP_PLANS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN]);
 
 /**
- * MUT-733 (ADR-292): the paid plans whose monthly meters refuse at the cap with PAID_HARD_CAPS on (after the one-time
+ * MUT-733 (ADR-293): the paid plans whose monthly meters refuse at the cap with PAID_HARD_CAPS on (after the one-time
  * gift). Firm stays soft (Basel's default on Q2: the top plan has nowhere to move); legacy Freelancer has no limits.
  */
 export const PAID_HARD_CAP_PLANS: ReadonlySet<string> = new Set<AnyPlanName>(['solo', 'business']);

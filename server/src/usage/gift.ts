@@ -3,7 +3,7 @@ import type { UsageMeter, UsagePlan } from './kinds.js';
 import { monthPlus, USAGE_TIMEZONE } from './month.js';
 
 /**
- * MUT-733 (ADR-292, Basel's decisions on MUT-733 comment 13548): the over-cap gift. Once per account, ever, for whichever
+ * MUT-733 (ADR-293, Basel's decisions on MUT-733 comment 13548): the over-cap gift. Once per account, ever, for whichever
  * monthly meter (documents or scans) is hit first on a paid hard-capped plan; while it runs (until the 1st of the next
  * Asia/Jerusalem month) that meter has no cap; the other keeps its cap and, the gift being used, is a hard cap. Pure.
  */

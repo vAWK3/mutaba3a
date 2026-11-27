@@ -46,7 +46,21 @@ export function accountantInviteUrl(origin: string, token: string): string {
   return `${origin.replace(/\/+$/, '')}/accountant-invite#${token}`;
 }
 
-export type GrantAuditAction = 'accountant.invited' | 'accountant.accepted' | 'accountant.revoked' | 'accountant.left' | 'accountant.viewed';
+export type GrantAuditAction =
+  | 'accountant.invited'
+  | 'accountant.accepted'
+  | 'accountant.revoked'
+  | 'accountant.left'
+  | 'accountant.viewed'
+  // MUT-762 (accountant channel): an approved accountant's customers. Only `customer_created` is written by MUT-764; the others by MUT-765/766.
+  | 'accountant.customer_created'
+  | 'accountant.customer_activated'
+  | 'accountant.customer_claimed'
+  | 'accountant.customer_email_changed'
+  | 'accountant.customer_lookup_existing'
+  // The operator's approval of an accountant to create customers, and its withdrawal (MUT-764).
+  | 'accountant.provisioning_approved'
+  | 'accountant.provisioning_withdrawn';
 
 /** An audit row about a grant, on the shared profile. Never the address or a name in its metadata. */
 export function grantAudit(grant: Pick<AccountantGrantRecord, 'id' | 'organizationId'>, action: GrantAuditAction, actorId: string | null, requestId: string | null): AuditEventInput {

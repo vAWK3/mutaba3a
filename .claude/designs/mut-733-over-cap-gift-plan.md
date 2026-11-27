@@ -158,7 +158,7 @@ New ADR "Paid plans' monthly caps are hard after one gift per account" (supersed
 
 ## Build decisions (server half, 2026-11-27, built alone with the approved defaults)
 
-1. **ADR-292**, API **1.158.0-mut733**, no migration.
+1. **ADR-293**, API **1.159.0-mut733**, no migration (renumbered from ADR-292 / 1.158.0 after MUT-764 took them on main).
 2. **Firm is soft (Q2 default)**: `PAID_HARD_CAP_PLANS = {solo, business}`. This overrides the error-table row "Firm at its cap after the gift: hard cap"; the gift is never offered on Firm.
 3. **The cap rule rides the usage stamp** (`UsageStamp.caps`, decided in `usageStampFor` with the plan, one read of the payer's gift, only with the flag on a Solo/Business payer) instead of a `hardCapPlans({ paidHardCaps })` function: every door already passes the stamp, so issue, Issue all, scan start and scan complete (memory and Postgres) agree without new parameters. `usageEvent` strips it so it is never stored.
 4. **`graceUntil` is an instant** (the schema's existing `datetime`): the first instant of the next Jerusalem month; the endpoint's `until` is the same instant (the plan's example showed a date).

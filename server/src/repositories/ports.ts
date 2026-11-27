@@ -2783,7 +2783,7 @@ export interface BillingRepository {
    * business count active (the rest read-only until picked) and new businesses past it are refused, as Starter's are.
    */
   readonly paidBusinessCaps: boolean;
-  /** MUT-733 (ADR-292): the server's PAID_HARD_CAPS: Solo and Business monthly meters refuse at the cap after the gift. */
+  /** MUT-733 (ADR-293): the server's PAID_HARD_CAPS: Solo and Business monthly meters refuse at the cap after the gift. */
   readonly paidHardCaps: boolean;
   /** MUT-733: the person's over-cap gift (never used: every field null). Null for an unknown user. */
   overCapGiftOf(userId: string): Promise<{ usedAt: Date | null; meter: 'DOCUMENTS' | 'SCANS' | null; month: string | null } | null>;
@@ -3451,12 +3451,27 @@ export interface ProvisionRepository {
    */
   create(input: ProvisionCustomerInput): Promise<ProvisionCustomerResult>;
   /** The operator's approval and limits, stamped together. Null for an unknown person. */
-  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date }): Promise<ProvisionApproval | null>;
+  setApproval(input: { userId: string; enabled: boolean; createLimitPerDay: number | null; lookupLimitPerDay: number | null; at: Date; audit?: AuditEventInput[] }): Promise<ProvisionApproval | null>;
   approvalOf(userId: string): Promise<ProvisionApproval | null>;
   /** Who created this account, and when; null when the account was not provisioned. `accountantUserId` is null once theirs is deleted. */
   originOf(userId: string): Promise<{ accountantUserId: string | null; provisionedAt: Date } | null>;
   /** The person's newest setup link (the provisioned one at creation). */
   setupLinkOf(userId: string): Promise<ProvisionedSetupLink | null>;
+  /** MUT-764: accounts this accountant created at or after `since` (from `users.provisionedByUserId`), for the daily creation limit. */
+  countCreatedSince(accountantUserId: string, since: Date): Promise<number>;
+  /** MUT-764: this accountant's existing-address attempts at or after `since` (`accountant.customer_lookup_existing` audit rows by actor), for the daily lookup limit. */
+  countLookupsSince(accountantUserId: string, since: Date): Promise<number>;
+  /** MUT-764: provisioned accounts that still have no password (the operator's list), newest first. */
+  listUnclaimed(input: { limit: number }): Promise<UnclaimedProvisionedAccount[]>;
+}
+
+/** One provisioned account not yet claimed (no password). `accountantUserId` is null once the accountant's account is deleted. */
+export interface UnclaimedProvisionedAccount {
+  userId: string;
+  email: string;
+  displayName: string;
+  accountantUserId: string | null;
+  provisionedAt: Date;
 }
 
 export interface AccountantGrantRepository {
@@ -5333,7 +5348,7 @@ export interface UsageStamp {
   plan: UsagePlan;
   door: UsageDoor;
   actorUserId: string | null;
-  /** MUT-733 (ADR-292): the paid caps and the over-cap gift, decided with the plan (usage/plan-of.ts). Absent = Starter only. */
+  /** MUT-733 (ADR-293): the paid caps and the over-cap gift, decided with the plan (usage/plan-of.ts). Absent = Starter only. */
   caps?: { paidHardCaps: boolean; giftMeter: 'DOCUMENTS' | 'SCANS' | null; giftAvailable: boolean };
 }
 

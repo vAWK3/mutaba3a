@@ -14,14 +14,15 @@ describe('the provision guard class (MUT-763)', () => {
       .map(([method]) => `${repo}.${method}`),
   );
 
-  it('belongs to exactly two methods: creating a customer and reading one’s own approval', () => {
-    expect(provisionMethods.sort()).toEqual(['provision.approvalOf', 'provision.create']);
+  it('belongs to the accountant’s own calls: creating a customer, reading one’s own approval and the two daily counts', () => {
+    expect(provisionMethods.sort()).toEqual(['provision.approvalOf', 'provision.countCreatedSince', 'provision.countLookupsSince', 'provision.create']);
   });
 
-  it('keeps the operator’s approval, the origin and the setup link below every guard', () => {
+  it('keeps the operator’s approval, the origin, the setup link and the unclaimed list below every guard', () => {
     expect(STORE_ACCESS.provision.setApproval).toBe('operator');
     expect(STORE_ACCESS.provision.originOf).toBe('operator');
     expect(STORE_ACCESS.provision.setupLinkOf).toBe('operator');
+    expect(STORE_ACCESS.provision.listUnclaimed).toBe('operator');
   });
 
   it('lets a signed-in session create, and refuses an API key', () => {
@@ -35,6 +36,8 @@ describe('the provision guard class (MUT-763)', () => {
     for (const guard of [accountantStoreGuard(), shareLinkStoreGuard(), agentStoreGuard()]) {
       expect(() => guard.assertCanCall('provision', 'create')).toThrow();
       expect(() => guard.assertCanCall('provision', 'approvalOf')).toThrow();
+      expect(() => guard.assertCanCall('provision', 'countCreatedSince')).toThrow();
+      expect(() => guard.assertCanCall('provision', 'countLookupsSince')).toThrow();
     }
   });
 });

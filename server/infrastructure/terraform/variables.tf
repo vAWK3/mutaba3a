@@ -568,7 +568,7 @@ variable "paid_business_caps" {
 }
 
 variable "paid_hard_caps" {
-  description = "MUT-733 (ADR-292): sets PAID_HARD_CAPS=true: Solo and Business monthly meters (documents, scans) refuse at the cap after a one-time gift per account; Firm stays soft. false (default) = counted, never refused. On only after plan_checkout, MUT-734's plan change and the phone build that shows the gift."
+  description = "MUT-733 (ADR-293): sets PAID_HARD_CAPS=true: Solo and Business monthly meters (documents, scans) refuse at the cap after a one-time gift per account; Firm stays soft. false (default) = counted, never refused. On only after plan_checkout, MUT-734's plan change and the phone build that shows the gift."
   type        = bool
   default     = false
 }

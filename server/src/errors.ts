@@ -100,6 +100,8 @@ export const ERROR_CODES = {
    * Not 409 ACCOUNTANT_LIMIT-style: that reason is the owner's 5-accountants-per-profile limit.
    */
   ACCOUNTANT_PLAN_REQUIRED: 402,
+  /** MUT-764 (accountant channel): creating a customer's account needs the operator's approval, which this person doesn't have (or was withdrawn). */
+  ACCOUNTANT_NOT_APPROVED: 403,
   /**
    * MUT-559 (ADR-245, D4): an accountant invite accepted by someone else: neither the invited address nor a colleague
    * on the same business domain (webmail, disposable and relay domains never match). `details.maskedEmail` names the
@@ -127,7 +129,7 @@ export const ERROR_CODES = {
   OPERATION_IN_PROGRESS: 409,
   /** MUT-737 (ADR-289): with OPEN_SIGNUP on there is no review: approve and decline are retired (the list stays as history). */
   SIGNUP_REVIEW_RETIRED: 409,
-  /** MUT-733 (ADR-292): the account's once-ever over-cap gift was already taken (a later refusal is a hard cap). */
+  /** MUT-733 (ADR-293): the account's once-ever over-cap gift was already taken (a later refusal is a hard cap). */
   GIFT_USED: 409,
   /** MUT-733: the gift can't be taken now: PAID_HARD_CAPS off, not a Solo or Business payer, or the meter isn't at its cap. */
   GIFT_NOT_AVAILABLE: 409,

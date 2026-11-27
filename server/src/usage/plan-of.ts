@@ -60,7 +60,7 @@ export async function usageStampFor(
 }
 
 /**
- * MUT-733 (ADR-292): with PAID_HARD_CAPS on and a Solo or Business payer, the gift's state from the payer's own row
+ * MUT-733 (ADR-293): with PAID_HARD_CAPS on and a Solo or Business payer, the gift's state from the payer's own row
  * (one read): the meter it lifts this month, and whether it can still be offered. Null otherwise (Starter's caps need no
  * rule; an owner-less firm, `org:`, is never capped, Q4).
  */

@@ -178,7 +178,7 @@ const envSchema = z.object({
    */
   PAID_BUSINESS_CAPS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
-   * MUT-733 (ADR-292): Solo and Business monthly meters (documents, scans) refuse at the cap with 409 PLAN_LIMIT, after a
+   * MUT-733 (ADR-293): Solo and Business monthly meters (documents, scans) refuse at the cap with 409 PLAN_LIMIT, after a
    * one-time gift per account (POST /v1/billing/over-cap-gift). Firm stays soft. Only exactly "true" turns it on. On only
    * after PLAN_CHECKOUT, MUT-734's plan change and the phone build that shows the gift (plan §7).
    */
@@ -289,6 +289,11 @@ const envSchema = z.object({
    * turns it on, as above.
    */
   ACCOUNTANT_ACCESS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-764 (accountant channel, epic MUT-762): an operator-approved accountant creates a customer's account. Off,
+   * POST /v1/accountant/customers answers 404 for everyone (the server deploys dark). Only "true" turns it on.
+   */
+  ACCOUNTANT_PROVISIONING: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-593 (ADR-254 D10): Malafat acting as each person with a delegated token. Off, the token endpoint refuses a
    * confidential client, every delegated token answers 401, and Connected apps and the operator's per-firm switch

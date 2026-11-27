@@ -24,8 +24,8 @@ export interface PlanLimitDetails {
   /** The first day of the next Asia/Jerusalem month (YYYY-MM-DD), for the monthly meters. */
   resetsOn?: string;
   /**
-   * MUT-733 (ADR-292): the account's once-ever over-cap gift can be taken for this meter (POST /v1/billing/over-cap-gift,
-   * then retry). Only on a monthly meter, a Solo or Business payer, and an unused gift. Additive since 1.158.0-mut733.
+   * MUT-733 (ADR-293): the account's once-ever over-cap gift can be taken for this meter (POST /v1/billing/over-cap-gift,
+   * then retry). Only on a monthly meter, a Solo or Business payer, and an unused gift. Additive since 1.159.0-mut733.
    */
   gift?: 'available';
 }

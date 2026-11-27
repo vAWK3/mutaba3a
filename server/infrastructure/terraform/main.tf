@@ -803,7 +803,7 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
-        # MUT-733 (ADR-292): Solo and Business monthly caps refuse after the one-time gift; off = counted, never refused.
+        # MUT-733 (ADR-293): Solo and Business monthly caps refuse after the one-time gift; off = counted, never refused.
         dynamic "env" {
           for_each = var.paid_hard_caps ? { PAID_HARD_CAPS = "true" } : {}
           content {

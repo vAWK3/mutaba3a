@@ -7,7 +7,7 @@ import { usageMonthOf } from '../usage/month.js';
 import { ADMIN, businessOf, idem, issuingHarness, json, person, read, type AccountantHarness, type Person } from './helpers/accountants.js';
 
 /**
- * MUT-733 (ADR-292): with PAID_HARD_CAPS on, Solo's and Business's monthly meters refuse at the cap; the first refusal
+ * MUT-733 (ADR-293): with PAID_HARD_CAPS on, Solo's and Business's monthly meters refuse at the cap; the first refusal
  * offers the account's once-ever gift (`gift: 'available'`), POST /v1/billing/over-cap-gift takes it and the same
  * request then goes through; later refusals (another month, or the other meter) are hard caps. Firm stays soft.
  */

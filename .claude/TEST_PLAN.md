@@ -88,6 +88,12 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## Accountant provisioning route and operator console (MUT-764, 2026-11-27)
+
+`routes-accountant-customers.test.ts`: 404 with the flag off, 403 unapproved and withdrawn, 401, Idempotency-Key required, 201 with rows and mail, no link or token in any response, replay without the code (one create, one mail), key reuse 422, both daily limits per UTC day with operator overrides and the defaults, existing-address answer audited and counted, throwaway refused uncounted, customer cannot sign in before claiming, the grant is read-only, OpenAPI. `routes-operator-provisioning.test.ts`: non-operator 404, step-up on writes (a password session is refused), approve/withdraw with audit rows, limit validation, today's counts, the unclaimed list with `paid`. Store contract adds the counts, the list and audited `setApproval`. Pinned in `route-security.test.ts` and `billing-gate-routes.test.ts`.
+
+---
+
 ## Accountant provisioning store (MUT-763, 2026-11-27)
 
 `server/src/repositories/__tests__/store-contract-accountant-provision.ts` runs on the memory store and on Postgres (`MUTABA3A_TEST_DATABASE_URL`): all rows created, `not_approved`, approval re-checked after withdrawal, `account_exists`, rollback on a duplicate digest, concurrent creates for one address, approval and limits storage. `auth/__tests__/store-guard-provision.test.ts` pins the `provision` guard class. Route, claim code and QA flows are MUT-764, 765 and 771.
@@ -4986,7 +4992,7 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | test:db | (CI) | the migration; cascade on closure (purge list entry) |
 | QA | with the UI half | `portal-live.billing.upgrade-solo-business`, `downgrade-business-solo`, `to-starter`, `undo-downgrade`, `portal.billing.change-plan-pane` |
 
-## MUT-733 (server half) — paid hard caps and the gift (2026-11-27, ADR-292)
+## MUT-733 (server half) — paid hard caps and the gift (2026-11-27, ADR-293)
 
 | Layer | File | Covers |
 |---|---|---|

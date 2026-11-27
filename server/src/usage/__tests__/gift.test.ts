@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hardCapOf } from '../caps.js';
 import { giftAvailable, giftCovers, giftUntil, NO_GIFT } from '../gift.js';
 
-/** MUT-733 (ADR-292): the gift's rule and the paid hard caps. */
+/** MUT-733 (ADR-293): the gift's rule and the paid hard caps. */
 const USED = { usedAt: new Date('2026-11-20T10:00:00Z'), meter: 'DOCUMENTS' as const, month: '2026-11' };
 
 describe('giftCovers / giftAvailable', () => {

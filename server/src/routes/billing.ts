@@ -430,7 +430,7 @@ async function billingUsage(store: LedgerStore, userId: string, owned: Awaited<R
     counts: { DOCUMENTS: count('DOCUMENTS'), SCANS: count('SCANS') },
     businessesOwned: owned.profiles.filter((p) => profileTypeOf(p) === 'BUSINESS').length,
   });
-  // MUT-733 (ADR-292): the gifted meter's `graceUntil`, and whether the gift can still be taken (PAID_HARD_CAPS only).
+  // MUT-733 (ADR-293): the gifted meter's `graceUntil`, and whether the gift can still be taken (PAID_HARD_CAPS only).
   if (!store.billing.paidHardCaps) return view;
   const gift = (await store.billing.overCapGiftOf(userId)) ?? NO_GIFT;
   const until = giftUntil(month).toISOString();

@@ -2,7 +2,7 @@ import { HARD_CAP_PLANS, PAID_HARD_CAP_PLANS, PLAN_LIMITS, type FreePlanName, ty
 import type { UsageMeter, UsagePlan } from './kinds.js';
 
 /**
- * MUT-733 (ADR-292): what a stamp carries about the paid caps: PAID_HARD_CAPS, and the meter the over-cap gift lifts
+ * MUT-733 (ADR-293): what a stamp carries about the paid caps: PAID_HARD_CAPS, and the meter the over-cap gift lifts
  * this month (null: none). Absent = only Starter is hard-capped (as before).
  */
 export interface CapRule {

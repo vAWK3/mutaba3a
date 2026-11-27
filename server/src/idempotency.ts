@@ -23,7 +23,8 @@ import type { IdempotencyClaim, LedgerStore, UserIdempotencyClaim } from './repo
 export const IDEMPOTENCY_HEADER = 'Idempotency-Key';
 const KEY_RE = /^[A-Za-z0-9_\-:.]{8,128}$/;
 
-function requireKey(c: Context<AppEnv>, operation: string): string {
+/** The request's Idempotency-Key, validated. Exported for a route that runs `runIdempotent` itself (MUT-764: a replay must never carry the claim code). */
+export function requireKey(c: Context<AppEnv>, operation: string): string {
   const key = c.req.header(IDEMPOTENCY_HEADER);
   if (!key) throw new ApiError('IDEMPOTENCY_KEY_REQUIRED', `${IDEMPOTENCY_HEADER} header is required for ${operation}`);
   if (!KEY_RE.test(key)) {
