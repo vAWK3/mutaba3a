@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>MUT-774 Client balances</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens copied from src/styles/brand/mutaba3a-theme.css (brand v2), as in accountant-channel-wireframe.html. The app ships Thmanyah; this file falls back to the system face. Amounts in IBM Plex Mono. */
+:root {
+  --m-canvas: oklch(0.975 0.014 80); --m-surface: oklch(0.993 0.008 80); --m-line: oklch(0.92 0.015 300);
+  --m-field-bg: oklch(0.965 0.012 300); --m-ink: oklch(0.33 0.05 300); --m-ink2: oklch(0.442 0.043 298.7);
+  --m-primary: oklch(0.55 0.14 295); --m-primary-hover: oklch(0.5 0.14 295); --m-on-primary: oklch(0.98 0.012 80); --m-focus: oklch(0.6 0.13 295);
+  --m-lavender: oklch(0.9 0.06 295); --m-lavender-ink: oklch(0.401 0.114 294.5);
+  --m-mint: oklch(0.9 0.06 165); --m-mint-ink: oklch(0.387 0.076 170.2);
+  --m-rose: oklch(0.9 0.06 10); --m-rose-ink: oklch(0.398 0.103 14.8);
+  --m-butter: oklch(0.93 0.07 95); --m-butter-ink: oklch(0.419 0.083 74.8);
+  --m-font-body: "Thmanyah Sans", system-ui, -apple-system, "Segoe UI", sans-serif; --m-font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px; --m-radius-card: 24px; --m-radius-pill: 999px;
+  --text-micro: 0.6875rem; --text-label: 0.8125rem; --text-body: 1rem; --text-headline: 1.25rem; --text-title: 2rem; --text-figure: 2.5rem;
+  --shadow: 0 1px 2px color-mix(in oklch, oklch(0.45 0.08 300) 6%, transparent), 0 12px 40px color-mix(in oklch, oklch(0.45 0.08 300) 9%, transparent);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --m-canvas: oklch(0.24 0.035 300); --m-surface: oklch(0.29 0.04 300); --m-line: oklch(0.4 0.04 300);
+  --m-field-bg: oklch(0.34 0.045 300); --m-ink: oklch(0.95 0.015 80); --m-ink2: oklch(0.78 0.03 300);
+  --m-primary: oklch(0.78 0.11 295); --m-primary-hover: oklch(0.84 0.1 295); --m-on-primary: oklch(0.27 0.06 300); --m-focus: oklch(0.75 0.12 295);
+  --m-lavender: oklch(0.38 0.07 295); --m-lavender-ink: oklch(0.88 0.08 295);
+  --m-mint: oklch(0.38 0.07 165); --m-mint-ink: oklch(0.88 0.08 165);
+  --m-rose: oklch(0.38 0.07 10); --m-rose-ink: oklch(0.88 0.08 10);
+  --m-butter: oklch(0.4 0.06 85); --m-butter-ink: oklch(0.9 0.09 95); color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --m-canvas: oklch(0.24 0.035 300); --m-surface: oklch(0.29 0.04 300); --m-line: oklch(0.4 0.04 300);
+  --m-field-bg: oklch(0.34 0.045 300); --m-ink: oklch(0.95 0.015 80); --m-ink2: oklch(0.78 0.03 300);
+  --m-primary: oklch(0.78 0.11 295); --m-primary-hover: oklch(0.84 0.1 295); --m-on-primary: oklch(0.27 0.06 300); --m-focus: oklch(0.75 0.12 295);
+  --m-lavender: oklch(0.38 0.07 295); --m-lavender-ink: oklch(0.88 0.08 295);
+  --m-mint: oklch(0.38 0.07 165); --m-mint-ink: oklch(0.88 0.08 165);
+  --m-rose: oklch(0.38 0.07 10); --m-rose-ink: oklch(0.88 0.08 10);
+  --m-butter: oklch(0.4 0.06 85); --m-butter-ink: oklch(0.9 0.09 95); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: hidden; }
+body { margin: 0; background: var(--m-canvas); color: var(--m-ink); font: var(--text-body)/1.5 var(--m-font-body); }
+:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--m-lavender-ink); }
+h1, h2, h3, h4 { font-weight: 700; }
+/* Wireframe toolbar */
+.top { position: sticky; top: 0; z-index: 40; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px; background: var(--m-surface); border-bottom: 1px solid var(--m-line); }
+.top .r { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.top h1 { font-size: var(--text-body); margin: 0; margin-inline-end: auto; }
+.top .lbl { font-size: var(--text-micro); color: var(--m-ink2); text-transform: uppercase; letter-spacing: .04em; min-width: 64px; }
+.tb { min-height: 36px; padding: 4px 14px; border-radius: var(--m-radius-pill); border: 1px solid var(--m-line); background: var(--m-field-bg); cursor: pointer; font-size: var(--text-label); }
+.tb[aria-pressed="true"] { background: var(--m-lavender); color: var(--m-lavender-ink); border-color: transparent; font-weight: 600; }
+.tb .star { color: var(--m-mint-ink); margin-inline-start: 4px; }
+main { max-width: 1440px; margin: 0 auto; padding: 18px 16px 64px; }
+.note { font-size: var(--text-label); color: var(--m-ink2); max-width: 90ch; margin: 0 0 12px; }
+.tradeoffs { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 4px; font-size: var(--text-label); }
+.tradeoffs li { padding: 6px 10px; border-radius: 10px; color: var(--m-ink2); border: 1px solid transparent; }
+.tradeoffs li.on { background: var(--m-surface); border-color: var(--m-line); color: var(--m-ink); }
+.tradeoffs b { font-family: var(--m-font-num); margin-inline-end: 6px; }
+.rec { display: inline-block; font-size: var(--text-micro); background: var(--m-mint); color: var(--m-mint-ink); padding: 1px 8px; border-radius: 6px; margin-inline-start: 6px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 391px; gap: 24px; align-items: start; }
+.stage.solo { grid-template-columns: minmax(0, 1fr); }
+.stage.phones { grid-template-columns: repeat(auto-fill, minmax(391px, 1fr)); justify-items: center; }
+.cap { font-size: var(--text-micro); color: var(--m-ink2); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 6px; }
+.none { border: 1px dashed var(--m-line); border-radius: var(--m-radius-lg); padding: 24px; color: var(--m-ink2); font-size: var(--text-label); }
+@media (max-width: 1000px) { .stage { grid-template-columns: minmax(0, 1fr); justify-items: stretch; } .stage > .pcol { justify-self: center; } }
+/* Desktop portal frame */
+.frame { position: relative; overflow: hidden; background: var(--m-canvas); border: 1px solid var(--m-line); border-radius: var(--m-radius-lg); box-shadow: var(--shadow); min-height: 780px; }
+.chrome { display: flex; align-items: center; gap: 10px; padding: 14px 20px 0; }
+.chrome .pill { margin-inline: auto; display: flex; gap: 2px; padding: 4px; border-radius: var(--m-radius-pill); background: color-mix(in oklch, var(--m-surface) 85%, transparent); border: 1px solid var(--m-line); box-shadow: var(--shadow); }
+.chrome .pill span { padding: 6px 12px; border-radius: var(--m-radius-pill); font-size: var(--text-label); color: var(--m-ink2); }
+.chrome .pill span.on { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.chrome .you { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--m-primary); display: grid; place-items: center; font-size: var(--text-label); background: var(--m-surface); }
+.chrome .rep { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--m-line); display: grid; place-items: center; background: var(--m-surface); color: var(--m-ink2); }
+.desk { padding: 22px 32px 32px; }
+.hdr { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+.hdr h2 { font-size: var(--text-title); margin: 0; margin-inline-end: auto; }
+.overlay { position: absolute; inset: 0; background: color-mix(in oklch, var(--m-ink) 30%, transparent); z-index: 5; }
+.drawer { position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: min(480px, 100%); background: var(--m-surface); z-index: 6; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.drawer.wide { width: min(720px, 100%); }
+.dh { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid var(--m-line); }
+.dh h3 { margin: 0; font-size: var(--text-body); margin-inline-end: auto; }
+.x { min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 18px; cursor: pointer; border-radius: 10px; }
+.db { padding: 18px 20px; overflow: auto; flex: 1; }
+.df { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--m-line); background: var(--m-canvas); }
+.df .start { margin-inline-end: auto; }
+/* Controls */
+.btn { min-height: 44px; padding: 8px 18px; border-radius: var(--m-radius-md); border: 1px solid transparent; background: var(--m-primary-hover); color: var(--m-on-primary); cursor: pointer; font-weight: 600; }
+.btn.sec { background: var(--m-field-bg); color: var(--m-ink); border-color: var(--m-line); }
+.btn.danger { background: var(--m-rose-ink); color: var(--m-canvas); }
+.btn.full { width: 100%; min-height: 52px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.lb { min-height: 44px; padding: 0 6px; background: none; border: 0; color: var(--m-lavender-ink); cursor: pointer; font-size: var(--text-label); font-weight: 600; }
+.lb.danger { color: var(--m-rose-ink); }
+.sub { font-size: var(--text-label); color: var(--m-ink2); }
+.num { font-family: var(--m-font-num); font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.big { font-family: var(--m-font-num); font-size: var(--text-figure); font-weight: 500; line-height: 1.1; }
+.h3 { font-size: var(--text-headline); font-weight: 500; margin: 0 0 8px; }
+.title { font-size: var(--text-title); margin: 0 0 4px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: var(--text-label); font-weight: 500; white-space: nowrap; }
+.b-neutral { background: var(--m-field-bg); color: var(--m-ink2); border: 1px solid var(--m-line); } .b-warning { background: var(--m-butter); color: var(--m-butter-ink); }
+.b-info, .b-accent { background: var(--m-lavender); color: var(--m-lavender-ink); } .b-success { background: var(--m-mint); color: var(--m-mint-ink); } .b-error { background: var(--m-rose); color: var(--m-rose-ink); }
+.banner { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--m-radius-sm); margin-bottom: 14px; font-size: var(--text-body); }
+.banner .grow { flex: 1; min-width: 160px; }
+.ban-error { background: var(--m-rose); color: var(--m-rose-ink); } .ban-warning { background: var(--m-butter); color: var(--m-butter-ink); } .ban-info { background: var(--m-lavender); color: var(--m-lavender-ink); } .ban-ok { background: var(--m-mint); color: var(--m-mint-ink); }
+.banner .lb { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.rg { background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); overflow: hidden; margin-bottom: 14px; }
+.rg > .row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-bottom: 1px solid var(--m-line); }
+.rg > .row:last-child { border-bottom: 0; }
+.rg > .row.click { cursor: pointer; } .rg > .row.click:hover { background: var(--m-field-bg); }
+.rg > .row.cur { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.rg > .row.cur .sub { color: var(--m-lavender-ink); }
+.rg > .row .grow { flex: 1; min-width: 0; }
+.rg .chev { color: var(--m-ink2); }
+/* › and ‹ are bidi-mirrored characters: RTL flips them by itself. */
+.radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--m-line); flex: none; display: grid; place-items: center; }
+.radio.on { border-color: var(--m-primary-hover); } .radio.on::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--m-primary-hover); }
+.check { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--m-line); flex: none; display: grid; place-items: center; font-size: 14px; }
+.check.on { background: var(--m-primary-hover); border-color: var(--m-primary-hover); color: var(--m-on-primary); }
+.sw { width: 44px; height: 26px; border-radius: 13px; background: var(--m-line); position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--m-surface); transition: inset-inline-start .15s; }
+.sw.on { background: var(--m-primary-hover); } .sw.on::after { inset-inline-start: 21px; }
+.seg { display: inline-flex; padding: 3px; border-radius: var(--m-radius-pill); background: var(--m-field-bg); border: 1px solid var(--m-line); gap: 2px; }
+.seg button { min-height: 36px; padding: 2px 14px; border: 0; border-radius: var(--m-radius-pill); background: none; cursor: pointer; font-size: var(--text-label); }
+.seg button.on { background: var(--m-surface); box-shadow: var(--shadow); font-weight: 600; }
+.fg { margin-bottom: 14px; } .fg label { display: block; font-size: var(--text-label); color: var(--m-ink2); margin-bottom: 4px; }
+.fg input, .fg select { width: 100%; min-height: 44px; padding: 6px 12px; border-radius: var(--m-radius-sm); border: 1px solid var(--m-line); background: var(--m-field-bg); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.kv.total { border-top: 1px solid var(--m-line); margin-top: 4px; padding-top: 10px; font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--m-field-bg); border: 1px solid var(--m-line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--m-primary); border-radius: 3px; }
+.bar.warn i { background: var(--m-butter-ink); }
+.warn-ink { color: var(--m-butter-ink); }
+.ok-ink { color: var(--m-mint-ink); }
+.err-ink { color: var(--m-rose-ink); }
+.card { background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); padding: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stack > * + * { margin-top: 10px; }
+table.t { width: 100%; border-collapse: collapse; background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); overflow: hidden; }
+.t th { text-align: start; font-size: var(--text-label); font-weight: 500; color: var(--m-ink2); padding: 10px 14px; border-bottom: 1px solid var(--m-line); }
+.t td { padding: 10px 14px; border-bottom: 1px solid var(--m-line); vertical-align: middle; }
+.t tr:last-child td { border-bottom: 0; }
+.t .n { text-align: end; }
+.t tr.click { cursor: pointer; } .t tr.click:hover { background: var(--m-field-bg); }
+.t tr.mon th { background: var(--m-field-bg); color: var(--m-ink); font-weight: 600; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: var(--text-micro); font-weight: 500; background: var(--m-field-bg); border: 1px solid var(--m-line); color: var(--m-ink2); white-space: nowrap; }
+.toast { position: absolute; bottom: 18px; inset-inline-start: 50%; transform: translateX(-50%); z-index: 9; background: var(--m-ink); color: var(--m-canvas); padding: 10px 16px; border-radius: var(--m-radius-md); font-size: var(--text-label); display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+[dir="rtl"] .toast { transform: translateX(50%); }
+.toast .lb { color: var(--m-lavender); min-height: 32px; }
+/* Phone frame */
+.pcol { width: 391px; max-width: 100%; }
+.phone { width: 375px; max-width: 100%; height: 740px; position: relative; overflow: hidden; background: var(--m-canvas); border: 8px solid var(--m-ink); border-radius: 40px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.pbar { padding: 48px 16px 8px; display: flex; align-items: center; gap: 8px; min-height: 100px; }
+.pbar h2 { margin: 0; font-size: 1.75rem; margin-inline-end: auto; }
+.pbar .back { min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 22px; color: var(--m-lavender-ink); cursor: pointer; }
+.pbody { flex: 1; overflow: auto; padding: 0 16px 16px; }
+.pfoot { padding: 10px 16px 22px; border-top: 1px solid var(--m-line); background: var(--m-canvas); }
+.ptabs { display: flex; justify-content: space-around; padding: 8px 8px 22px; border-top: 1px solid var(--m-line); background: var(--m-surface); font-size: var(--text-micro); color: var(--m-ink2); }
+.ptabs span.on { color: var(--m-lavender-ink); font-weight: 600; }
+.sheet { position: absolute; inset-inline: 0; bottom: 0; background: var(--m-surface); border-radius: 24px 24px 0 0; z-index: 6; display: flex; flex-direction: column; box-shadow: var(--shadow); max-height: 88%; }
+.sheet.fullh { top: 40px; max-height: none; }
+.sheet .sb { padding: 4px 18px 12px; overflow: auto; flex: 1; } .sheet .sf { padding: 10px 18px 22px; }
+.grab { width: 40px; height: 4px; background: var(--m-line); border-radius: 2px; margin: 10px auto; flex: none; }
+.pscrim { position: absolute; inset: 0; background: color-mix(in oklch, var(--m-ink) 30%, transparent); z-index: 5; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 760px) { .desk { padding: 16px; } .hdr h2 { font-size: 1.5rem; } .chrome .pill span:nth-child(n+4) { display: none; } .grid3 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .two, .grid2 { grid-template-columns: 1fr; } .pcol, .phone { width: 100%; } .stage.phones { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+</style>
+</head>
+<body>
+<div class="top" id="top" role="toolbar" aria-label="Wireframe controls"></div>
+<main id="app"></main>
+<script>
+/* Shared wireframe runtime: state, i18n, Levantine dates, money, portal and phone frames, shared parts (plans, meters). */
+const S = { lang: 'ar', theme: 'auto', scr: null, v: {}, st: {}, x: {} };
+const SHARED_T = {
+  ar: {
+    screen: 'الشاشة', variant: 'البديل', state: 'الحالة', view: 'عرض', close: 'إغلاق', cancel: 'إلغاء', cont: 'متابعة', confirm: 'تأكيد', done: 'تم', undo: 'تراجع', back: 'رجوع',
+    nav_home: 'الرئيسية', nav_owed: 'المستحق', nav_paid: 'المقبوض', nav_spent: 'المصروف', nav_clients: 'العملاء', you: 'أنت',
+    ptab_home: 'الرئيسية', ptab_owed: 'المستحق', ptab_scan: 'مسح', ptab_clients: 'العملاء', ptab_you: 'أنت',
+    billing: 'الفوترة', perMonth: 'شهريًا', perYear: 'سنويًا', ofCap: '{u} من {c}', invoices: 'الفواتير', scans: 'مسح الإيصالات', businesses: 'الأنشطة',
+    thisMonth: 'هذا الشهر', upgradeTo: 'الترقية إلى {p}', noLimitUntil: 'بلا حد حتى {d}', limitReached: 'بلغت الحد', resets: 'يتجدد في {d}',
+    current: 'الحالية', recommended: 'مقترح', desk: 'الويب (البوابة)', phone: 'الهاتف (Flutter)', noSurface: 'لا شاشة هنا', theme: 'المظهر', auto: 'تلقائي', light: 'فاتح', dark: 'داكن',
+  },
+  en: {
+    screen: 'Screen', variant: 'Variant', state: 'State', view: 'View', close: 'Close', cancel: 'Cancel', cont: 'Continue', confirm: 'Confirm', done: 'Done', undo: 'Undo', back: 'Back',
+    nav_home: 'Home', nav_owed: 'Owed', nav_paid: 'Paid', nav_spent: 'Spent', nav_clients: 'Clients', you: 'You',
+    ptab_home: 'Home', ptab_owed: 'Owed', ptab_scan: 'Scan', ptab_clients: 'Clients', ptab_you: 'You',
+    billing: 'Billing', perMonth: 'a month', perYear: 'a year', ofCap: '{u} of {c}', invoices: 'Invoices', scans: 'Scans', businesses: 'Businesses',
+    thisMonth: 'this month', upgradeTo: 'Upgrade to {p}', noLimitUntil: 'No limit until {d}', limitReached: 'Limit reached', resets: 'Resets {d}',
+    current: 'Current', recommended: 'Recommended', desk: 'Web (portal)', phone: 'Phone (Flutter)', noSurface: 'No screen here', theme: 'Theme', auto: 'Auto', light: 'Light', dark: 'Dark',
+  },
+};
+function t(k, p) {
+  let s = (APP.T && APP.T[S.lang] && APP.T[S.lang][k]) ?? SHARED_T[S.lang][k] ?? k;
+  if (p) for (const [a, b] of Object.entries(p)) s = s.split('{' + a + '}').join(b);
+  return s;
+}
+const L = (o) => (o == null ? '' : typeof o === 'object' ? o[S.lang] ?? o.en : o);
+const LOC = () => (S.lang === 'ar' ? 'ar-u-nu-latn' : 'en-GB');
+function money(minor, cur = 'ILS', { sign = false } = {}) {
+  const f = new Intl.NumberFormat(LOC(), { style: 'currency', currency: cur, minimumFractionDigits: minor % 100 ? 2 : 0, maximumFractionDigits: 2, signDisplay: sign ? 'exceptZero' : 'auto' });
+  return `<bdi class="num">${f.format(minor / 100)}</bdi>`;
+}
+const num = (x) => `<bdi class="num">${new Intl.NumberFormat(LOC()).format(x)}</bdi>`;
+const AR_M = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+const EN_M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const EN_MS = EN_M.map((m) => m.slice(0, 3));
+function day(iso, { year = true, short = false } = {}) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const M = S.lang === 'ar' ? AR_M[m - 1] : (short ? EN_MS : EN_M)[m - 1];
+  return `<bdi>${d} ${M}${year ? ' ' + y : ''}</bdi>`;
+}
+function month(iso) { const [y, m] = iso.split('-').map(Number); return `${S.lang === 'ar' ? AR_M[m - 1] : EN_M[m - 1]} ${y}`; }
+const escH = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s) => String(s).replace(/"/g, '&quot;');
+
+/* Plans (MUT-702 / ADR-275 / ADR-284): names, list prices before VAT, limits. */
+const PLANS = {
+  starter: { ar: 'البداية', en: 'Starter', price: 0, biz: 1, docs: 3, scans: 12 },
+  solo: { ar: 'مستقل', en: 'Solo', price: 3900, biz: 1, docs: 50, scans: 100 },
+  business: { ar: 'تجاري', en: 'Business', price: 8900, biz: 3, docs: 250, scans: 500 },
+  firm: { ar: 'مؤسسة', en: 'Firm', price: 24900, biz: 6, docs: 1000, scans: 2000 },
+  legacy: { ar: 'الخطة السابقة', en: 'Previous plan', price: 2900 },
+  accountant: { ar: 'المحاسب', en: 'Accountant' },
+};
+const pn = (k) => L(PLANS[k]);
+const NEXT_PLAN = { starter: 'solo', solo: 'business', business: 'firm', firm: null };
+const limitsLine = (k) => { const p = PLANS[k]; return `${num(p.biz)} ${t('businesses')} · ${num(p.docs)} ${t('invoices')} · ${num(p.scans)} ${t('scans')}`; };
+
+/* Small parts */
+const btn = (label, { kind = '', x = '', full = false, dis = false, attrs = '' } = {}) => `<button class="btn ${kind} ${full ? 'full' : ''}" ${x ? `data-x="${x}"` : ''} ${dis ? 'disabled' : ''} ${attrs}>${label}</button>`;
+const lb = (label, { x = '', danger = false } = {}) => `<button class="lb ${danger ? 'danger' : ''}" ${x ? `data-x="${x}"` : ''}>${label}</button>`;
+const badge = (tone, text) => `<span class="badge b-${tone}">${text}</span>`;
+const ICON = { error: '!', warning: '!', info: 'i', ok: '✓' };
+const banner = (tone, html, action = '') => `<div class="banner ban-${tone}" role="${tone === 'error' ? 'alert' : 'note'}"><span aria-hidden="true" class="num">${ICON[tone]}</span><span class="grow">${html}</span>${action}</div>`;
+const rows = (items) => `<div class="rg">${items.join('')}</div>`;
+const row = (inner, { click = '', cur = false, chev = false } = {}) => `<div class="row ${click ? 'click' : ''} ${cur ? 'cur' : ''}" ${click ? `data-x="${click}" role="button" tabindex="0"` : ''}>${inner}${chev ? '<span class="chev" aria-hidden="true">›</span>' : ''}</div>`;
+const toast = (text, action = '') => `<div class="toast" role="status">${text}${action}</div>`;
+const backArrow = () => '‹';
+
+/* Portal frame: the floating chrome (Reports, pill of destinations, You island) over <main>. */
+function desk(main, { nav = '', overlay = '' } = {}) {
+  const pill = ['home', 'owed', 'paid', 'spent', 'clients'].map((k) => `<span class="${k === nav ? 'on' : ''}">${t('nav_' + k)}</span>`).join('');
+  return `<div class="frame"><div class="chrome"><span class="rep" aria-hidden="true">▤</span><div class="pill">${pill}</div><span class="you">${S.lang === 'ar' ? 'س' : 'S'}</span></div><div class="desk">${main}</div>${overlay}</div>`;
+}
+function drawer({ title, body, foot = '', back = '', wide = false, extra = '' }) {
+  return `<div class="overlay"></div><section class="drawer ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="dh">${back ? `<button class="x" data-x="${back}" aria-label="${t('back')}">${backArrow()}</button>` : ''}<h3>${title}</h3><button class="x" aria-label="${t('close')}">✕</button></div>
+    <div class="db">${body}</div>${foot ? `<div class="df">${foot}</div>` : ''}${extra}</section>`;
+}
+/* Phone frame (Flutter): large title, body, pinned footer, tab bar, optional sheet. */
+function phone({ title = '', body = '', foot = '', sheet = '', back = false, tabs = 'you', large = true, scrim = false, extra = '' }) {
+  const tb = tabs ? `<div class="ptabs">${['home', 'owed', 'scan', 'clients', 'you'].map((k) => `<span class="${k === tabs ? 'on' : ''}">${t('ptab_' + k)}</span>`).join('')}</div>` : '';
+  return `<div class="phone"><div class="pbar" style="${large ? '' : 'min-height:0;padding-bottom:4px'}">${back ? `<button class="back" aria-label="${t('back')}">${backArrow()}</button>` : ''}<h2 style="${large ? '' : 'font-size:var(--text-headline)'}">${title}</h2></div>
+    <div class="pbody">${body}</div>${foot ? `<div class="pfoot">${foot}</div>` : ''}${tb}${scrim || sheet ? '<div class="pscrim"></div>' : ''}${sheet}${extra}</div>`;
+}
+const sheet = (inner, foot = '', { full = false } = {}) => `<div class="sheet ${full ? 'fullh' : ''}" role="dialog" aria-modal="true"><div class="grab"></div><div class="sb">${inner}</div>${foot ? `<div class="sf">${foot}</div>` : ''}</div>`;
+
+/* Meter rows, shared by MUT-733, MUT-754 (portal) and MUT-706 / MUT-756 (phone). Level: ok < 80% ≤ near < 90% ≤ nudge < 100% ≤ cap. */
+function levelOf(used, cap) { const r = used / cap; return r >= 1 ? 'cap' : r >= 0.9 ? 'nudge' : r >= 0.8 ? 'near' : 'ok'; }
+function meter({ label, used, cap, grace = '', style = 'A', upgrade = '' }) {
+  const lv = levelOf(used, cap);
+  const warn = !grace && (lv === 'nudge' || lv === 'cap');
+  const pct = Math.min(100, Math.round((used / cap) * 100));
+  const count = t('ofCap', { u: num(used), c: num(cap) });
+  const status = grace ? `<span class="sub ok-ink">${t('noLimitUntil', { d: day(grace) })}</span>` : lv === 'cap' ? `<span class="sub warn-ink">${t('limitReached')}</span>` : '';
+  const up = upgrade && warn ? lb(t('upgradeTo', { p: pn(upgrade) }), { x: 'upgraded=1' }) : '';
+  const aria = `aria-label="${esc(label)}, ${used} / ${cap}"`;
+  if (style === 'B') {
+    return `<div class="row" ${aria}><span class="grow">${label}</span>${status}<span class="num ${warn ? 'warn-ink' : ''}" style="font-weight:${warn ? 600 : 400}">${count}</span></div>`;
+  }
+  if (style === 'C') {
+    return `<div class="card" ${aria} style="${warn ? 'border-color:var(--m-butter-ink)' : ''}"><div class="sub">${label}</div><div class="big ${warn ? 'warn-ink' : ''}" style="font-size:1.75rem">${num(used)}<span class="sub" style="font-size:var(--text-label)"> / ${num(cap)}</span></div><div class="bar ${warn ? 'warn' : ''}" style="margin:8px 0 4px"><i style="width:${pct}%"></i></div>${status || '<span class="sub">&nbsp;</span>'}${up ? `<div>${up}</div>` : ''}</div>`;
+  }
+  return `<div class="row" ${aria} style="flex-wrap:wrap;row-gap:6px"><span class="grow">${label}</span>${status}<span class="num ${warn ? 'warn-ink' : ''}" style="font-weight:${warn ? 600 : 400}">${count}</span><div class="bar ${warn ? 'warn' : ''}" style="flex-basis:100%"><i style="width:${pct}%"></i></div>${up ? `<div style="flex-basis:100%;margin-block:-8px">${up}</div>` : ''}</div>`;
+}
+function meters(list, style, { upgrade = '' } = {}) {
+  if (style === 'C') return `<div class="grid2">${list.map((m) => meter({ ...m, style, upgrade })).join('')}</div>`;
+  const anyWarn = list.some((m) => !m.grace && ['nudge', 'cap'].includes(levelOf(m.used, m.cap)));
+  const tail = style === 'B' && upgrade && anyWarn ? row(`<span class="grow"></span>${lb(t('upgradeTo', { p: pn(upgrade) }), { x: 'upgraded=1' })}`) : '';
+  return `<div class="rg">${list.map((m) => meter({ ...m, style, upgrade })).join('')}${tail}</div>`;
+}
+
+/* The You page behind account drawers. */
+function youPage(cur = 'billing') {
+  const items = [['profiles', S.lang === 'ar' ? 'الملفات' : 'Profiles'], ['billing', t('billing')], ['data', S.lang === 'ar' ? 'بياناتك' : 'Your data'], ['security', S.lang === 'ar' ? 'الأمان' : 'Security']];
+  return `<div class="hdr"><h2>${t('you')}</h2></div><div style="max-width:560px">${rows(items.map(([k, l]) => row(`<span class="grow">${l}</span>`, { cur: k === cur, chev: true })))}</div>`;
+}
+
+/* Toolbar and rendering */
+function render() {
+  const H = document.documentElement;
+  H.lang = S.lang; H.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
+  if (S.theme === 'auto') H.removeAttribute('data-theme'); else H.setAttribute('data-theme', S.theme);
+  const sc = APP.screens.find((s) => s.id === S.scr) || APP.screens[0];
+  S.scr = sc.id;
+  const v = S.v[sc.id] || sc.rec;
+  const st = S.st[sc.id] || (sc.states && sc.states[0].id);
+  const ctx = { v, st, x: S.x };
+  document.title = APP.docTitle;
+  const pb = (attr, val, on, label) => `<button class="tb" data-${attr}="${val}" aria-pressed="${on}">${label}</button>`;
+  document.getElementById('top').innerHTML = `
+    <div class="r"><h1>${L(APP.title)}</h1>${pb('lang', 'ar', S.lang === 'ar', 'العربية')}${pb('lang', 'en', S.lang === 'en', 'English')}
+      ${['auto', 'light', 'dark'].map((m) => pb('thm', m, S.theme === m, t(m))).join('')}</div>
+    ${APP.screens.length > 1 ? `<div class="r"><span class="lbl">${t('screen')}</span>${APP.screens.map((s) => pb('scr', s.id, s.id === sc.id, L(s.name))).join('')}</div>` : ''}
+    <div class="r"><span class="lbl">${t('variant')}</span>${['A', 'B', 'C'].map((k) => `<button class="tb" data-var="${k}" aria-pressed="${k === v}">${k} · ${L(sc.names[k])}${k === sc.rec ? '<span class="star" title="' + t('recommended') + '">★</span>' : ''}</button>`).join('')}</div>
+    ${sc.states ? `<div class="r"><span class="lbl">${t('state')}</span>${sc.states.map((s) => pb('st', s.id, s.id === st, L(s.label))).join('')}</div>` : ''}`;
+  const d = sc.desk ? sc.desk(ctx) : null;
+  let p = sc.phone ? sc.phone(ctx) : null;
+  const tr = `<ul class="tradeoffs">${['A', 'B', 'C'].map((k) => `<li class="${k === v ? 'on' : ''}" dir="ltr"><b>${k}</b>${escH(sc.trade[k])}${k === sc.rec ? '<span class="rec">recommended</span>' : ''}</li>`).join('')}</ul>`;
+  const note = sc.note ? `<p class="note" dir="ltr">${escH(sc.note)}</p>` : '';
+  const none = (why) => `<div class="none" dir="ltr">${escH(why)}</div>`;
+  let stage;
+  if (Array.isArray(p)) {
+    const phones = `<div class="stage phones">${p.map((ph) => `<div class="pcol"><p class="cap">${ph.cap}</p>${ph.html}</div>`).join('')}</div>`;
+    stage = (d ? `<p class="cap">${t('desk')}</p>${d}<div style="height:24px"></div>` : sc.noDesk ? none(sc.noDesk) + '<div style="height:16px"></div>' : '') + `<p class="cap">${t('phone')}</p>` + phones;
+  } else {
+    const left = d ? `<div><p class="cap">${t('desk')}</p>${d}</div>` : `<div><p class="cap">${t('desk')}</p>${none(sc.noDesk || t('noSurface'))}</div>`;
+    const right = p ? `<div class="pcol"><p class="cap">${t('phone')}</p>${p}</div>` : `<div class="pcol"><p class="cap">${t('phone')}</p>${none(sc.noPhone || t('noSurface'))}</div>`;
+    stage = `<div class="stage">${left}${right}</div>`;
+  }
+  document.getElementById('app').innerHTML = note + tr + stage;
+}
+function setX(spec) {
+  for (const part of spec.split(';')) {
+    if (!part) continue;
+    const [k, val] = part.split('=');
+    if (val === 'null') delete S.x[k]; else if (val === '!') S.x[k] = !S.x[k]; else S.x[k] = val;
+  }
+}
+function boot() {
+  try { const saved = JSON.parse(localStorage.getItem('wf:' + APP.docTitle) || '{}'); if (saved.lang) S.lang = saved.lang; if (saved.theme) S.theme = saved.theme; } catch (e) { /* private mode */ }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-scr],[data-var],[data-st],[data-lang],[data-thm],[data-x]');
+    if (!b) return;
+    const ds = b.dataset;
+    if (ds.scr) { S.scr = ds.scr; S.x = {}; }
+    else if (ds.var) { S.v[S.scr] = ds.var; S.x = {}; }
+    else if (ds.st) { S.st[S.scr] = ds.st; S.x = {}; }
+    else if (ds.lang) S.lang = ds.lang;
+    else if (ds.thm) S.theme = ds.thm;
+    else if (ds.x) setX(ds.x);
+    try { localStorage.setItem('wf:' + APP.docTitle, JSON.stringify({ lang: S.lang, theme: S.theme })); } catch (err) { /* ignore */ }
+    render();
+  });
+  document.addEventListener('change', (e) => { const el = e.target.closest('[data-xs]'); if (el) { S.x[el.dataset.xs] = el.value; render(); } });
+  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.row[data-x]')) { e.preventDefault(); e.target.click(); } });
+  render();
+}
+
+/* MUT-774: each client's balance per currency on the portal clients list; the phone's client ledger card, mirroring the portal LedgerCard (MUT-664). */
+const CLIENTS = [
+  { ar: 'استوديو ليلى', en: 'Layla Studio', c: { ar: 'ليلى سعيد', en: 'Layla Saeed' }, bal: { ILS: 1280000, USD: 100000, EUR: 25000 }, last: '2026-11-24' },
+  { ar: 'مقهى نور', en: 'Café Nour', c: { ar: 'سامر حداد', en: 'Samer Haddad' }, bal: { ILS: 420000, USD: 30000 }, last: '2026-11-20' },
+  { ar: 'جابر وأولاده', en: 'Jaber & Sons', c: { ar: 'محمود جابر', en: 'Mahmoud Jaber' }, bal: { JOD: 115000 }, last: '2026-11-02' },
+  { ar: 'صيدلية القدس', en: 'Al-Quds Pharmacy', c: { ar: 'خالد جابر', en: 'Khaled Jaber' }, bal: { ILS: -50000 }, last: '2026-10-30' },
+  { ar: 'دار السلام', en: 'Dar Al-Salam', c: { ar: 'ليلى منصور', en: 'Layla Mansour' }, bal: { ILS: 0 }, last: '2026-09-11' },
+];
+/* Newest first, as the portal card (D14). debit = owed by the client (income), credit = paid. bal = running balance after the line. */
+const LINES = {
+  ILS: [
+    { d: '2026-11-20', k: 'pay', amt: -200000, bal: 420000, docs: [['receipt', 112]] },
+    { d: '2026-11-03', k: 'inc', note: { ar: 'صيانة الموقع', en: 'Website care' }, amt: 300000, bal: 620000, docs: [['taxInvoice', 241]] },
+    { d: '2026-10-28', k: 'pay', amt: -150000, bal: 320000, docs: [], due: 'receipt' },
+    { d: '2026-10-05', k: 'inc', note: { ar: 'صيانة الموقع', en: 'Website care' }, amt: 300000, bal: 470000, docs: [['taxInvoice', 236]] },
+    { d: '2026-09-15', k: 'inc', note: { ar: 'تصميم القائمة', en: 'Menu design' }, amt: 170000, bal: 170000, docs: [['taxInvoice', 229]] },
+  ],
+  USD: [{ d: '2026-11-10', k: 'inc', note: { ar: 'ترجمة', en: 'Translation' }, amt: 30000, bal: 30000, docs: [], due: 'invoice' }],
+  CREDIT: [
+    { d: '2026-10-30', k: 'pay', amt: -100000, bal: -50000, docs: [['receipt', 108]] },
+    { d: '2026-10-12', k: 'inc', note: { ar: 'استشارة', en: 'Consulting' }, amt: 50000, bal: 50000, docs: [['taxInvoice', 233]] },
+  ],
+};
+const APP = {
+  docTitle: 'MUT-774 Client balances',
+  title: { ar: 'MUT-774 · أرصدة العملاء وكرت العميل', en: 'MUT-774 · Client balances and the ledger card' },
+  T: {
+    ar: { clients: 'العملاء', client: 'العميل', balance: 'الرصيد', last: 'آخر حركة', inCredit: 'العميل دائن {a}', settled: 'مسدّد', viewOnly: 'للعرض فقط', addClient: 'عميل جديد', search: 'بحث',
+      ledger: 'كرت العميل', closing: 'الرصيد الختامي', opening: 'الرصيد الافتتاحي', period: 'الفترة', pYear: 'هذه السنة', p12: 'آخر 12 شهرًا', pAll: 'الكل', inc: 'دخل', pay: 'دفعة', debit: 'مدين', credit: 'دائن', date: 'التاريخ', movement: 'الحركة', document: 'المستند',
+      taxInvoice: 'فاتورة ضريبية', receipt: 'إيصال', due_receipt: 'إيصال للإصدار', due_invoice: 'فاتورة للإصدار', empty: 'لا حركات', total: 'المجموع', earlier: 'عرض الأقدم', all: 'الكل' },
+    en: { clients: 'Clients', client: 'Client', balance: 'Balance', last: 'Last movement', inCredit: 'Client in credit {a}', settled: 'Settled', viewOnly: 'View only', addClient: 'New client', search: 'Search',
+      ledger: 'Client ledger', closing: 'Closing balance', opening: 'Opening balance', period: 'Period', pYear: 'This year', p12: 'Last 12 months', pAll: 'All', inc: 'Income', pay: 'Payment', debit: 'Debit', credit: 'Credit', date: 'Date', movement: 'Movement', document: 'Document',
+      taxInvoice: 'Tax invoice', receipt: 'Receipt', due_receipt: 'Receipt to issue', due_invoice: 'Invoice to issue', empty: 'No movements', total: 'Total', earlier: 'Show earlier', all: 'All' },
+  },
+  screens: [],
+  smokeX: [{}, { cur: 'USD' }, { cur: 'EUR' }],
+};
+const balTxt = (minor, cur) => (minor < 0 ? `<span class="ok-ink">${t('inCredit', { a: money(-minor, cur) })}</span>` : minor === 0 ? `<span class="sub">${t('settled')}</span>` : money(minor, cur));
+const CURS = ['ILS', 'USD', 'JOD', 'EUR'];
+
+/* Screen 1: clients list */
+function listDesk(c) {
+  const ro = c.st === 'acct';
+  const head = `<div class="hdr"><h2>${t('clients')}</h2>${ro ? badge('neutral', t('viewOnly')) : ''}<input style="min-height:44px;padding:6px 12px;border-radius:12px;border:1px solid var(--m-line);background:var(--m-field-bg)" placeholder="${t('search')}">${ro ? '' : btn(t('addClient'))}</div>`;
+  const nm = (cl) => `<div style="font-weight:600" dir="auto">${L(cl)}</div><div class="sub" dir="auto">${L(cl.c)}</div>`;
+  if (c.v === 'A') {
+    return head + `<table class="t"><thead><tr><th>${t('client')}</th><th class="n">${t('balance')}</th><th class="n">${t('last')}</th></tr></thead><tbody>${CLIENTS.map((cl) => `<tr class="click"><td>${nm(cl)}</td><td class="n">${Object.entries(cl.bal).map(([cur, v]) => `<div>${balTxt(v, cur)}</div>`).join('')}</td><td class="n sub">${day(cl.last, { year: false })}</td></tr>`).join('')}</tbody></table>`;
+  }
+  if (c.v === 'B') {
+    const cur = S.x.cur || 'ILS';
+    const tabs = `<div class="seg" style="margin-bottom:14px">${CURS.map((k) => `<button class="${k === cur ? 'on' : ''}" data-x="cur=${k}">${k}</button>`).join('')}</div>`;
+    const these = CLIENTS.filter((cl) => cur in cl.bal).sort((a, b) => b.bal[cur] - a.bal[cur]);
+    const total = these.reduce((s, cl) => s + Math.max(0, cl.bal[cur]), 0);
+    return head + tabs + `<table class="t"><thead><tr><th>${t('client')}</th><th class="n">${t('balance')} · ${cur}</th><th class="n">${t('last')}</th></tr></thead><tbody>${these.map((cl) => `<tr class="click"><td>${nm(cl)}</td><td class="n">${balTxt(cl.bal[cur], cur)}</td><td class="n sub">${day(cl.last, { year: false })}</td></tr>`).join('')}<tr><th style="text-align:start">${t('total')}</th><td class="n" style="font-weight:600">${money(total, cur)}</td><td></td></tr></tbody></table>`;
+  }
+  return head + `<div style="max-width:720px">${rows(CLIENTS.map((cl) => row(`<span class="grow">${nm(cl)}<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${Object.entries(cl.bal).map(([cur, v]) => `<span class="badge ${v < 0 ? 'b-success' : v === 0 ? 'b-neutral' : 'b-info'}">${v < 0 ? t('inCredit', { a: money(-v, cur) }) : v === 0 ? t('settled') : money(v, cur)}</span>`).join('')}</div></span><span class="sub">${day(cl.last, { year: false })}</span>`, { click: 'x=1', chev: true })))}</div>`;
+}
+function listPhone(c) {
+  const ro = c.st === 'acct';
+  const items = (c.v === 'B' ? CLIENTS.filter((cl) => (S.x.cur || 'ILS') in cl.bal) : CLIENTS).map((cl) => {
+    const cur = S.x.cur || 'ILS';
+    const bal = c.v === 'B' ? `<span style="text-align:end">${balTxt(cl.bal[cur], cur)}</span>`
+      : c.v === 'A' ? `<span style="text-align:end;font-size:var(--text-label)">${Object.entries(cl.bal).map(([k, v]) => `<div>${balTxt(v, k)}</div>`).join('')}</span>` : '';
+    const chips = c.v === 'C' ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${Object.entries(cl.bal).map(([k, v]) => `<span class="badge ${v < 0 ? 'b-success' : v === 0 ? 'b-neutral' : 'b-info'}" style="font-size:var(--text-micro)">${v < 0 ? t('inCredit', { a: money(-v, k) }) : v === 0 ? t('settled') : money(v, k)}</span>`).join('')}</div>` : '';
+    return row(`<span class="grow" dir="auto"><b>${L(cl)}</b><br><span class="sub">${L(cl.c)}</span>${chips}</span>${bal}`, { chev: true });
+  });
+  const tabs = c.v === 'B' ? `<div class="seg" style="margin-bottom:12px">${CURS.map((k) => `<button class="${k === (S.x.cur || 'ILS') ? 'on' : ''}" data-x="cur=${k}">${k}</button>`).join('')}</div>` : '';
+  return phone({ title: t('clients'), tabs: 'clients', body: (ro ? `<p>${badge('neutral', t('viewOnly'))}</p>` : '') + tabs + rows(items) });
+}
+
+/* Screen 2: the ledger card */
+function data(c) {
+  if (c.st === 'empty') return { cur: 'ILS', lines: [], curs: ['ILS'] };
+  if (c.st === 'credit') return { cur: 'ILS', lines: LINES.CREDIT, curs: ['ILS'] };
+  const cur = S.x.cur || (c.st === 'usd' ? 'USD' : 'ILS');
+  return { cur, lines: LINES[cur] || LINES.ILS, curs: ['ILS', 'USD'] };
+}
+const movement = (l) => (l.k === 'inc' ? `${t('inc')} · <span dir="auto">${L(l.note)}</span>` : t('pay'));
+const tags = (l, ro) => [...l.docs.map(([k, n]) => `<span class="chip" style="${ro ? '' : 'color:var(--m-lavender-ink)'}">${t(k)} ${num(n)}</span>`), l.due ? `<span class="chip" style="background:var(--m-butter);color:var(--m-butter-ink);border-color:transparent">${t('due_' + l.due)}</span>` : ''].join(' ');
+function controls(D, ro, phoneMode) {
+  const seg = D.curs.length > 1 ? `<div class="seg">${D.curs.map((k) => `<button class="${k === D.cur ? 'on' : ''}" data-x="cur=${k}">${k}</button>`).join('')}</div>` : '';
+  const per = `<select data-xs="per" style="min-height:36px;border-radius:12px;border:1px solid var(--m-line);background:var(--m-field-bg);padding:2px 10px">${['pAll', 'pYear', 'p12'].map((p) => `<option value="${p}" ${S.x.per === p ? 'selected' : ''}>${t(p)}</option>`).join('')}</select>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">${seg}<label class="sub" style="display:flex;gap:6px;align-items:center">${phoneMode ? '' : t('period')} ${per}</label>${ro ? badge('neutral', t('viewOnly')) : ''}</div>`;
+}
+const opening = (D) => (S.x.per === 'pYear' || S.x.per === 'p12') && D.lines.length ? 0 : null;
+function ledgerPhone(c) {
+  const ro = c.st === 'acct';
+  const D = data(c);
+  const cl = c.st === 'credit' ? CLIENTS[3] : CLIENTS[1];
+  const closing = D.lines.length ? D.lines[0].bal : 0;
+  const op = opening(D);
+  let body = controls(D, ro, true);
+  if (!D.lines.length) return phone({ title: L(cl), back: true, tabs: 'clients', large: false, body: body + `<div class="none" style="text-align:center;padding:40px">${t('empty')}</div>` });
+  const hero = `<div style="margin-bottom:14px"><div class="sub">${t('closing')}</div><div class="big" style="font-size:2rem">${balTxt(closing, D.cur)}</div></div>`;
+  if (c.v === 'A') {
+    let lastM = '';
+    const items = [];
+    D.lines.forEach((l) => {
+      const m = l.d.slice(0, 7);
+      if (m !== lastM) { items.push(`<div class="kv" style="padding:12px 2px 4px"><b>${month(l.d)}</b><span class="sub">${balTxt(l.bal, D.cur)}</span></div>`); lastM = m; }
+      items.push(`<div class="rg" style="margin-bottom:6px"><div class="row ${ro ? '' : 'click'}" style="align-items:flex-start"><span class="grow"><span class="sub">${day(l.d, { year: false })}</span><br>${movement(l)}<div style="margin-top:4px">${tags(l, ro)}</div></span><span style="text-align:end"><span class="num" style="font-weight:600">${money(l.amt, D.cur, { sign: true })}</span><br><span class="sub">${balTxt(l.bal, D.cur)}</span></span>${ro ? '' : '<span class="chev">›</span>'}</div></div>`);
+    });
+    if (op !== null) items.push(`<div class="kv" style="padding:12px 2px"><b>${t('opening')}</b>${money(op, D.cur)}</div>`);
+    body += hero + items.join('');
+  } else if (c.v === 'B') {
+    body += hero + `<table class="t" style="font-size:var(--text-label)"><thead><tr><th style="padding:8px">${t('date')}</th><th style="padding:8px">${t('movement')}</th><th class="n" style="padding:8px">±</th><th class="n" style="padding:8px">${t('balance')}</th></tr></thead><tbody>${D.lines.map((l) => `<tr class="${ro ? '' : 'click'}"><td style="padding:8px;white-space:nowrap">${day(l.d, { year: false, short: true })}</td><td style="padding:8px">${movement(l)}<div>${tags(l, ro)}</div></td><td class="n num" style="padding:8px">${money(l.amt, D.cur, { sign: true })}</td><td class="n" style="padding:8px">${balTxt(l.bal, D.cur)}</td></tr>`).join('')}${op !== null ? `<tr class="mon"><th colspan="3" style="padding:8px">${t('opening')}</th><td class="n" style="padding:8px">${money(op, D.cur)}</td></tr>` : ''}</tbody></table>`;
+  } else {
+    const deb = D.lines.filter((l) => l.amt > 0).reduce((s, l) => s + l.amt, 0); const cre = D.lines.filter((l) => l.amt < 0).reduce((s, l) => s - l.amt, 0);
+    body += `<div class="card" style="margin-bottom:14px">${op !== null ? `<div class="kv"><span>${t('opening')}</span>${money(op, D.cur)}</div>` : ''}<div class="kv"><span>${t('debit')}</span>${money(deb, D.cur)}</div><div class="kv"><span>${t('credit')}</span>${money(cre, D.cur)}</div><div class="kv total"><span>${t('closing')}</span>${balTxt(closing, D.cur)}</div></div>`
+      + rows(D.lines.map((l) => row(`<span class="grow"><span class="sub">${day(l.d, { year: false })}</span> · ${movement(l)}<div style="margin-top:4px">${tags(l, ro)}</div></span><span style="text-align:end"><span class="num">${money(l.amt, D.cur, { sign: true })}</span><br><span class="badge b-neutral" style="font-size:var(--text-micro)">${balTxt(l.bal, D.cur)}</span></span>`, { chev: !ro })));
+  }
+  return phone({ title: L(cl), back: true, tabs: 'clients', large: false, body });
+}
+function ledgerDesk(c) {
+  const ro = c.st === 'acct';
+  const D = data(c);
+  const cl = c.st === 'credit' ? CLIENTS[3] : CLIENTS[1];
+  const op = opening(D);
+  if (!D.lines.length) return desk(`<div class="hdr"><h2>${L(cl)}</h2></div>${controls(D, ro)}<div class="none" style="text-align:center;padding:48px">${t('empty')}</div>`, { nav: 'clients' });
+  let lastM = '';
+  const tr = [];
+  D.lines.forEach((l) => {
+    if (l.d.slice(0, 7) !== lastM) { tr.push(`<tr class="mon"><th colspan="5">${month(l.d)}</th><td class="n">${balTxt(l.bal, D.cur)}</td></tr>`); lastM = l.d.slice(0, 7); }
+    tr.push(`<tr><td class="sub">${day(l.d, { year: false })}</td><td>${movement(l)}</td><td>${tags(l, ro)}</td><td class="n">${l.amt > 0 ? money(l.amt, D.cur) : ''}</td><td class="n">${l.amt < 0 ? money(-l.amt, D.cur) : ''}</td><td class="n">${balTxt(l.bal, D.cur)}</td></tr>`);
+  });
+  if (op !== null) tr.push(`<tr class="mon"><th colspan="5">${t('opening')}</th><td class="n">${money(op, D.cur)}</td></tr>`);
+  return desk(`<div class="hdr"><h2>${L(cl)}</h2></div>${controls(D, ro)}<p><span class="sub">${t('closing')}</span> <b>${balTxt(D.lines[0].bal, D.cur)}</b></p>
+    <table class="t"><thead><tr><th>${t('date')}</th><th>${t('movement')}</th><th>${t('document')}</th><th class="n">${t('debit')}</th><th class="n">${t('credit')}</th><th class="n">${t('balance')}</th></tr></thead><tbody>${tr.join('')}</tbody></table>`, { nav: 'clients' });
+}
+
+APP.screens.push(
+  {
+    id: 'list', name: { ar: 'قائمة العملاء', en: 'Clients list' },
+    names: { A: { ar: 'عمود رصيد مكدّس', en: 'Stacked balance column' }, B: { ar: 'تبويب لكل عملة', en: 'Tab per currency' }, C: { ar: 'شارات في الصف', en: 'Chips in the row' } },
+    rec: 'A',
+    note: 'GET /v1/customer-balances on the portal list: each client\'s balance per currency, never summed across currencies (ADR-004); a negative balance reads "Client in credit"; it must match the ledger card and Owed. Accountant: same list, view only. Phone list shown for parity (not in MUT-774\'s AC).',
+    trade: {
+      A: 'One Balance column, one line per currency stacked: every currency visible, nothing summed, scans like the ledger card\'s balance column; rows with three currencies get tall.',
+      B: 'A currency tab, the column sorted by balance with a per-currency total: best for "who owes me the most in ₪"; a client\'s other currencies are hidden until you switch tab.',
+      C: 'Balances as chips under the name, no column: works unchanged at 375 px and on the phone; chips are harder to compare down a list than a right-aligned column.',
+    },
+    states: [{ id: 'all', label: { ar: 'المالك', en: 'Owner' } }, { id: 'acct', label: { ar: 'محاسب (للعرض)', en: 'Accountant (view only)' } }],
+    desk: (c) => desk(listDesk(c), { nav: 'clients' }),
+    phone: listPhone,
+  },
+  {
+    id: 'ledger', name: { ar: 'كرت العميل على الهاتف', en: 'Phone ledger card' },
+    names: { A: { ar: 'أقسام شهرية', en: 'Month sections' }, B: { ar: 'جدول مضغوط', en: 'Compact table' }, C: { ar: 'ملخص ثم الحركات', en: 'Summary + list' } },
+    rec: 'A',
+    note: 'The phone mirrors the portal LedgerCard (the web frame: already built in MUT-664, unchanged, shown for reference): newest first, one card per currency (tabs), month rows carrying the month-end balance, period filter with opening and closing balance, document tags beside the line, "to issue" in butter; each line opens its entry, a tag its document; an accountant reads it only. Try the period select and the currency tabs.',
+    trade: {
+      A: 'Month sections with the month-end balance in the header, each line a card with signed amount and running balance: same reading order as the portal\'s month rows, thumb-sized taps; the longest scroll.',
+      B: 'A 4-column table (date, movement, ±, balance): closest to the portal and to a printed כרטסת, densest; 12–13 px type at 375 px and tags squeezed under the movement.',
+      C: 'Opening / debit / credit / closing summary first, then a flat list: the answer before the detail; loses the month grouping, and the running balance becomes a small chip.',
+    },
+    states: [{ id: 'ils', label: '₪ ILS' }, { id: 'usd', label: '$ USD' }, { id: 'credit', label: { ar: 'العميل دائن', en: 'In credit' } }, { id: 'acct', label: { ar: 'محاسب', en: 'Accountant' } }, { id: 'empty', label: { ar: 'فارغ', en: 'Empty' } }],
+    desk: ledgerDesk,
+    phone: ledgerPhone,
+  },
+);
+
+boot();
+</script>
+</body>
+</html>

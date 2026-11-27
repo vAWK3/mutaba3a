@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>MUT-750a VAT lines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens copied from src/styles/brand/mutaba3a-theme.css (brand v2), as in accountant-channel-wireframe.html. The app ships Thmanyah; this file falls back to the system face. Amounts in IBM Plex Mono. */
+:root {
+  --m-canvas: oklch(0.975 0.014 80); --m-surface: oklch(0.993 0.008 80); --m-line: oklch(0.92 0.015 300);
+  --m-field-bg: oklch(0.965 0.012 300); --m-ink: oklch(0.33 0.05 300); --m-ink2: oklch(0.442 0.043 298.7);
+  --m-primary: oklch(0.55 0.14 295); --m-primary-hover: oklch(0.5 0.14 295); --m-on-primary: oklch(0.98 0.012 80); --m-focus: oklch(0.6 0.13 295);
+  --m-lavender: oklch(0.9 0.06 295); --m-lavender-ink: oklch(0.401 0.114 294.5);
+  --m-mint: oklch(0.9 0.06 165); --m-mint-ink: oklch(0.387 0.076 170.2);
+  --m-rose: oklch(0.9 0.06 10); --m-rose-ink: oklch(0.398 0.103 14.8);
+  --m-butter: oklch(0.93 0.07 95); --m-butter-ink: oklch(0.419 0.083 74.8);
+  --m-font-body: "Thmanyah Sans", system-ui, -apple-system, "Segoe UI", sans-serif; --m-font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px; --m-radius-card: 24px; --m-radius-pill: 999px;
+  --text-micro: 0.6875rem; --text-label: 0.8125rem; --text-body: 1rem; --text-headline: 1.25rem; --text-title: 2rem; --text-figure: 2.5rem;
+  --shadow: 0 1px 2px color-mix(in oklch, oklch(0.45 0.08 300) 6%, transparent), 0 12px 40px color-mix(in oklch, oklch(0.45 0.08 300) 9%, transparent);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --m-canvas: oklch(0.24 0.035 300); --m-surface: oklch(0.29 0.04 300); --m-line: oklch(0.4 0.04 300);
+  --m-field-bg: oklch(0.34 0.045 300); --m-ink: oklch(0.95 0.015 80); --m-ink2: oklch(0.78 0.03 300);
+  --m-primary: oklch(0.78 0.11 295); --m-primary-hover: oklch(0.84 0.1 295); --m-on-primary: oklch(0.27 0.06 300); --m-focus: oklch(0.75 0.12 295);
+  --m-lavender: oklch(0.38 0.07 295); --m-lavender-ink: oklch(0.88 0.08 295);
+  --m-mint: oklch(0.38 0.07 165); --m-mint-ink: oklch(0.88 0.08 165);
+  --m-rose: oklch(0.38 0.07 10); --m-rose-ink: oklch(0.88 0.08 10);
+  --m-butter: oklch(0.4 0.06 85); --m-butter-ink: oklch(0.9 0.09 95); color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --m-canvas: oklch(0.24 0.035 300); --m-surface: oklch(0.29 0.04 300); --m-line: oklch(0.4 0.04 300);
+  --m-field-bg: oklch(0.34 0.045 300); --m-ink: oklch(0.95 0.015 80); --m-ink2: oklch(0.78 0.03 300);
+  --m-primary: oklch(0.78 0.11 295); --m-primary-hover: oklch(0.84 0.1 295); --m-on-primary: oklch(0.27 0.06 300); --m-focus: oklch(0.75 0.12 295);
+  --m-lavender: oklch(0.38 0.07 295); --m-lavender-ink: oklch(0.88 0.08 295);
+  --m-mint: oklch(0.38 0.07 165); --m-mint-ink: oklch(0.88 0.08 165);
+  --m-rose: oklch(0.38 0.07 10); --m-rose-ink: oklch(0.88 0.08 10);
+  --m-butter: oklch(0.4 0.06 85); --m-butter-ink: oklch(0.9 0.09 95); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: hidden; }
+body { margin: 0; background: var(--m-canvas); color: var(--m-ink); font: var(--text-body)/1.5 var(--m-font-body); }
+:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--m-lavender-ink); }
+h1, h2, h3, h4 { font-weight: 700; }
+/* Wireframe toolbar */
+.top { position: sticky; top: 0; z-index: 40; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px; background: var(--m-surface); border-bottom: 1px solid var(--m-line); }
+.top .r { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.top h1 { font-size: var(--text-body); margin: 0; margin-inline-end: auto; }
+.top .lbl { font-size: var(--text-micro); color: var(--m-ink2); text-transform: uppercase; letter-spacing: .04em; min-width: 64px; }
+.tb { min-height: 36px; padding: 4px 14px; border-radius: var(--m-radius-pill); border: 1px solid var(--m-line); background: var(--m-field-bg); cursor: pointer; font-size: var(--text-label); }
+.tb[aria-pressed="true"] { background: var(--m-lavender); color: var(--m-lavender-ink); border-color: transparent; font-weight: 600; }
+.tb .star { color: var(--m-mint-ink); margin-inline-start: 4px; }
+main { max-width: 1440px; margin: 0 auto; padding: 18px 16px 64px; }
+.note { font-size: var(--text-label); color: var(--m-ink2); max-width: 90ch; margin: 0 0 12px; }
+.tradeoffs { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 4px; font-size: var(--text-label); }
+.tradeoffs li { padding: 6px 10px; border-radius: 10px; color: var(--m-ink2); border: 1px solid transparent; }
+.tradeoffs li.on { background: var(--m-surface); border-color: var(--m-line); color: var(--m-ink); }
+.tradeoffs b { font-family: var(--m-font-num); margin-inline-end: 6px; }
+.rec { display: inline-block; font-size: var(--text-micro); background: var(--m-mint); color: var(--m-mint-ink); padding: 1px 8px; border-radius: 6px; margin-inline-start: 6px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 391px; gap: 24px; align-items: start; }
+.stage.solo { grid-template-columns: minmax(0, 1fr); }
+.stage.phones { grid-template-columns: repeat(auto-fill, minmax(391px, 1fr)); justify-items: center; }
+.cap { font-size: var(--text-micro); color: var(--m-ink2); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 6px; }
+.none { border: 1px dashed var(--m-line); border-radius: var(--m-radius-lg); padding: 24px; color: var(--m-ink2); font-size: var(--text-label); }
+@media (max-width: 1000px) { .stage { grid-template-columns: minmax(0, 1fr); justify-items: stretch; } .stage > .pcol { justify-self: center; } }
+/* Desktop portal frame */
+.frame { position: relative; overflow: hidden; background: var(--m-canvas); border: 1px solid var(--m-line); border-radius: var(--m-radius-lg); box-shadow: var(--shadow); min-height: 780px; }
+.chrome { display: flex; align-items: center; gap: 10px; padding: 14px 20px 0; }
+.chrome .pill { margin-inline: auto; display: flex; gap: 2px; padding: 4px; border-radius: var(--m-radius-pill); background: color-mix(in oklch, var(--m-surface) 85%, transparent); border: 1px solid var(--m-line); box-shadow: var(--shadow); }
+.chrome .pill span { padding: 6px 12px; border-radius: var(--m-radius-pill); font-size: var(--text-label); color: var(--m-ink2); }
+.chrome .pill span.on { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.chrome .you { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--m-primary); display: grid; place-items: center; font-size: var(--text-label); background: var(--m-surface); }
+.chrome .rep { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--m-line); display: grid; place-items: center; background: var(--m-surface); color: var(--m-ink2); }
+.desk { padding: 22px 32px 32px; }
+.hdr { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+.hdr h2 { font-size: var(--text-title); margin: 0; margin-inline-end: auto; }
+.overlay { position: absolute; inset: 0; background: color-mix(in oklch, var(--m-ink) 30%, transparent); z-index: 5; }
+.drawer { position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: min(480px, 100%); background: var(--m-surface); z-index: 6; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.drawer.wide { width: min(720px, 100%); }
+.dh { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid var(--m-line); }
+.dh h3 { margin: 0; font-size: var(--text-body); margin-inline-end: auto; }
+.x { min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 18px; cursor: pointer; border-radius: 10px; }
+.db { padding: 18px 20px; overflow: auto; flex: 1; }
+.df { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--m-line); background: var(--m-canvas); }
+.df .start { margin-inline-end: auto; }
+/* Controls */
+.btn { min-height: 44px; padding: 8px 18px; border-radius: var(--m-radius-md); border: 1px solid transparent; background: var(--m-primary-hover); color: var(--m-on-primary); cursor: pointer; font-weight: 600; }
+.btn.sec { background: var(--m-field-bg); color: var(--m-ink); border-color: var(--m-line); }
+.btn.danger { background: var(--m-rose-ink); color: var(--m-canvas); }
+.btn.full { width: 100%; min-height: 52px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.lb { min-height: 44px; padding: 0 6px; background: none; border: 0; color: var(--m-lavender-ink); cursor: pointer; font-size: var(--text-label); font-weight: 600; }
+.lb.danger { color: var(--m-rose-ink); }
+.sub { font-size: var(--text-label); color: var(--m-ink2); }
+.num { font-family: var(--m-font-num); font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.big { font-family: var(--m-font-num); font-size: var(--text-figure); font-weight: 500; line-height: 1.1; }
+.h3 { font-size: var(--text-headline); font-weight: 500; margin: 0 0 8px; }
+.title { font-size: var(--text-title); margin: 0 0 4px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: var(--text-label); font-weight: 500; white-space: nowrap; }
+.b-neutral { background: var(--m-field-bg); color: var(--m-ink2); border: 1px solid var(--m-line); } .b-warning { background: var(--m-butter); color: var(--m-butter-ink); }
+.b-info, .b-accent { background: var(--m-lavender); color: var(--m-lavender-ink); } .b-success { background: var(--m-mint); color: var(--m-mint-ink); } .b-error { background: var(--m-rose); color: var(--m-rose-ink); }
+.banner { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--m-radius-sm); margin-bottom: 14px; font-size: var(--text-body); }
+.banner .grow { flex: 1; min-width: 160px; }
+.ban-error { background: var(--m-rose); color: var(--m-rose-ink); } .ban-warning { background: var(--m-butter); color: var(--m-butter-ink); } .ban-info { background: var(--m-lavender); color: var(--m-lavender-ink); } .ban-ok { background: var(--m-mint); color: var(--m-mint-ink); }
+.banner .lb { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.rg { background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); overflow: hidden; margin-bottom: 14px; }
+.rg > .row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-bottom: 1px solid var(--m-line); }
+.rg > .row:last-child { border-bottom: 0; }
+.rg > .row.click { cursor: pointer; } .rg > .row.click:hover { background: var(--m-field-bg); }
+.rg > .row.cur { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.rg > .row.cur .sub { color: var(--m-lavender-ink); }
+.rg > .row .grow { flex: 1; min-width: 0; }
+.rg .chev { color: var(--m-ink2); }
+/* › and ‹ are bidi-mirrored characters: RTL flips them by itself. */
+.radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--m-line); flex: none; display: grid; place-items: center; }
+.radio.on { border-color: var(--m-primary-hover); } .radio.on::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--m-primary-hover); }
+.check { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--m-line); flex: none; display: grid; place-items: center; font-size: 14px; }
+.check.on { background: var(--m-primary-hover); border-color: var(--m-primary-hover); color: var(--m-on-primary); }
+.sw { width: 44px; height: 26px; border-radius: 13px; background: var(--m-line); position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--m-surface); transition: inset-inline-start .15s; }
+.sw.on { background: var(--m-primary-hover); } .sw.on::after { inset-inline-start: 21px; }
+.seg { display: inline-flex; padding: 3px; border-radius: var(--m-radius-pill); background: var(--m-field-bg); border: 1px solid var(--m-line); gap: 2px; }
+.seg button { min-height: 36px; padding: 2px 14px; border: 0; border-radius: var(--m-radius-pill); background: none; cursor: pointer; font-size: var(--text-label); }
+.seg button.on { background: var(--m-surface); box-shadow: var(--shadow); font-weight: 600; }
+.fg { margin-bottom: 14px; } .fg label { display: block; font-size: var(--text-label); color: var(--m-ink2); margin-bottom: 4px; }
+.fg input, .fg select { width: 100%; min-height: 44px; padding: 6px 12px; border-radius: var(--m-radius-sm); border: 1px solid var(--m-line); background: var(--m-field-bg); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.kv.total { border-top: 1px solid var(--m-line); margin-top: 4px; padding-top: 10px; font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--m-field-bg); border: 1px solid var(--m-line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--m-primary); border-radius: 3px; }
+.bar.warn i { background: var(--m-butter-ink); }
+.warn-ink { color: var(--m-butter-ink); }
+.ok-ink { color: var(--m-mint-ink); }
+.err-ink { color: var(--m-rose-ink); }
+.card { background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); padding: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stack > * + * { margin-top: 10px; }
+table.t { width: 100%; border-collapse: collapse; background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); overflow: hidden; }
+.t th { text-align: start; font-size: var(--text-label); font-weight: 500; color: var(--m-ink2); padding: 10px 14px; border-bottom: 1px solid var(--m-line); }
+.t td { padding: 10px 14px; border-bottom: 1px solid var(--m-line); vertical-align: middle; }
+.t tr:last-child td { border-bottom: 0; }
+.t .n { text-align: end; }
+.t tr.click { cursor: pointer; } .t tr.click:hover { background: var(--m-field-bg); }
+.t tr.mon th { background: var(--m-field-bg); color: var(--m-ink); font-weight: 600; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: var(--text-micro); font-weight: 500; background: var(--m-field-bg); border: 1px solid var(--m-line); color: var(--m-ink2); white-space: nowrap; }
+.toast { position: absolute; bottom: 18px; inset-inline-start: 50%; transform: translateX(-50%); z-index: 9; background: var(--m-ink); color: var(--m-canvas); padding: 10px 16px; border-radius: var(--m-radius-md); font-size: var(--text-label); display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+[dir="rtl"] .toast { transform: translateX(50%); }
+.toast .lb { color: var(--m-lavender); min-height: 32px; }
+/* Phone frame */
+.pcol { width: 391px; max-width: 100%; }
+.phone { width: 375px; max-width: 100%; height: 740px; position: relative; overflow: hidden; background: var(--m-canvas); border: 8px solid var(--m-ink); border-radius: 40px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.pbar { padding: 48px 16px 8px; display: flex; align-items: center; gap: 8px; min-height: 100px; }
+.pbar h2 { margin: 0; font-size: 1.75rem; margin-inline-end: auto; }
+.pbar .back { min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 22px; color: var(--m-lavender-ink); cursor: pointer; }
+.pbody { flex: 1; overflow: auto; padding: 0 16px 16px; }
+.pfoot { padding: 10px 16px 22px; border-top: 1px solid var(--m-line); background: var(--m-canvas); }
+.ptabs { display: flex; justify-content: space-around; padding: 8px 8px 22px; border-top: 1px solid var(--m-line); background: var(--m-surface); font-size: var(--text-micro); color: var(--m-ink2); }
+.ptabs span.on { color: var(--m-lavender-ink); font-weight: 600; }
+.sheet { position: absolute; inset-inline: 0; bottom: 0; background: var(--m-surface); border-radius: 24px 24px 0 0; z-index: 6; display: flex; flex-direction: column; box-shadow: var(--shadow); max-height: 88%; }
+.sheet.fullh { top: 40px; max-height: none; }
+.sheet .sb { padding: 4px 18px 12px; overflow: auto; flex: 1; } .sheet .sf { padding: 10px 18px 22px; }
+.grab { width: 40px; height: 4px; background: var(--m-line); border-radius: 2px; margin: 10px auto; flex: none; }
+.pscrim { position: absolute; inset: 0; background: color-mix(in oklch, var(--m-ink) 30%, transparent); z-index: 5; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 760px) { .desk { padding: 16px; } .hdr h2 { font-size: 1.5rem; } .chrome .pill span:nth-child(n+4) { display: none; } .grid3 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .two, .grid2 { grid-template-columns: 1fr; } .pcol, .phone { width: 100%; } .stage.phones { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+</style>
+</head>
+<body>
+<div class="top" id="top" role="toolbar" aria-label="Wireframe controls"></div>
+<main id="app"></main>
+<script>
+/* Shared wireframe runtime: state, i18n, Levantine dates, money, portal and phone frames, shared parts (plans, meters). */
+const S = { lang: 'ar', theme: 'auto', scr: null, v: {}, st: {}, x: {} };
+const SHARED_T = {
+  ar: {
+    screen: 'الشاشة', variant: 'البديل', state: 'الحالة', view: 'عرض', close: 'إغلاق', cancel: 'إلغاء', cont: 'متابعة', confirm: 'تأكيد', done: 'تم', undo: 'تراجع', back: 'رجوع',
+    nav_home: 'الرئيسية', nav_owed: 'المستحق', nav_paid: 'المقبوض', nav_spent: 'المصروف', nav_clients: 'العملاء', you: 'أنت',
+    ptab_home: 'الرئيسية', ptab_owed: 'المستحق', ptab_scan: 'مسح', ptab_clients: 'العملاء', ptab_you: 'أنت',
+    billing: 'الفوترة', perMonth: 'شهريًا', perYear: 'سنويًا', ofCap: '{u} من {c}', invoices: 'الفواتير', scans: 'مسح الإيصالات', businesses: 'الأنشطة',
+    thisMonth: 'هذا الشهر', upgradeTo: 'الترقية إلى {p}', noLimitUntil: 'بلا حد حتى {d}', limitReached: 'بلغت الحد', resets: 'يتجدد في {d}',
+    current: 'الحالية', recommended: 'مقترح', desk: 'الويب (البوابة)', phone: 'الهاتف (Flutter)', noSurface: 'لا شاشة هنا', theme: 'المظهر', auto: 'تلقائي', light: 'فاتح', dark: 'داكن',
+  },
+  en: {
+    screen: 'Screen', variant: 'Variant', state: 'State', view: 'View', close: 'Close', cancel: 'Cancel', cont: 'Continue', confirm: 'Confirm', done: 'Done', undo: 'Undo', back: 'Back',
+    nav_home: 'Home', nav_owed: 'Owed', nav_paid: 'Paid', nav_spent: 'Spent', nav_clients: 'Clients', you: 'You',
+    ptab_home: 'Home', ptab_owed: 'Owed', ptab_scan: 'Scan', ptab_clients: 'Clients', ptab_you: 'You',
+    billing: 'Billing', perMonth: 'a month', perYear: 'a year', ofCap: '{u} of {c}', invoices: 'Invoices', scans: 'Scans', businesses: 'Businesses',
+    thisMonth: 'this month', upgradeTo: 'Upgrade to {p}', noLimitUntil: 'No limit until {d}', limitReached: 'Limit reached', resets: 'Resets {d}',
+    current: 'Current', recommended: 'Recommended', desk: 'Web (portal)', phone: 'Phone (Flutter)', noSurface: 'No screen here', theme: 'Theme', auto: 'Auto', light: 'Light', dark: 'Dark',
+  },
+};
+function t(k, p) {
+  let s = (APP.T && APP.T[S.lang] && APP.T[S.lang][k]) ?? SHARED_T[S.lang][k] ?? k;
+  if (p) for (const [a, b] of Object.entries(p)) s = s.split('{' + a + '}').join(b);
+  return s;
+}
+const L = (o) => (o == null ? '' : typeof o === 'object' ? o[S.lang] ?? o.en : o);
+const LOC = () => (S.lang === 'ar' ? 'ar-u-nu-latn' : 'en-GB');
+function money(minor, cur = 'ILS', { sign = false } = {}) {
+  const f = new Intl.NumberFormat(LOC(), { style: 'currency', currency: cur, minimumFractionDigits: minor % 100 ? 2 : 0, maximumFractionDigits: 2, signDisplay: sign ? 'exceptZero' : 'auto' });
+  return `<bdi class="num">${f.format(minor / 100)}</bdi>`;
+}
+const num = (x) => `<bdi class="num">${new Intl.NumberFormat(LOC()).format(x)}</bdi>`;
+const AR_M = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+const EN_M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const EN_MS = EN_M.map((m) => m.slice(0, 3));
+function day(iso, { year = true, short = false } = {}) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const M = S.lang === 'ar' ? AR_M[m - 1] : (short ? EN_MS : EN_M)[m - 1];
+  return `<bdi>${d} ${M}${year ? ' ' + y : ''}</bdi>`;
+}
+function month(iso) { const [y, m] = iso.split('-').map(Number); return `${S.lang === 'ar' ? AR_M[m - 1] : EN_M[m - 1]} ${y}`; }
+const escH = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s) => String(s).replace(/"/g, '&quot;');
+
+/* Plans (MUT-702 / ADR-275 / ADR-284): names, list prices before VAT, limits. */
+const PLANS = {
+  starter: { ar: 'البداية', en: 'Starter', price: 0, biz: 1, docs: 3, scans: 12 },
+  solo: { ar: 'مستقل', en: 'Solo', price: 3900, biz: 1, docs: 50, scans: 100 },
+  business: { ar: 'تجاري', en: 'Business', price: 8900, biz: 3, docs: 250, scans: 500 },
+  firm: { ar: 'مؤسسة', en: 'Firm', price: 24900, biz: 6, docs: 1000, scans: 2000 },
+  legacy: { ar: 'الخطة السابقة', en: 'Previous plan', price: 2900 },
+  accountant: { ar: 'المحاسب', en: 'Accountant' },
+};
+const pn = (k) => L(PLANS[k]);
+const NEXT_PLAN = { starter: 'solo', solo: 'business', business: 'firm', firm: null };
+const limitsLine = (k) => { const p = PLANS[k]; return `${num(p.biz)} ${t('businesses')} · ${num(p.docs)} ${t('invoices')} · ${num(p.scans)} ${t('scans')}`; };
+
+/* Small parts */
+const btn = (label, { kind = '', x = '', full = false, dis = false, attrs = '' } = {}) => `<button class="btn ${kind} ${full ? 'full' : ''}" ${x ? `data-x="${x}"` : ''} ${dis ? 'disabled' : ''} ${attrs}>${label}</button>`;
+const lb = (label, { x = '', danger = false } = {}) => `<button class="lb ${danger ? 'danger' : ''}" ${x ? `data-x="${x}"` : ''}>${label}</button>`;
+const badge = (tone, text) => `<span class="badge b-${tone}">${text}</span>`;
+const ICON = { error: '!', warning: '!', info: 'i', ok: '✓' };
+const banner = (tone, html, action = '') => `<div class="banner ban-${tone}" role="${tone === 'error' ? 'alert' : 'note'}"><span aria-hidden="true" class="num">${ICON[tone]}</span><span class="grow">${html}</span>${action}</div>`;
+const rows = (items) => `<div class="rg">${items.join('')}</div>`;
+const row = (inner, { click = '', cur = false, chev = false } = {}) => `<div class="row ${click ? 'click' : ''} ${cur ? 'cur' : ''}" ${click ? `data-x="${click}" role="button" tabindex="0"` : ''}>${inner}${chev ? '<span class="chev" aria-hidden="true">›</span>' : ''}</div>`;
+const toast = (text, action = '') => `<div class="toast" role="status">${text}${action}</div>`;
+const backArrow = () => '‹';
+
+/* Portal frame: the floating chrome (Reports, pill of destinations, You island) over <main>. */
+function desk(main, { nav = '', overlay = '' } = {}) {
+  const pill = ['home', 'owed', 'paid', 'spent', 'clients'].map((k) => `<span class="${k === nav ? 'on' : ''}">${t('nav_' + k)}</span>`).join('');
+  return `<div class="frame"><div class="chrome"><span class="rep" aria-hidden="true">▤</span><div class="pill">${pill}</div><span class="you">${S.lang === 'ar' ? 'س' : 'S'}</span></div><div class="desk">${main}</div>${overlay}</div>`;
+}
+function drawer({ title, body, foot = '', back = '', wide = false, extra = '' }) {
+  return `<div class="overlay"></div><section class="drawer ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="dh">${back ? `<button class="x" data-x="${back}" aria-label="${t('back')}">${backArrow()}</button>` : ''}<h3>${title}</h3><button class="x" aria-label="${t('close')}">✕</button></div>
+    <div class="db">${body}</div>${foot ? `<div class="df">${foot}</div>` : ''}${extra}</section>`;
+}
+/* Phone frame (Flutter): large title, body, pinned footer, tab bar, optional sheet. */
+function phone({ title = '', body = '', foot = '', sheet = '', back = false, tabs = 'you', large = true, scrim = false, extra = '' }) {
+  const tb = tabs ? `<div class="ptabs">${['home', 'owed', 'scan', 'clients', 'you'].map((k) => `<span class="${k === tabs ? 'on' : ''}">${t('ptab_' + k)}</span>`).join('')}</div>` : '';
+  return `<div class="phone"><div class="pbar" style="${large ? '' : 'min-height:0;padding-bottom:4px'}">${back ? `<button class="back" aria-label="${t('back')}">${backArrow()}</button>` : ''}<h2 style="${large ? '' : 'font-size:var(--text-headline)'}">${title}</h2></div>
+    <div class="pbody">${body}</div>${foot ? `<div class="pfoot">${foot}</div>` : ''}${tb}${scrim || sheet ? '<div class="pscrim"></div>' : ''}${sheet}${extra}</div>`;
+}
+const sheet = (inner, foot = '', { full = false } = {}) => `<div class="sheet ${full ? 'fullh' : ''}" role="dialog" aria-modal="true"><div class="grab"></div><div class="sb">${inner}</div>${foot ? `<div class="sf">${foot}</div>` : ''}</div>`;
+
+/* Meter rows, shared by MUT-733, MUT-754 (portal) and MUT-706 / MUT-756 (phone). Level: ok < 80% ≤ near < 90% ≤ nudge < 100% ≤ cap. */
+function levelOf(used, cap) { const r = used / cap; return r >= 1 ? 'cap' : r >= 0.9 ? 'nudge' : r >= 0.8 ? 'near' : 'ok'; }
+function meter({ label, used, cap, grace = '', style = 'A', upgrade = '' }) {
+  const lv = levelOf(used, cap);
+  const warn = !grace && (lv === 'nudge' || lv === 'cap');
+  const pct = Math.min(100, Math.round((used / cap) * 100));
+  const count = t('ofCap', { u: num(used), c: num(cap) });
+  const status = grace ? `<span class="sub ok-ink">${t('noLimitUntil', { d: day(grace) })}</span>` : lv === 'cap' ? `<span class="sub warn-ink">${t('limitReached')}</span>` : '';
+  const up = upgrade && warn ? lb(t('upgradeTo', { p: pn(upgrade) }), { x: 'upgraded=1' }) : '';
+  const aria = `aria-label="${esc(label)}, ${used} / ${cap}"`;
+  if (style === 'B') {
+    return `<div class="row" ${aria}><span class="grow">${label}</span>${status}<span class="num ${warn ? 'warn-ink' : ''}" style="font-weight:${warn ? 600 : 400}">${count}</span></div>`;
+  }
+  if (style === 'C') {
+    return `<div class="card" ${aria} style="${warn ? 'border-color:var(--m-butter-ink)' : ''}"><div class="sub">${label}</div><div class="big ${warn ? 'warn-ink' : ''}" style="font-size:1.75rem">${num(used)}<span class="sub" style="font-size:var(--text-label)"> / ${num(cap)}</span></div><div class="bar ${warn ? 'warn' : ''}" style="margin:8px 0 4px"><i style="width:${pct}%"></i></div>${status || '<span class="sub">&nbsp;</span>'}${up ? `<div>${up}</div>` : ''}</div>`;
+  }
+  return `<div class="row" ${aria} style="flex-wrap:wrap;row-gap:6px"><span class="grow">${label}</span>${status}<span class="num ${warn ? 'warn-ink' : ''}" style="font-weight:${warn ? 600 : 400}">${count}</span><div class="bar ${warn ? 'warn' : ''}" style="flex-basis:100%"><i style="width:${pct}%"></i></div>${up ? `<div style="flex-basis:100%;margin-block:-8px">${up}</div>` : ''}</div>`;
+}
+function meters(list, style, { upgrade = '' } = {}) {
+  if (style === 'C') return `<div class="grid2">${list.map((m) => meter({ ...m, style, upgrade })).join('')}</div>`;
+  const anyWarn = list.some((m) => !m.grace && ['nudge', 'cap'].includes(levelOf(m.used, m.cap)));
+  const tail = style === 'B' && upgrade && anyWarn ? row(`<span class="grow"></span>${lb(t('upgradeTo', { p: pn(upgrade) }), { x: 'upgraded=1' })}`) : '';
+  return `<div class="rg">${list.map((m) => meter({ ...m, style, upgrade })).join('')}${tail}</div>`;
+}
+
+/* The You page behind account drawers. */
+function youPage(cur = 'billing') {
+  const items = [['profiles', S.lang === 'ar' ? 'الملفات' : 'Profiles'], ['billing', t('billing')], ['data', S.lang === 'ar' ? 'بياناتك' : 'Your data'], ['security', S.lang === 'ar' ? 'الأمان' : 'Security']];
+  return `<div class="hdr"><h2>${t('you')}</h2></div><div style="max-width:560px">${rows(items.map(([k, l]) => row(`<span class="grow">${l}</span>`, { cur: k === cur, chev: true })))}</div>`;
+}
+
+/* Toolbar and rendering */
+function render() {
+  const H = document.documentElement;
+  H.lang = S.lang; H.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
+  if (S.theme === 'auto') H.removeAttribute('data-theme'); else H.setAttribute('data-theme', S.theme);
+  const sc = APP.screens.find((s) => s.id === S.scr) || APP.screens[0];
+  S.scr = sc.id;
+  const v = S.v[sc.id] || sc.rec;
+  const st = S.st[sc.id] || (sc.states && sc.states[0].id);
+  const ctx = { v, st, x: S.x };
+  document.title = APP.docTitle;
+  const pb = (attr, val, on, label) => `<button class="tb" data-${attr}="${val}" aria-pressed="${on}">${label}</button>`;
+  document.getElementById('top').innerHTML = `
+    <div class="r"><h1>${L(APP.title)}</h1>${pb('lang', 'ar', S.lang === 'ar', 'العربية')}${pb('lang', 'en', S.lang === 'en', 'English')}
+      ${['auto', 'light', 'dark'].map((m) => pb('thm', m, S.theme === m, t(m))).join('')}</div>
+    ${APP.screens.length > 1 ? `<div class="r"><span class="lbl">${t('screen')}</span>${APP.screens.map((s) => pb('scr', s.id, s.id === sc.id, L(s.name))).join('')}</div>` : ''}
+    <div class="r"><span class="lbl">${t('variant')}</span>${['A', 'B', 'C'].map((k) => `<button class="tb" data-var="${k}" aria-pressed="${k === v}">${k} · ${L(sc.names[k])}${k === sc.rec ? '<span class="star" title="' + t('recommended') + '">★</span>' : ''}</button>`).join('')}</div>
+    ${sc.states ? `<div class="r"><span class="lbl">${t('state')}</span>${sc.states.map((s) => pb('st', s.id, s.id === st, L(s.label))).join('')}</div>` : ''}`;
+  const d = sc.desk ? sc.desk(ctx) : null;
+  let p = sc.phone ? sc.phone(ctx) : null;
+  const tr = `<ul class="tradeoffs">${['A', 'B', 'C'].map((k) => `<li class="${k === v ? 'on' : ''}" dir="ltr"><b>${k}</b>${escH(sc.trade[k])}${k === sc.rec ? '<span class="rec">recommended</span>' : ''}</li>`).join('')}</ul>`;
+  const note = sc.note ? `<p class="note" dir="ltr">${escH(sc.note)}</p>` : '';
+  const none = (why) => `<div class="none" dir="ltr">${escH(why)}</div>`;
+  let stage;
+  if (Array.isArray(p)) {
+    const phones = `<div class="stage phones">${p.map((ph) => `<div class="pcol"><p class="cap">${ph.cap}</p>${ph.html}</div>`).join('')}</div>`;
+    stage = (d ? `<p class="cap">${t('desk')}</p>${d}<div style="height:24px"></div>` : sc.noDesk ? none(sc.noDesk) + '<div style="height:16px"></div>' : '') + `<p class="cap">${t('phone')}</p>` + phones;
+  } else {
+    const left = d ? `<div><p class="cap">${t('desk')}</p>${d}</div>` : `<div><p class="cap">${t('desk')}</p>${none(sc.noDesk || t('noSurface'))}</div>`;
+    const right = p ? `<div class="pcol"><p class="cap">${t('phone')}</p>${p}</div>` : `<div class="pcol"><p class="cap">${t('phone')}</p>${none(sc.noPhone || t('noSurface'))}</div>`;
+    stage = `<div class="stage">${left}${right}</div>`;
+  }
+  document.getElementById('app').innerHTML = note + tr + stage;
+}
+function setX(spec) {
+  for (const part of spec.split(';')) {
+    if (!part) continue;
+    const [k, val] = part.split('=');
+    if (val === 'null') delete S.x[k]; else if (val === '!') S.x[k] = !S.x[k]; else S.x[k] = val;
+  }
+}
+function boot() {
+  try { const saved = JSON.parse(localStorage.getItem('wf:' + APP.docTitle) || '{}'); if (saved.lang) S.lang = saved.lang; if (saved.theme) S.theme = saved.theme; } catch (e) { /* private mode */ }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-scr],[data-var],[data-st],[data-lang],[data-thm],[data-x]');
+    if (!b) return;
+    const ds = b.dataset;
+    if (ds.scr) { S.scr = ds.scr; S.x = {}; }
+    else if (ds.var) { S.v[S.scr] = ds.var; S.x = {}; }
+    else if (ds.st) { S.st[S.scr] = ds.st; S.x = {}; }
+    else if (ds.lang) S.lang = ds.lang;
+    else if (ds.thm) S.theme = ds.thm;
+    else if (ds.x) setX(ds.x);
+    try { localStorage.setItem('wf:' + APP.docTitle, JSON.stringify({ lang: S.lang, theme: S.theme })); } catch (err) { /* ignore */ }
+    render();
+  });
+  document.addEventListener('change', (e) => { const el = e.target.closest('[data-xs]'); if (el) { S.x[el.dataset.xs] = el.value; render(); } });
+  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.row[data-x]')) { e.preventDefault(); e.target.click(); } });
+  render();
+}
+
+/* MUT-750 slice A: price, VAT and total for an Israeli billing address, before Continue (AC4). Portal only. */
+const VAT_PCT = 18; // GET /v1/billing.vatRate in the build; never a literal in the portal
+const APP = {
+  docTitle: 'MUT-750a VAT lines',
+  title: { ar: 'MUT-750أ · سطور الضريبة قبل الدفع', en: 'MUT-750a · VAT lines before Checkout' },
+  T: {
+    ar: { choose: 'اختر خطة', plan: 'الخطة', change: 'تغيير', country: 'الدولة', il: 'إسرائيل', jo: 'الأردن', ps: 'فلسطين', buyer: 'المشتري', person: 'فرد', company: 'شركة', taxId: 'الرقم الضريبي', name: 'الاسم', street: 'العنوان', city: 'المدينة',
+      price: 'السعر', vat: 'ضريبة القيمة المضافة {p}%', total: 'المجموع', pay: 'المتابعة إلى الدفع', details: 'التفاصيل', hide: 'إخفاء', plusVat: '+ ضريبة {v}', monthly: 'شهري', yearly: 'سنوي', address: 'عنوان الفوترة' },
+    en: { choose: 'Choose a plan', plan: 'Plan', change: 'Change', country: 'Country', il: 'Israel', jo: 'Jordan', ps: 'Palestine', buyer: 'Buyer', person: 'Person', company: 'Company', taxId: 'Tax ID', name: 'Name', street: 'Address', city: 'City',
+      price: 'Price', vat: 'VAT {p}%', total: 'Total', pay: 'Continue to payment', details: 'Details', hide: 'Hide', plusVat: '+ {v} VAT', monthly: 'Monthly', yearly: 'Yearly', address: 'Billing address' },
+  },
+  screens: [],
+};
+const ctxOf = (c) => {
+  const country = c.x.country || (c.st === 'jo' ? 'jo' : 'il');
+  const yearly = c.st === 'ily';
+  const plan = c.x.plan || 'solo';
+  const company = c.st === 'co' || c.x.buyer === 'company';
+  const price = PLANS[plan].price * (yearly ? 10 : 1);
+  const vat = country === 'il' ? Math.round((price * VAT_PCT) / 100) : 0;
+  return { country, yearly, plan, company, price, vat, total: price + vat, per: yearly ? t('perYear') : t('perMonth') };
+};
+const sel = (key, val, opts) => `<select data-xs="${key}">${opts.map((o) => `<option value="${o}" ${o === val ? 'selected' : ''}>${t(o)}</option>`).join('')}</select>`;
+function addressFields(m, { withCountry = true } = {}) {
+  return `<p class="sub" style="margin:0 0 8px">${t('address')}</p>
+    ${withCountry ? `<div class="two"><div class="fg"><label>${t('country')}</label>${sel('country', m.country, ['il', 'jo', 'ps'])}</div><div class="fg"><label>${t('buyer')}</label>${sel('buyer', m.company ? 'company' : 'person', ['person', 'company'])}</div></div>` : ''}
+    ${m.company ? `<div class="fg"><label>${t('taxId')}</label><input dir="ltr" value="516 234 871"></div>` : ''}
+    <div class="fg"><label>${t('name')}</label><input dir="auto" value="${S.lang === 'ar' ? 'سامر حداد' : 'Samer Haddad'}"></div>
+    <div class="two"><div class="fg"><label>${t('street')}</label><input dir="auto" value="${S.lang === 'ar' ? 'شارع يافا 12' : '12 Jaffa St'}"></div><div class="fg"><label>${t('city')}</label><input dir="auto" value="${S.lang === 'ar' ? 'حيفا' : 'Haifa'}"></div></div>`;
+}
+const lines = (m) => `<div class="kv"><span>${t('price')}</span>${money(m.price)}</div>${m.vat ? `<div class="kv"><span>${t('vat', { p: num(VAT_PCT) })}</span>${money(m.vat)}</div>` : ''}<div class="kv total"><span>${t('total')} <span class="sub">${m.per}</span></span>${money(m.total)}</div>`;
+const planRow = (m) => rows([row(`<span class="grow"><b>${pn(m.plan)}</b> ${lb(t('change'))}<br><span class="sub">${limitsLine(m.plan)}</span></span><span class="num">${money(m.price)}</span>`)]);
+function variantA(m) {
+  const body = `${planRow(m)}${addressFields(m)}<div class="card" aria-live="polite">${m.vat ? lines(m) : `<div class="kv"><span>${t('price')} <span class="sub">${m.per}</span></span>${money(m.price)}</div>`}</div>`;
+  return drawer({ title: t('billing'), back: 'x=1', body, foot: `${btn(t('cancel'), { kind: 'sec' })}${btn(t('pay'))}` });
+}
+function variantB(m) {
+  const list = ['solo', 'business', 'firm'].map((k) => {
+    const p = PLANS[k].price * (m.yearly ? 10 : 1); const v = m.country === 'il' ? Math.round((p * VAT_PCT) / 100) : 0;
+    return row(`<span class="radio ${k === m.plan ? 'on' : ''}"></span><span class="grow"><b>${pn(k)}</b><br><span class="sub">${limitsLine(k)}</span></span>
+      <span style="text-align:end"><span class="num" style="font-weight:600">${money(p + v)}</span><br>${v ? `<span class="sub">${money(p)} ${t('plusVat', { v: money(v) })}</span>` : `<span class="sub">${m.per}</span>`}</span>`, { click: `plan=${k}`, cur: false });
+  });
+  const body = `<div class="two"><div class="fg"><label>${t('country')}</label>${sel('country', m.country, ['il', 'jo', 'ps'])}</div><div class="fg"><label>${t('buyer')}</label>${sel('buyer', m.company ? 'company' : 'person', ['person', 'company'])}</div></div>
+    <p class="sub" style="margin:0 0 6px">${t('choose')} · ${m.per}</p>${rows(list)}${addressFields(m, { withCountry: false })}`;
+  return drawer({ title: t('billing'), back: 'x=1', body, foot: `${btn(t('cancel'), { kind: 'sec' })}${btn(t('pay'))}` });
+}
+function variantC(m) {
+  const open = !!S.x.open;
+  const body = `${planRow(m)}${addressFields(m)}`;
+  const sum = `<div class="start" style="display:flex;flex-direction:column"><span class="sub">${t('total')} · ${m.per}</span><span class="num" style="font-size:var(--text-headline);font-weight:600">${money(m.total)}</span>${m.vat ? lb(open ? t('hide') : t('details'), { x: 'open=!' }) : ''}</div>`;
+  const detail = open && m.vat ? `<div style="padding:10px 20px;border-top:1px solid var(--m-line);background:var(--m-canvas)">${lines(m)}</div>` : '';
+  return drawer({ title: t('billing'), back: 'x=1', body, foot: `${sum}${btn(t('pay'))}`, extra: '' }).replace('<div class="df">', detail + '<div class="df">');
+}
+APP.screens.push({
+  id: 'pay', name: { ar: 'خطوة الاشتراك', en: 'Subscribe step' },
+  names: { A: { ar: 'سطور تحت العنوان', en: 'Lines under the address' }, B: { ar: 'المجموع في صف الخطة', en: 'Total in the plan rows' }, C: { ar: 'المجموع في التذييل', en: 'Total in the footer' } },
+  rec: 'A',
+  note: 'Billing › See plans › a plan › the address step, the last screen before Stripe. Change the country in the drawer (or with the State buttons) to see the lines appear and disappear. Rounding as Stripe: 3900 × 18% = 702.',
+  trade: {
+    A: 'Price, VAT and total as three lines right under the address that decides them: reads like Stripe\'s own split, nothing hidden; costs three lines of height.',
+    B: 'Each plan row shows the total first, with "₪39 + ₪7.02 VAT" under it: one glance answers "what do I pay" and suits a VAT-inclusive answer to Q1; the country must come before the plans, so the address is split in two.',
+    C: 'Only the total sits beside Continue, the split one tap away under Details: tightest drawer; the VAT line is hidden by default, so AC4\'s "three lines" is met only on tap.',
+  },
+  states: [{ id: 'il', label: { ar: 'إسرائيل · شهري', en: 'Israel · monthly' } }, { id: 'ily', label: { ar: 'إسرائيل · سنوي', en: 'Israel · yearly' } }, { id: 'co', label: { ar: 'إسرائيل · شركة', en: 'Israel · company' } }, { id: 'jo', label: { ar: 'الأردن', en: 'Jordan' } }],
+  desk: (c) => { const m = ctxOf(c); return desk(youPage(), { overlay: c.v === 'A' ? variantA(m) : c.v === 'B' ? variantB(m) : variantC(m) }); },
+  phone: null,
+  noPhone: 'Phone: no screen. The phone never sells (MUT-364 D1; MUT-750 AC4 "Phone: nothing").',
+});
+
+boot();
+</script>
+</body>
+</html>
