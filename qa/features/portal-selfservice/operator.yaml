@@ -28,47 +28,48 @@ paths:
   - src/hosted/data/operatorUsageQueries.ts
   - server/src/routes/operator-usage.ts
 features:
-  - id: signups-approve
-    title: From the digest mail, sign in with a passkey and approve a waiting signup
-    tickets: [MUT-460]
+  - id: signups-history
+    title: With open sign-up the console has no Signups tab; Accounts › Signups is the read-only history, and a webmail account shows its class
+    tickets: [MUT-737, TD-371]
     tier: core
     paths:
-      - src/hosted/pages/auth/SignInPage.tsx
-      - server/src/email/templates/copy.ts
+      - src/hosted/pages/operator/SignupHistory.tsx
+      - src/hosted/pages/operator/OperatorAccountsPage.tsx
+      - src/hosted/pages/operator/OperatorLayout.tsx
+      - src/hosted/pages/operator/OperatorAccountPage.tsx
     steps:
       - Someone signs up with an @gmail.com address and finishes setting a password
-      - Open the "Review signups" link in the operator's digest mail while signed out
-      - Sign in with the passkey, which the sign-in page offers first
-      - Find the signup in the list, press Approve and confirm
+      - Open Operator from You › Account
+      - Choose Signups above the list
+      - Open the new account
     expect:
-      - The signup is listed with its wait and a Webmail chip
-      - The confirm says "‹email› can sign in. We'll email them now."
-      - '"‹email› approved · email sent", the row leaves the list, and no second passkey prompt was needed'
-      - The person gets the "your account is ready" mail and can sign in
-  - id: signups-decline
-    title: Decline a waiting signup, in Arabic on a 375 px phone
-    tickets: [MUT-460]
+      - The account opens at once (no review) and can sign in
+      - Operator opens on Accounts, with no Signups tab
+      - The history shows "No history" and no Approve or Decline
+      - The account page shows a Webmail chip
+  - id: signups-history-arabic
+    title: The operator's Accounts and the sign-up history in Arabic on a 375 px phone
+    tickets: [MUT-737, TD-371]
     steps:
-      - Sign in with the password on a 375 px phone in Arabic
-      - Find the signup, press رفض and confirm with the passkey
+      - Sign in with the password on a 375 px phone in Arabic and open المشغّل
+      - Choose التسجيلات
     expect:
-      - The confirm says the account will be deleted and they will be emailed
-      - The toast says the signup was declined and the mail went
-      - The person gets the decline mail and can no longer sign in
       - The page reads right to left with no sideways scroll
+      - The history reads "لا سجل"
   - id: step-up-passkey
     title: A stale step-up asks for the passkey on the same tap; cancelling it changes nothing
-    tickets: [MUT-460]
+    tickets: [MUT-460, TD-371]
     paths:
       - src/hosted/passkeys/webauthn.ts
     steps:
       - Sign in with the password (no passkey step-up yet)
-      - Press Approve on a waiting signup
-      - Dismiss the passkey sheet, then press Approve with passkey again and confirm on the device
+      - Open a person's account and press Sign out everywhere
+      - Dismiss the passkey sheet, then press Sign out with passkey again and confirm on the device
     expect:
-      - The confirm button reads "Approve with passkey"
-      - Dismissing the sheet leaves the confirm as it was, with no message and nothing approved
-      - Confirming on the device approves the signup
+      - The confirm button reads "Sign out with passkey"
+      - Dismissing the sheet leaves the confirm as it was, with nothing sent and the person still signed in
+      - Confirming on the device signs them out on 1 device
+
   - id: hidden-for-non-operator
     title: Someone who isn't an operator never sees the console
     tickets: [MUT-460]

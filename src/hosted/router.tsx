@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useCallback, useRef, type ReactNode, type RefObject } from 'react';
 import { Navigate, Outlet, createRootRoute, createRoute, createRouter, redirect, useNavigate, type RouterHistory } from '@tanstack/react-router';
-import type { QueryClient } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
 import { MalafatOfficePage } from './pages/auth/malafat/MalafatOfficePage';
@@ -59,7 +59,7 @@ import { useIsOperator } from './session/features';
 import { OperatorLayout } from './pages/operator/OperatorLayout';
 import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
 import { SignupHistory } from './pages/operator/SignupHistory';
-import { useSelfServiceDoors } from './session/selfServiceDoors';
+import { selfServiceQuery, useSelfServiceDoors } from './session/selfServiceDoors';
 import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
 import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
 import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
@@ -507,7 +507,16 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
    * MUT-460 (ADR-213, design 6A): the operator console, outside any profile. Only an operator (/v1/me says so) sees it;
    * anyone else gets the not-found answer every unknown path gets, and the server's gate refuses them regardless.
    */
-  const operatorRoute = createRoute({ getParentRoute: () => authedRoute, path: '/operator', component: () => <Navigate to="/operator/signups" replace /> });
+  // MUT-737: with open sign-up there is no review queue, so the console opens on Accounts (once the doors are known).
+  const operatorRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    path: '/operator',
+    component: function OperatorIndex() {
+      const doors = useQuery(selfServiceQuery);
+      if (doors.isPending) return null;
+      return <Navigate to={doors.data?.openSignup ? '/operator/accounts' : '/operator/signups'} replace />;
+    },
+  });
   /** Every operator page: signed out it asks for a sign-in (local mode never does, 2A); a non-operator goes Home. */
   function OperatorPage({ children }: { children: (heading: RefObject<HTMLHeadingElement | null>) => ReactNode }) {
     const operator = useIsOperator();

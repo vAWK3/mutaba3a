@@ -12,7 +12,6 @@ import {
   grantOperator,
   liveSession,
   liveState,
-  mailTo,
   memberRole,
   operatorAccount,
   operatorFirmRequest,
@@ -56,8 +55,6 @@ async function operator(page: Page, language: 'en' | 'ar' = 'en'): Promise<{ id:
   return { id, email, authenticator };
 }
 
-const signupRow = (page: Page, email: string) => page.getByRole('listitem', { name: email });
-
 /**
  * The person dismisses the next passkey sheet. The virtual authenticator has no Cancel button (without presence it
  * waits out the 2-minute ceremony), so the next `navigator.credentials.get` answers as the browser does on a dismissal:
@@ -77,114 +74,77 @@ async function dismissNextPasskeySheet(page: Page) {
   });
 }
 
-test('From the digest mail, sign in with a passkey and approve a waiting signup', { tag: '@portal-selfservice.operator.signups-approve' }, async ({ page, step }) => {
+test('With open sign-up the console has no Signups tab; Accounts › Signups is the read-only history, and a webmail account shows its class', { tag: '@portal-selfservice.operator.signups-history' }, async ({ page, step }) => {
   await chooseLanguage(page, 'en');
-  const { authenticator } = await operator(page);
-  let waiting = '';
-  let link = '';
-  await step('Someone signs up with an @gmail.com address and finishes setting a password', async () => {
-    waiting = await pendingSignup('waiting');
-    const digest = await mailTo(liveState().operatorDigest, 'review-digest');
-    link = digest.text.match(/https?:\/\/[^\s]+\/operator\/signups/)?.[0] ?? '';
-    expect(link, 'the digest links to the signups page').toBe(`${liveState().origin}/operator/signups`);
+  await operator(page);
+  let person = '';
+  await step('Someone signs up with an @gmail.com address and finishes setting a password: the account opens at once', async () => {
+    person = await pendingSignup('open');
+    expect(await signsIn(person, SIGNUP_PASSWORD)).toBe(true);
   });
-  await step('Sign out, then open the digest mail’s Review signups link', async () => {
-    await authenticator.setPresence(false);
-    await openYou(page, 'account');
-    await youRow(page, 'Sign out').click();
-    await expect(page).toHaveURL(/\/sign-in/);
-    await page.goto(link);
-    await expect(page).toHaveURL(/\/sign-in\?next=/);
+  await step('Open Operator from You › Account: Accounts first, and no Signups tab', async () => {
+    await page.goto('/you/account');
+    await page.getByRole('link', { name: /^Operator/ }).click();
+    await expect(page).toHaveURL(/\/operator\/accounts$/);
+    await expect(page.getByRole('link', { name: 'Accounts' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Signups/ })).toHaveCount(0);
   });
-  let prompts = 0;
-  await step('Sign in with the passkey, which the sign-in page offers first', async () => {
-    const buttons = page.getByRole('button', { name: /^Sign in/ });
-    await expect(buttons.first()).toHaveText('Sign in with a passkey');
-    await expect(buttons.first()).toHaveClass(/btn-primary/);
-    page.on('request', (request) => void (request.url().endsWith('/v1/operator/step-up/options') && (prompts += 1)));
-    await authenticator.setPresence(true);
-    await buttons.first().click();
-    await expect(page).toHaveURL(/\/operator\/signups$/);
+  await step('Choose Signups above the list: the history, with no Approve or Decline', async () => {
+    await page.getByRole('radio', { name: 'Signups' }).click();
+    await expect(page).toHaveURL(/\/operator\/accounts\?view=signups$/);
+    await expect(page.getByText('No history')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Approve|Decline)/ })).toHaveCount(0);
   });
-  await step('The signup is listed with its wait and a Webmail chip', async () => {
-    const row = signupRow(page, waiting);
-    await expect(row).toBeVisible();
-    await expect(row).toContainText(/Signed up \d+ minutes? ago/);
-    await expect(row.getByText('Webmail')).toBeVisible();
-  });
-  await step('Press Approve: the confirm says what will be mailed', async () => {
-    await signupRow(page, waiting).getByRole('button', { name: 'Approve' }).click();
-    await expect(page.getByText(`${waiting} can sign in. We'll email them now.`)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cancel' })).toBeFocused();
-  });
-  await step('Confirm: approved, the mail went, the row leaves, no second passkey prompt', async () => {
-    await signupRow(page, waiting).getByRole('button', { name: 'Approve', exact: true }).click();
-    await expect(page.getByText(`${waiting} approved · email sent`)).toBeVisible();
-    await expect(signupRow(page, waiting)).toHaveCount(0);
-    expect(prompts).toBe(0);
-  });
-  await step('The person gets the account-ready mail and can sign in', async () => {
-    await mailTo(waiting, 'account-ready');
-    expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(true);
+  await step('Open the new account: its sign-up domain reads Webmail', async () => {
+    await openAccount(page, person);
+    await expect(page.locator('.hp-operator-account-header').getByText('Webmail')).toBeVisible();
   });
 });
 
-test('Decline a waiting signup, in Arabic on a 375 px phone', { tag: '@portal-selfservice.operator.signups-decline' }, async ({ page, step }) => {
+test('The same in Arabic on a 375 px phone', { tag: '@portal-selfservice.operator.signups-history-arabic' }, async ({ page, step }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await chooseLanguage(page, 'ar');
   await operator(page, 'ar');
-  const waiting = await pendingSignup('declined');
-  await step('Open المشغّل from You › Account', async () => {
+  await step('Open المشغّل from You › Account: right to left, nothing scrolls sideways', async () => {
     await page.goto('/you/account');
     await page.getByRole('link', { name: /^المشغّل/ }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'المشغّل' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expectNoHorizontalOverflow(page, 'the operator signups page at 375 px');
+    await expectNoHorizontalOverflow(page, 'the operator accounts page at 375 px');
   });
-  await step('Press رفض: the confirm says the account will be deleted', async () => {
-    await signupRow(page, waiting).getByRole('button', { name: 'رفض' }).click();
-    await expect(page.getByText(`سيُحذف حساب ${waiting}. سنراسله.`)).toBeVisible();
-    await expectNoHorizontalOverflow(page, 'the decline confirm at 375 px');
-  });
-  await step('Confirm with the passkey: declined, and the mail went', async () => {
-    await signupRow(page, waiting).getByRole('button', { name: 'رفض بمفتاح المرور' }).click();
-    await expect(page.getByText(`رُفض ${waiting} · أُرسل البريد`)).toBeVisible();
-    await expect(signupRow(page, waiting)).toHaveCount(0);
-  });
-  await step('The person gets the decline mail and can no longer sign in', async () => {
-    await mailTo(waiting, 'account-declined');
-    expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(false);
+  await step('Choose التسجيلات: the history', async () => {
+    await page.getByRole('radio', { name: 'التسجيلات' }).click();
+    await expect(page.getByText('لا سجل')).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'the signup history at 375 px');
   });
 });
 
 test('A stale step-up asks for the passkey on the same tap; cancelling it changes nothing', { tag: '@portal-selfservice.operator.step-up-passkey' }, async ({ page, step }) => {
   await chooseLanguage(page, 'en');
   await operator(page);
-  const waiting = await pendingSignup('stepup');
+  const person = await target('stepup');
   // The challenge is fetched when the confirm opens, before the tap (e316f50a, so Safari's sheet follows the tap): count
-  // every POST from Approve on.
+  // every POST from Sign out everywhere on.
   const posts: string[] = [];
-  page.on('request', (request) => void (request.method() === 'POST' && posts.push(new URL(request.url()).pathname)));
-  await step('Press Approve: the confirm button reads Approve with passkey', async () => {
-    await page.goto('/operator/signups');
-    await signupRow(page, waiting).getByRole('button', { name: 'Approve' }).click();
-    await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeVisible();
+  await step('Press Sign out everywhere: the confirm button reads Sign out with passkey', async () => {
+    await openAccount(page, person.email);
+    page.on('request', (request) => void (request.method() === 'POST' && posts.push(new URL(request.url()).pathname)));
+    await accessRow(page, /Sign out everywhere/).click();
+    await expect(page.getByRole('button', { name: 'Sign out with passkey' })).toBeVisible();
   });
-  await step('Dismiss the passkey sheet: the confirm stays, with no message and nothing approved', async () => {
+  await step('Dismiss the passkey sheet: the confirm stays, with no message and nothing done', async () => {
     await dismissNextPasskeySheet(page);
-    await signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' }).click();
+    await page.getByRole('button', { name: 'Sign out with passkey' }).click();
     // The sheet was asked for (options fetched, the one-shot dismissal used up) and nothing else was sent.
     await expect.poll(() => page.evaluate(() => (navigator.credentials.get as unknown as { dismissed?: boolean }).dismissed !== false)).toBe(true);
-    await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeEnabled();
-    // One challenge, fetched ahead of the tap, and nothing else sent: no approval.
-    expect(posts).toEqual(['/v1/operator/step-up/options']);
-    await expect(signupRow(page, waiting).getByRole('alert')).toHaveCount(0);
-    expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(false);
+    await expect(page.getByRole('button', { name: 'Sign out with passkey' })).toBeEnabled();
+    expect(posts.filter((p) => !p.endsWith('/step-up/options'))).toEqual([]);
+    expect(await sessionWorks(person.device)).toBe(true);
   });
-  await step('Confirm on the device: approved', async () => {
-    await signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' }).click();
-    await expect(page.getByText(`${waiting} approved · email sent`)).toBeVisible();
-    expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(true);
+  await step('Confirm on the device: signed out everywhere', async () => {
+    await page.getByRole('button', { name: 'Sign out with passkey' }).click();
+    await expect.poll(() => toastText(page)).toContain(`${person.email} signed out on 1 device`);
+    expect(await sessionWorks(person.device)).toBe(false);
   });
 });
 
@@ -267,7 +227,7 @@ test('Opening Accounts lists every account; search narrows it, and says so when 
     await expect(page.getByText(/Last signed in \d+ minutes? ago · No passkey/)).toBeVisible();
     await expect(accessRow(page, /Sign out everywhere/)).toContainText('1 device');
     await expect(accessRow(page, /Disable account/)).toContainText('Signs out 1 device');
-    await expect(page.getByRole('region', { name: 'Profiles' })).toContainText(/Owner · (Trial|No plan|Granted|Paid) · /);
+    await expect(page.getByRole('region', { name: 'Profiles' })).toContainText(/Owner · (Starter|Trial|No plan|Granted|Paid) · /);
   });
 });
 

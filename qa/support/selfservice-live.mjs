@@ -189,10 +189,11 @@ async function main() {
       MALAFAT_DELEGATION: 'true',
       OAUTH_CLIENT_LOCAL_HTTP: 'true',
       // Switch rollout (Basel 2026-11-27, docs/operations/before-release.md): the production target, on here too.
-      // INVOICING_FOR_ALL and ACCOUNTANT_PLAN stay off. STARTER_PLAN and OPEN_SIGNUP stay off in this env until the
-      // flows recorded against the trial and the signup review are re-specced for Starter: signup.create (the trial
-      // step), signup.review-declined, operator.signups-approve and -decline, mail.mail-directional-art and the two
-      // malafat-delegation sign-ins (passTrialWelcome). Turning them on here fails those flows.
+      // INVOICING_FOR_ALL and ACCOUNTANT_PLAN stay off. TD-371: STARTER_PLAN and OPEN_SIGNUP are on, the flows that
+      // expected the trial or a waiting sign-up re-specced for Starter (signup.create, signup.webmail-starter,
+      // operator.signups-history, operator.step-up-passkey, mail.mail-directional-art, malafat-delegation).
+      STARTER_PLAN: 'true',
+      OPEN_SIGNUP: 'true',
       PLAN_CHECKOUT: 'true',
       PAID_BUSINESS_CAPS: 'true',
       PAID_HARD_CAPS: 'true',
