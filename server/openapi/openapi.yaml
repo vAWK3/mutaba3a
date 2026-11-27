@@ -1532,6 +1532,10 @@ components:
                 - invalid
             purpose:
               $ref: "#/components/schemas/SetupLinkPurpose"
+            provisioned:
+              type: boolean
+              enum:
+                - true
           required:
             - state
     SetupLinkPurpose:

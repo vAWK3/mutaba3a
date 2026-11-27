@@ -25,6 +25,9 @@ import { UnderReviewNotice } from './UnderReviewNotice';
 import { SetupPasskeyStep, type SetupLinkKind } from './SetupPasskeyStep';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
 import { TwoFactorFields } from '../../twoFactor/TwoFactorFields';
+import { HandoverClaimedMotion } from '../../components/HandoverClaimedMotion';
+import { ClaimCodeStep, ClaimContextLine, ClaimDeadEnd, ClaimStepCount } from './ClaimCodeStep';
+import { claimNext, isClaimRefusal, type ClaimContext } from './claimStep';
 import { TwoFactorStep } from '../../twoFactor/TwoFactorStep';
 import { answerOf, EMPTY_TWO_FACTOR_INPUT, endsTheTry, twoFactorChallengeOf, twoFactorFailure, type TwoFactorAnswer, type TwoFactorFailure } from '../../twoFactor/twoFactor';
 
@@ -42,6 +45,12 @@ import { answerOf, EMPTY_TWO_FACTOR_INPUT, endsTheTry, twoFactorChallengeOf, two
  *
  * MUT-710 (D11): when the person has two-step sign-in on, every link asks for the second step too, beside the new
  * password and sent with it; the sign-in after it asks again, as any sign-in does.
+ *
+ * MUT-769 (DR-1, DR-7): a link an accountant's customer was sent (the check answers `claim`) first names who set the
+ * account up and for which business and asks for the code the accountant said (`ClaimCodeStep`), then the password
+ * (the code goes with it), then the passkey nudge under the `handover-claimed` moment, then the card when one is due
+ * (the customer's own Checkout, Billing › Subscribe on the business profile), then the app. A locked code or a dead
+ * accountant's link sends the customer back to the accountant, never to recovery (B7). Operator links are unchanged.
  */
 
 const SETUP_CHECK_KEY = ['setup-link-check'] as const;
@@ -53,7 +62,7 @@ const NAME_MAX_LENGTH = 200;
 type Refusal = SetupLinkRefusal | 'missing';
 type Purpose = Extract<SetupLinkCheck, { state: 'valid' }>['purpose'];
 /** Where the page ends when it doesn't land on Home. `purpose`: what a dead link was for, when known (MUT-368 D2). */
-type Outcome = { kind: 'refused'; state: Refusal; purpose?: Purpose } | { kind: 'usedAfterRetry' } | { kind: 'saved' } | { kind: 'underReview' };
+type Outcome = { kind: 'refused'; state: Refusal; purpose?: Purpose; provisioned?: boolean } | { kind: 'usedAfterRetry' } | { kind: 'saved' } | { kind: 'underReview' };
 
 /** Every setup request gives up when sign-in's session check does (MUT-207 DR6), so a lost answer surfaces as one. */
 const requestTimeout = () => AbortSignal.timeout(ME_TIMEOUT_MS);
@@ -102,9 +111,36 @@ function SetupLink({ token }: { token: string }) {
   if (check.error) return <CheckFailed error={check.error} onRetry={() => void check.refetch()} retrying={check.isFetching} />;
   if (!link) {
     const dead = check.data.state === 'valid' ? null : check.data;
-    return <SetupNotice outcome={{ kind: 'refused', state: dead?.state ?? 'invalid', ...(dead?.purpose ? { purpose: dead.purpose } : {}) }} />;
+    return (
+      <SetupNotice
+        outcome={{ kind: 'refused', state: dead?.state ?? 'invalid', ...(dead?.purpose ? { purpose: dead.purpose } : {}), ...(dead?.provisioned ? { provisioned: true } : {}) }}
+      />
+    );
   }
-  return <SetupForm token={token} email={link.email} purpose={link.purpose} termsVersion={link.termsVersion} twoFactor={Boolean(link.twoFactor)} onOutcome={setOutcome} />;
+  const form = { token, email: link.email, purpose: link.purpose, termsVersion: link.termsVersion, twoFactor: Boolean(link.twoFactor), onOutcome: setOutcome };
+  if (link.claim) return <ClaimSetup claim={link.claim} form={form} />;
+  return <SetupForm {...form} />;
+}
+
+/** MUT-769: the code first, then the password with it. A code that locks (now or at the redeem) ends on the locked screen. */
+function ClaimSetup({ claim, form }: { claim: ClaimContext; form: Omit<SetupFormProps, 'claim'> }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [locked, setLocked] = useState(claim.codeLocked);
+  if (locked) {
+    return (
+      <SetupLayout>
+        <ClaimDeadEnd kind="locked" />
+      </SetupLayout>
+    );
+  }
+  if (code === null) {
+    return (
+      <SetupLayout>
+        <ClaimCodeStep token={form.token} claim={claim} onVerified={setCode} onLocked={() => setLocked(true)} />
+      </SetupLayout>
+    );
+  }
+  return <SetupForm {...form} claim={{ code, context: claim, onCodeRefused: (nowLocked) => (nowLocked ? setLocked(true) : setCode(null)) }} />;
 }
 
 function SetupLayout({ children }: { children: ReactNode }) {
@@ -135,6 +171,14 @@ function SetupNotice({ outcome }: { outcome: Outcome }) {
   // A dead link that could offer a new one waits for the server's doors, so it never shows the operator's words first.
   if (outcome.kind === 'refused' && outcome.purpose && doorsQuery.isPending) return <CheckingSession label={t('hosted.setup.checking')} />;
   if (outcome.kind === 'underReview') return <UnderReviewNotice onLeave={() => void navigate({ to: '/sign-in', replace: true })} />;
+  // MUT-769: a dead accountant's link: ask him (recovery mails nothing for an unclaimed provisioned account, B7).
+  if (outcome.kind === 'refused' && outcome.provisioned && outcome.state !== 'used') {
+    return (
+      <SetupLayout>
+        <ClaimDeadEnd kind="dead" />
+      </SetupLayout>
+    );
+  }
   const key = outcome.kind === 'refused' ? `hosted.setup.refused.${outcome.state}` : `hosted.setup.${outcome.kind}`;
   const offersSignIn = outcome.kind !== 'refused' || outcome.state === 'used';
   // A dead link the person can replace themselves says so, without "ask the person who set up your account".
@@ -197,6 +241,8 @@ interface SetupFormProps {
   /** MUT-710 (D11): the person has two-step sign-in on, so the link needs the second step too. */
   twoFactor: boolean;
   onOutcome: (outcome: Outcome) => void;
+  /** MUT-769: an accountant's link: the code already checked (sent with the password), and who set it up. */
+  claim?: { code: string; context: ClaimContext; onCodeRefused: (locked: boolean) => void };
 }
 
 /** MUT-324: what the link's check says now, when a 409 didn't name the new terms version. */
@@ -211,7 +257,7 @@ async function recheckTermsVersion(token: string): Promise<RecheckedTerms> {
   }
 }
 
-function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, twoFactor, onOutcome }: SetupFormProps) {
+function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, twoFactor, onOutcome, claim }: SetupFormProps) {
   const t = useT();
   const tp = useTp();
   const queryClient = useQueryClient();
@@ -242,6 +288,8 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
   const [zoneRefused, setZoneRefused] = useState(false);
   /** MUT-619: signed in, the passkey step is showing; where it goes next. */
   const [afterPasskey, setAfterPasskey] = useState<NextPlace | null>(null);
+  /** MUT-769: claimed, no passkey to offer: the moment with Continue; where it goes next. */
+  const [claimedNext, setClaimedNext] = useState<NextPlace | null>(null);
   /**
    * MUT-710 (D11): the link's own challenge, asked for explicitly once the form shows (it mails the email method's code),
    * never by the check, which runs on every page load. A new one replaces it when a try ends.
@@ -294,6 +342,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
     queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] && query.queryKey[0] !== SETUP_TWO_FACTOR_KEY[0] });
     queryClient.setQueryData(ME_KEY, me);
     adoptAccountLocale(me.user.locale);
+    if (claim) return afterClaim(me);
     // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
     const home = { ...(signup ? firstRunPath(me) : { to: '/' }), replace: true } as NextPlace;
     // MUT-619: offer a passkey first, on the MUT-370 rules. `due` means no passkey yet, so there is nothing to review.
@@ -302,6 +351,14 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
     // MUT-415: a recovery lands on the passkey review when the account has passkeys; they survive the new password.
     const review = await passkeysToReview(queryClient);
     void navigate({ to: '/', ...(review ? { search: { passkeys: true, review: 'recovery' } } : {}), replace: true } as never);
+  }
+
+  /** MUT-769 (DR-7): the account is theirs: the passkey nudge (or the moment alone), then the card when due, then the app. */
+  async function afterClaim(me: Me) {
+    const billing = await api.billing({ signal: requestTimeout() }).catch(() => null);
+    const next = { ...claimNext(me, billing), replace: true } as NextPlace;
+    if (passkeyOfferable(me, { supported: passkeySupport(), local: false })) return setAfterPasskey(next);
+    setClaimedNext(next);
   }
 
   /** MUT-710 (D11): the second step to send with the password, or null after marking what's missing. */
@@ -362,7 +419,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
     try {
       const termsLocale = language === 'ar' ? 'ar' : 'en';
       const redeemed = await api.redeemSetupLink(
-        { token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE, ...newAccountFields(), ...second },
+        { token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE, ...newAccountFields(), ...second, ...(claim?.code ? { claimCode: claim.code } : {}) },
         requestTimeout(),
       );
       // MUT-367: an account waiting for review can't sign in yet; say so without trying
@@ -370,6 +427,8 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
       await signIn(redeemed.email, { kind: 'saved' });
     } catch (error) {
       if (refuseSecondStep(error)) return setPhase('idle');
+      // MUT-769: the code locked or changed since its step (a new link from the accountant): back to it.
+      if (claim && isClaimRefusal(error)) return claim.onCodeRefused((error as ApiError).code === 'CLAIM_CODE_LOCKED');
       const failure = redeemFailure(error, answerLost.current);
       if (answerWasLost(error)) answerLost.current = true;
       if (failure.kind === 'trySignIn') return void (await signIn(email, { kind: 'usedAfterRetry' }));
@@ -377,8 +436,9 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
       const rechecked: RecheckedTerms | null =
         failure.kind !== 'termsChanged' ? null : failure.current ? { kind: 'version', version: failure.current } : await recheckTermsVersion(token);
       setPhase('idle');
-      if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state, purpose });
-      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state, purpose });
+      const provisioned = claim ? { provisioned: true } : {};
+      if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state, purpose, ...provisioned });
+      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state, purpose, ...provisioned });
       else if (failure.kind === 'policy') refuseInline('rule');
       else if (failure.kind === 'timezone') {
         setZoneOpen(true);
@@ -408,7 +468,15 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
   if (afterPasskey) {
     return (
       <SetupLayout>
-        <SetupPasskeyStep link={LINK_KIND[purpose]} password={password} onDone={() => void navigate(afterPasskey)} />
+        <SetupPasskeyStep link={LINK_KIND[purpose]} password={password} onDone={() => void navigate(afterPasskey)} art={claim ? <ClaimedMoment /> : undefined} />
+      </SetupLayout>
+    );
+  }
+
+  if (claimedNext) {
+    return (
+      <SetupLayout>
+        <ClaimedCard onContinue={() => void navigate(claimedNext)} />
       </SetupLayout>
     );
   }
@@ -424,7 +492,13 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
 
   return (
     <SetupLayout>
-      <form className="hp-card hp-signin-card" noValidate onSubmit={onSubmit}>
+      <form className={`hp-card hp-signin-card${claim ? ' hp-claim-card' : ''}`} noValidate onSubmit={onSubmit}>
+        {claim && (
+          <>
+            <ClaimContextLine claim={claim.context} />
+            <ClaimStepCount step={2} />
+          </>
+        )}
         <h1>{t(`hosted.setup.title.${variant}`)}</h1>
         {variant === 'reset' && <p className="hp-setup-lead">{t('hosted.setup.lead.reset')}</p>}
 
@@ -627,5 +701,36 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
         </button>
       </form>
     </SetupLayout>
+  );
+}
+
+/** MUT-769: the account is theirs: `motion-handover-claimed` and the one line that says so. */
+function ClaimedMoment() {
+  const t = useT();
+  return (
+    <div className="hp-claim-claimed">
+      <HandoverClaimedMotion size={140} />
+      <p className="hp-claim-claimed-line" role="status">
+        {t('hosted.accountantChannel.claim.claimed.title')}
+      </p>
+    </div>
+  );
+}
+
+/** MUT-769: claimed on a device that can't make a passkey: the moment, then Continue (the card when due, or the app). */
+function ClaimedCard({ onContinue }: { onContinue: () => void }) {
+  const t = useT();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => headingRef.current?.focus(), []);
+  return (
+    <section className="hp-card hp-signin-card hp-claim-card">
+      <HandoverClaimedMotion size={140} />
+      <h1 ref={headingRef} tabIndex={-1}>
+        {t('hosted.accountantChannel.claim.claimed.title')}
+      </h1>
+      <button type="button" className="btn btn-primary btn-md hp-block" onClick={onContinue}>
+        {t('hosted.accountantChannel.claim.claimed.continue')}
+      </button>
+    </section>
   );
 }

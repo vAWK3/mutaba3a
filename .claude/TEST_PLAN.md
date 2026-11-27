@@ -5105,3 +5105,12 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/components/__tests__/CodeReveal.test.tsx` | 3+3 groups, spaced aria-label, LTR in ar and en, stagger order, Copy → Copied → Copy after 2 s, a failed copy, the claim-code spec values and the reduced-motion still in CSS |
 | Unit | `src/hosted/components/__tests__/Activating.test.tsx` | `activatingPhase`; the poll every 4 s, late at 2 min, active when paid, late on a late reload; `hopEnd`; loop → finish the hop → resolve; -rtl key frames; reduced motion shows the scene; the activating spec values; the polite live region in ar and en |
 | Guard | `src/styles/__tests__/direction.test.ts`, `brand.test.ts` | the two `dir` sites; the Copy pill's contrast |
+
+## MUT-769 — /setup for an accountant's customer (2026-11-27, ADR-320)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/pages/auth/__tests__/claimStep.test.ts` | the context line's four forms, code failures, `claimNext` (card when due, never blocked), motion-handover-claimed's spec values and reduced-motion still in CSS |
+| Component | `src/hosted/pages/auth/__tests__/SetupClaim.test.tsx` | context line, step count, six LTR boxes named "Digit n of 6", focus, paste, wrong/required/locked, Arabic RTL; the code sent with the password; the moment then Billing › Subscribe or the business; the moment on the passkey nudge; lock and replaced code at the redeem; dead accountant's link vs operator link |
+| Route | `server/src/__tests__/routes-accountant-claim.test.ts` | `provisioned: true` on superseded and expired accountant links, nothing on unknown or operator links |
+| Release QA | `qa/specs/portal/setup.spec.ts` | `portal.setup.claim-code` (en + ar, 375 px, axe), `portal.setup.claim-refused` |
