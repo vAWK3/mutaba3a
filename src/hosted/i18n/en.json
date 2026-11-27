@@ -3624,6 +3624,17 @@
         "skip": "Continue on Starter",
         "back": "Back"
       }
+    },
+    "pilotWelcome": {
+      "title": "Welcome",
+      "lead": "{plan}, free until {date}",
+      "steps": {
+        "scan": "Scan a receipt",
+        "invoice": "Issue an invoice",
+        "tell": "Tell us what is unclear"
+      },
+      "later": "Later",
+      "start": "Start with a receipt"
     }
   }
 }

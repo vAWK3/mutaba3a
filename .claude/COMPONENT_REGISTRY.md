@@ -2619,4 +2619,6 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `PlanUsageLines` (`src/hosted/components/PilotBilling.tsx`): a paid plan's usage lines from `usageLinesOf(billing)` (`src/hosted/data/usageLines.ts`): "12 of 250 documents" with a bar, the number and bar butter from 90% (`data-attention`), partners per business, the reset day. Shared: use it for any paid plan's meters (MUT-754, MUT-733) instead of a second meter row. Starter keeps `UsageMeter` (its "left" line and 80% rule).
 - `PilotBilling`: the Pilot panel's body (lines, plans with Expected prices, Write to us). Usage: `<PilotBilling billing={billing} pilot={billingPilotOf(billing)!} usage={usageLinesOf(billing)} />`.
 - `billingPilotOf`, `billingPilotEndedOf`, `pilotCurrencyOf`, `PILOT_LAST_DAYS` (`src/hosted/data/pilot.ts`).
+- `PilotWelcomeDrawer` (`src/hosted/components/PilotWelcomeDrawer.tsx`, MUT-755, ADR-331): the once-per-account Welcome, by URL key `pilotWelcome`; opened by `PilotWelcomeOpener` (`src/hosted/shell/`).
+- `usePilot()` (`src/hosted/data/pilotQueries.ts`): the pilot for shell-level features (Welcome, milestones); reads billing only when `mayBeOnPilot(me)`.
 

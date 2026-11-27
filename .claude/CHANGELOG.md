@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-755: the pilot Welcome, once per account (ADR-331)
+
+### Added
+- `PilotWelcomeDrawer` (`?pilotWelcome=true`): "Business, free until <date>", three steps on `pilot-welcome-1..3` with `motion-pilot-sheet`, Later and Start with a receipt (to Receipts); closing calls `POST /v1/billing/pilot-welcome` (`api.pilotWelcomeSeen`).
+- `PilotWelcomeOpener` in the shell; `usePilot`, `usePilotWelcomeSeen` (`src/hosted/data/pilotQueries.ts`); `mayBeOnPilot`, `pilotWelcomeDue` (`src/hosted/data/pilot.ts`); `session/pilotWelcomeOffer.ts` (reset in `endSession`).
+
+### Technical
+- Tests: `src/hosted/components/__tests__/PilotWelcome.test.tsx`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.200.0-mut753, ADR-330)
 
 ### Added

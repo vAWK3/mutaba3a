@@ -829,6 +829,8 @@ export const api = {
   chooseStarter: () => request<Schemas['StarterChoice']>('POST', '/v1/billing/starter'),
   /** MUT-731 (Basel Q5): the business kept active on Starter. */
   setActiveBusinesses: (organizationIds: string[]) => request<Schemas['ActiveBusinesses']>('PUT', '/v1/billing/active-businesses', { body: { organizationIds } }),
+  /** MUT-755 (ADR-296): the pilot Welcome was closed (Later, its action or ✕); idempotent, the first instant is kept. */
+  pilotWelcomeSeen: () => request<Schemas['PilotWelcomeSeen']>('POST', '/v1/billing/pilot-welcome'),
   /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */
   soloTrialOffered: () => request<Schemas['SoloTrialOffer']>('POST', '/v1/billing/solo-trial/offered'),
 

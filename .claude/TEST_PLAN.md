@@ -5061,3 +5061,9 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/data/__tests__/pilot.test.ts` | `pilot` and `pilotEnded` panels (day 1–46, last 14 days, Starter on/off, subscription first, ended onto Starter or read-only, never over a new grant, older server); plans' currency; usage lines butter at 90% and not at 89%, over cap, no caps |
 | Drawer | `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx` | order (status, lines, plans, Write to us), Expected prices from `pilot.plans`, no Subscribe, butter at 90%, last 14 days, Pilot ended with its scene and Starter's lines, Arabic Levantine month |
 
+## MUT-755 — the pilot Welcome (2026-11-27, ADR-331)
+
+| Level | File | What |
+|---|---|---|
+| Portal | `src/hosted/components/__tests__/PilotWelcome.test.tsx` | opens once on a pilot (URL replaced), the lead with the end, three steps on their scenes; Later, ✕ and Start each call the server once; Start goes to Receipts; closed or no pilot never opens; Arabic -rtl art and Levantine month; `mayBeOnPilot` / `pilotWelcomeDue` |
+

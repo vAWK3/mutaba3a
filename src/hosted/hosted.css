@@ -1944,6 +1944,29 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-pilot-expected { color: var(--muted); }
 .hp-pilot-write { display: inline-flex; align-items: center; min-block-size: 44px; font-weight: var(--weight-medium); color: var(--accent-text); text-underline-offset: 2px; }
 .hp-pilot-ended-art { align-self: center; }
+
+/* MUT-755: the pilot Welcome. Three steps, each on its 120×96 scene. Motion from
+   docs/design/motion/2026-11-27/pilot-sheet/motion-pilot-sheet-spec.md: the drawer's own entrance stands for the
+   scrim and the half sheet; each step card rises 14px and fades in (350ms spring) from 180/230/280ms, and its spot's
+   nuqta scales 0→1 (220ms overshoot) from 480/530/580ms. Reduced motion: the still (the scenes as drawn), no movement. */
+.hp-pilot-welcome { display: grid; gap: var(--space-4); }
+.hp-pilot-welcome-lead { margin: 0; color: var(--text-secondary); }
+.hp-pilot-welcome-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.hp-pilot-welcome-step { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); font-weight: var(--weight-medium); }
+.hp-pilot-welcome-step .hp-scene { flex: none; }
+.hp-pilot-welcome-step [data-part="nuqta"] { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-pilot-welcome-step { animation: hp-pilot-step-rise 350ms var(--ease-spring) both; }
+  .hp-pilot-welcome-step [data-part="nuqta"] { animation: hp-pilot-nuqta-pop 220ms var(--ease-overshoot) both; }
+  .hp-pilot-welcome-step-1 { animation-delay: 180ms; }
+  .hp-pilot-welcome-step-2 { animation-delay: 230ms; }
+  .hp-pilot-welcome-step-3 { animation-delay: 280ms; }
+  .hp-pilot-welcome-step-1 [data-part="nuqta"] { animation-delay: 480ms; }
+  .hp-pilot-welcome-step-2 [data-part="nuqta"] { animation-delay: 530ms; }
+  .hp-pilot-welcome-step-3 [data-part="nuqta"] { animation-delay: 580ms; }
+}
+@keyframes hp-pilot-step-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes hp-pilot-nuqta-pop { from { transform: scale(0); } to { transform: scale(1); } }
 .hp-pick-business { display: grid; gap: var(--space-3); }
 .hp-pick-business p { margin: 0; }
 .hp-pick-list { display: grid; gap: var(--space-2); }
