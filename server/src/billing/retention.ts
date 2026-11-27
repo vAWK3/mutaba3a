@@ -1,5 +1,5 @@
-import { GA_PRICE_LOOKUP_KEYS, type BillingCurrency, type Catalog, type CatalogPrice } from './checkout.js';
-import { firstYearOf, productIdsOf, type CouponFact } from './offer.js';
+import type { BillingCurrency, BillingInterval, Catalog, CatalogPrice } from './checkout.js';
+import { couponCovers, firstYearOf, productIdsOf, type CouponFact, type OfferPlan } from './offer.js';
 
 /**
  * MUT-531 (plan D2–D4, D13, ADR-238): moving a monthly payer to the yearly price. Pure: the route reads the mirror,
@@ -22,19 +22,39 @@ export interface PlanFacts {
   paidInvoices: number;
   discounted: boolean;
   paused: boolean;
+  /** MUT-703: a MUT-734 plan change waits on a Stripe schedule; a direct update would fight its phases. */
+  scheduled?: boolean;
 }
 
-export type SwitchRefusal = 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'DISCOUNTED' | 'TOO_EARLY' | 'NO_PRICE';
+export type SwitchRefusal = 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'SCHEDULED' | 'DISCOUNTED' | 'TOO_EARLY' | 'NO_PRICE';
 
 export type YearlySwitch =
-  | { ok: true; currency: BillingCurrency; yearly: CatalogPrice; savings: number | null }
+  | { ok: true; plan: OfferPlan; currency: BillingCurrency; yearly: CatalogPrice; savings: number | null }
   | { ok: false; refusal: SwitchRefusal };
 
-const CURRENCIES = Object.keys(GA_PRICE_LOOKUP_KEYS) as BillingCurrency[];
+/** MUT-703 (§3.3): a list price of a plan (Solo, Business, Firm or the legacy Freelancer), as its lookup key names it. */
+export interface ListPrice {
+  plan: OfferPlan;
+  interval: BillingInterval;
+  currency: BillingCurrency;
+}
 
-/** The currency of a monthly list price; null for a yearly, founder, Firm or unknown price (D5: founders don't switch). */
+const LIST_KEY = /^(freelancer|solo|business|firm)_list_(monthly|yearly)_(ils|usd)$/;
+
+/**
+ * MUT-703 (§3.3): the plan, interval and currency of a list price; null for a founder or Accountant price and anything
+ * else (D5: founders never switch, pause or take the stay offer).
+ */
+export function listPriceOf(priceLookupKey: string | null): ListPrice | null {
+  const match = priceLookupKey === null ? null : LIST_KEY.exec(priceLookupKey);
+  if (!match) return null;
+  return { plan: match[1] as OfferPlan, interval: match[2] === 'monthly' ? 'month' : 'year', currency: match[3]!.toUpperCase() as BillingCurrency };
+}
+
+/** The currency of a monthly list price, any plan's; null for a yearly, founder or unknown price. */
 export function listMonthlyCurrencyOf(priceLookupKey: string | null): BillingCurrency | null {
-  return CURRENCIES.find((currency) => GA_PRICE_LOOKUP_KEYS[currency].month === priceLookupKey) ?? null;
+  const list = listPriceOf(priceLookupKey);
+  return list?.interval === 'month' ? list.currency : null;
 }
 
 /** D3: twelve months less the year, in that currency's minor units; null when the year saves nothing or isn't sold. */
@@ -45,18 +65,23 @@ export function yearlySavingsOf(catalog: Catalog, currency: BillingCurrency): nu
   return savings > 0 ? savings : null;
 }
 
-/** D2, D4, D13: the first refusal that applies, else the yearly price of the subscription's own currency. */
+/**
+ * D2, D4, D13: the first refusal that applies, else the yearly price of the subscription's own currency. MUT-703:
+ * `catalog` is the subscription's own plan's (billing/yearly-switch-line.ts `catalogOfKey`).
+ */
 export function yearlySwitchOf(subscription: SwitchSubscription, facts: PlanFacts, catalog: Catalog): YearlySwitch {
-  const currency = listMonthlyCurrencyOf(subscription.priceLookupKey);
-  if (!currency) return { ok: false, refusal: 'NOT_MONTHLY_LIST' };
+  const list = listPriceOf(subscription.priceLookupKey);
+  if (!list || list.interval !== 'month') return { ok: false, refusal: 'NOT_MONTHLY_LIST' };
+  const { plan, currency } = list;
   if (subscription.status !== 'active') return { ok: false, refusal: 'NOT_ACTIVE' };
   if (subscription.cancelAtPeriodEnd) return { ok: false, refusal: 'CANCELLING' };
   if (facts.paused) return { ok: false, refusal: 'PAUSED' };
+  if (facts.scheduled) return { ok: false, refusal: 'SCHEDULED' };
   if (facts.discounted) return { ok: false, refusal: 'DISCOUNTED' };
   if (facts.paidInvoices < SWITCH_AFTER_PAID_INVOICES) return { ok: false, refusal: 'TOO_EARLY' };
   const yearly = catalog[currency]?.year;
   if (!yearly) return { ok: false, refusal: 'NO_PRICE' };
-  return { ok: true, currency, yearly, savings: yearlySavingsOf(catalog, currency) };
+  return { ok: true, plan, currency, yearly, savings: yearlySavingsOf(catalog, currency) };
 }
 
 /*
@@ -89,6 +114,8 @@ export interface RetentionSubject extends SwitchSubscription {
   discounted: boolean;
   currentPeriodEnd: Date | null;
   billingCycleAnchor: Date | null;
+  /** MUT-703: a MUT-734 downgrade waits on a Stripe schedule (absent: none). */
+  scheduled?: boolean;
 }
 
 /** What the once-rules read of a person's retention events. */
@@ -108,8 +135,8 @@ export interface PauseOption {
   resumesAt: Date;
 }
 
-export type PauseRefusal = 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'TOO_EARLY' | 'ONCE_A_YEAR' | 'NO_PERIOD';
-export type StayRefusal = 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'DISCOUNTED' | 'ALREADY_HAD' | 'NO_COUPON' | 'NO_PRICE';
+export type PauseRefusal = 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'SCHEDULED' | 'TOO_EARLY' | 'ONCE_A_YEAR' | 'NO_PERIOD';
+export type StayRefusal = 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'SCHEDULED' | 'DISCOUNTED' | 'ALREADY_HAD' | 'NO_COUPON' | 'NO_PRICE';
 
 export interface StayOffer {
   couponId: string;
@@ -167,8 +194,18 @@ export function pauseOptionsOf(subject: RetentionSubject, paidInvoices: number, 
   return { ok: true, options };
 }
 
-/** D11: the first refusal that applies, else the offer the coupon makes on this subscription's own monthly price. */
-export function stayOfferOf(subject: RetentionSubject, events: readonly RetentionEventFact[], coupon: CouponFact | null, catalog: Catalog): { ok: true; offer: StayOffer } | { ok: false; refusal: StayRefusal } {
+/**
+ * D11: the first refusal that applies, else the offer the coupon makes on this subscription's own monthly price.
+ * MUT-703: `catalog` is the subscription's own plan's; `entryProducts` the stay entry's plans' products (absent: the
+ * catalog's own, the legacy Freelancer rule).
+ */
+export function stayOfferOf(
+  subject: RetentionSubject,
+  events: readonly RetentionEventFact[],
+  coupon: CouponFact | null,
+  catalog: Catalog,
+  entryProducts: ReadonlySet<string> = productIdsOf(catalog),
+): { ok: true; offer: StayOffer } | { ok: false; refusal: StayRefusal } {
   const refusal = planRefusal(subject);
   if (refusal) return { ok: false, refusal };
   if (subject.discounted) return { ok: false, refusal: 'DISCOUNTED' };
@@ -176,7 +213,7 @@ export function stayOfferOf(subject: RetentionSubject, events: readonly Retentio
   const currency = listMonthlyCurrencyOf(subject.priceLookupKey)!;
   const month = catalog[currency]?.month;
   if (!month) return { ok: false, refusal: 'NO_PRICE' };
-  if (!isStayCoupon(coupon, productIdsOf(catalog))) return { ok: false, refusal: 'NO_COUPON' };
+  if (!isStayCoupon(coupon, entryProducts, productIdsOf(catalog))) return { ok: false, refusal: 'NO_COUPON' };
   const percentOff = coupon.percentOff!;
   return {
     ok: true,
@@ -184,20 +221,26 @@ export function stayOfferOf(subject: RetentionSubject, events: readonly Retentio
   };
 }
 
-/** D11: valid, a percentage, `repeating` for some months, restricted to the Freelancer products only. */
-function isStayCoupon(coupon: CouponFact | null, freelancerProducts: ReadonlySet<string>): coupon is CouponFact {
+/**
+ * D11: valid, a percentage, `repeating` for some months, restricted to the entry's products and (MUT-703) covering the
+ * plan held.
+ */
+function isStayCoupon(coupon: CouponFact | null, entryProducts: ReadonlySet<string>, held: ReadonlySet<string>): coupon is CouponFact {
   if (!coupon || !coupon.valid || coupon.duration !== 'repeating') return false;
   if (coupon.durationInMonths === null || coupon.durationInMonths < 1) return false;
   if (coupon.percentOff === null || !(coupon.percentOff > 0 && coupon.percentOff <= 100)) return false;
-  const products = coupon.appliesToProducts;
-  return products !== null && products.length > 0 && products.every((product) => freelancerProducts.has(product));
+  return couponCovers(coupon, entryProducts, held);
 }
 
-/** What both retention steps need first: a monthly list plan that is active, not cancelling and not paused. */
-function planRefusal(subject: RetentionSubject): 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | null {
+/**
+ * What both retention steps need first: a monthly list plan (any plan's, MUT-703) that is active, not cancelling, not
+ * paused and not waiting on a scheduled plan change.
+ */
+function planRefusal(subject: RetentionSubject): 'NOT_MONTHLY_LIST' | 'NOT_ACTIVE' | 'CANCELLING' | 'PAUSED' | 'SCHEDULED' | null {
   if (!listMonthlyCurrencyOf(subject.priceLookupKey)) return 'NOT_MONTHLY_LIST';
   if (subject.status !== 'active') return 'NOT_ACTIVE';
   if (subject.cancelAtPeriodEnd) return 'CANCELLING';
   if (subject.paused) return 'PAUSED';
+  if (subject.scheduled) return 'SCHEDULED';
   return null;
 }
