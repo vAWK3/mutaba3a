@@ -705,14 +705,14 @@ export const BillingPlanSchema = z
 export const BillingPilotSchema = z
   .object({
     cohort: z.string(),
-    /** MUT-758 (ADR-298): the person's first pilot grant (an extension keeps it). Additive since 1.172.0-mut758. */
+    /** MUT-758 (ADR-298): the person's first pilot grant (an extension keeps it). Additive since 1.210.0-mut703. */
     startedAt: z.string().datetime().optional(),
     endsAt: z.string().datetime(),
     welcomeSeenAt: z.string().datetime().nullable(),
     /**
      * MUT-758: the person's first scan and first issued document (any type) as the payer, from the usage events; null =
      * not yet. Web and phone send `pilot_first_scan_saved` / `pilot_first_invoice_issued` once, when these were null.
-     * Additive since 1.172.0-mut758.
+     * Additive since 1.210.0-mut703.
      */
     firstScanAt: z.string().datetime().nullable().optional(),
     firstInvoiceAt: z.string().datetime().nullable().optional(),
