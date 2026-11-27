@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — The accountant takes the card in the room (MUT-766 server half, epic MUT-762, ADR-295, API 1.161.0-mut766)
+
+Plan `docs/designs/accountant-channel.md` (eng SC-1, T5, R4, R5; build decisions B12–B16). Server only, dark behind `ACCOUNTANT_PROVISIONING` and `PLAN_CHECKOUT`. No migration. MONEY CODE: the existing billing tests (billing-routes, billing-core, billing-gate-routes, routes-accountant-plan) are unchanged and green.
+
+### Added
+- `POST /v1/accountant/customers/{userId}/checkout-session`: Stripe Checkout for a paid plan with the unclaimed customer as payer.
+- `startPlanCheckout(payer, actor)` extracted from the plan Checkout; both doors use it (golden test).
+- `CheckoutGateway.customerIdOf`, `setCustomerEmail`; `findOrCreateCustomer` with `email: null` (metadata search, no email on the customer).
+- The claim sets the verified address on that Stripe customer. `paid` on `GET /v1/accountant/customers` rows.
+- `store.provision.unclaimedCustomerOf`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — Claim code, fresh links and change of address (MUT-765 server half, epic MUT-762, ADR-294, API 1.160.0-mut765)
 
 Plan `docs/designs/accountant-channel.md` (eng T4; ACCT-6, ACCT-10, R6; build decisions B5–B11). Server only, dark behind `ACCOUNTANT_PROVISIONING`. No migration (MUT-763's columns). The /setup code step (MUT-769) and the desk's Customer drawer (MUT-768) wait for the UI.

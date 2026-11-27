@@ -88,6 +88,12 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## Activation Checkout (MUT-766, 2026-11-27)
+
+`routes-accountant-activation.test.ts`: payer is the customer, Stripe customer with no email, address saved, audit actor accountant with `payerUserId`; golden test (same params and Stripe call order and one expiry from both doors for the same payer, the claim sets the verified email); IDOR (another accountant, unknown id, claimed) 404 and unapproved 403; paid plans only and the address country; the limiter counts the accountant; a duplicated and a late webhook make one subscription and the desk shows `paid`; 404 with the flag off. `checkout-gateway.test.ts`: metadata search, create with no email and a per-person key, set email. Unchanged and green: billing-routes, billing-core, billing-gate-routes, routes-accountant-plan.
+
+---
+
 ## Claim code and setup actions (MUT-765, 2026-11-27)
 
 `routes-accountant-claim.test.ts`: check names accountant and business; mail names them and never carries the code; right code with spaces; redeem without code 422; claim sets password, verifies address, audits, closes setup actions (403 CUSTOMER_CLAIMED) and keeps the read grant; four wrong tries count down, the fifth locks even the right code; 14-day expiry; operator links need no code; recovery mails nothing for an unclaimed provisioned account; reissue kills the old link and code, replay omits the code; a fresh code unlocks; 5 reissues a day then 429 until the next UTC day; change of address (old link dead, old address told, new link claims); EMAIL_TAKEN and throwaway refusals; another accountant 404; approval withdrawn 403; the desk list with states and paging; 404 with the flag off. Store contract: reissue, change of address, refusals, wrong-try counter and `claimOf`, mail status, `customersOf`.

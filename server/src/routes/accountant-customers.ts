@@ -5,6 +5,7 @@ import { personalOrganizationIdOf } from '../accountants/provision.js';
 import { generateSetupToken, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
 import { CLAIM_REISSUES_PER_DAY, claimCodeDigest, generateClaimCode } from '../auth/claim-code.js';
 import { isClaimCodeLocked } from '../accountants/claim.js';
+import { COVERING_STATUSES, profilePlanSubscriptions } from '../billing/entitlement.js';
 import type { Context } from 'hono';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { sessionDigest } from '../auth/sessions.js';
@@ -55,6 +56,8 @@ export const ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<st
   'GET /v1/accountant/customers',
   'POST /v1/accountant/customers/:userId/link',
   'PUT /v1/accountant/customers/:userId/email',
+  // MUT-766: the activation Checkout (its handler lives with billing, routes/billing.ts).
+  'POST /v1/accountant/customers/:userId/checkout-session',
 ]);
 
 /** Every endpoint this file adds: the dark-launch switch (ACCOUNTANT_PROVISIONING off) answers 404 for each. */
@@ -257,7 +260,8 @@ export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions
       const limit = query.limit ?? DEFAULT_PAGE;
       const rows = await store.provision.customersOf(user.id, { limit, before: query.before ? new Date(query.before) : undefined });
       const now = c.get('now')();
-      return c.json({ items: rows.map((row) => customerView(row, now)), nextBefore: rows.length === limit ? rows[rows.length - 1]!.provisionedAt.toISOString() : null }, 200);
+      const paid = await Promise.all(rows.map(async (row) => profilePlanSubscriptions((await store.billing.summaryOf(row.userId)).subscriptions).some((s) => COVERING_STATUSES.has(s.status))));
+      return c.json({ items: rows.map((row, i) => customerView(row, now, paid[i] ?? false)), nextBefore: rows.length === limit ? rows[rows.length - 1]!.provisionedAt.toISOString() : null }, 200);
     },
   );
 
@@ -365,7 +369,7 @@ export function accountantCustomerRoutes(options: AccountantCustomerRouteOptions
 }
 
 /** The desk's row. A claimed customer shows no link (no setup action remains). */
-export function customerView(row: ProvisionedCustomerRow, now: Date) {
+export function customerView(row: ProvisionedCustomerRow, now: Date, paid: boolean) {
   const link = row.claimed ? null : row.link;
   const live = link && link.usedAt === null && link.cancelledAt === null && link.expiresAt.getTime() > now.getTime();
   const state = row.claimed ? 'claimed' : !live ? 'link_expired' : isClaimCodeLocked(link) ? 'code_locked' : 'awaiting_claim';
@@ -377,5 +381,6 @@ export function customerView(row: ProvisionedCustomerRow, now: Date) {
     provisionedAt: row.provisionedAt.toISOString(),
     state,
     link: link ? { expiresAt: link.expiresAt.toISOString(), mailStatus: link.mailStatus } : null,
+    paid,
   } as const;
 }

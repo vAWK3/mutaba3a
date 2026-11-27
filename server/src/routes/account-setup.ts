@@ -11,6 +11,7 @@ import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { Mailer } from '../email/ports.js';
+import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { sendPasswordNotice } from '../email/password-notice.js';
 import type { ReviewDigest } from '../email/review-digest.js';
 import type { Logger } from '../logger.js';
@@ -58,6 +59,8 @@ export interface AccountSetupRouteOptions {
   twoFactor: TwoFactorFlow;
   /** MUT-737 (ADR-289): OPEN_SIGNUP. On, every SIGNUP link opens ACTIVE (no review); absent = off. */
   openSignup?: boolean;
+  /** MUT-766 (eng R5): sets the verified address on the Stripe customer an accountant's activation made with none. Null: no Stripe. */
+  checkout?: Pick<CheckoutGateway, 'customerIdOf' | 'setCustomerEmail'> | null;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
@@ -249,6 +252,22 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     }
   }
 
+  /**
+   * MUT-766 (R5): an accountant's activation made the customer's Stripe customer with no email; the claim proves the
+   * address, so it goes there now (receipts start). After the commit and never able to change the answer; a failure is
+   * logged with the person's id (TD-361: no retry yet).
+   */
+  async function verifiedAddressToStripe(userId: string, email: string): Promise<void> {
+    const checkout = options.checkout;
+    if (!checkout) return;
+    try {
+      const customer = (await store.billing.summaryOf(userId)).account?.stripeCustomerId ?? (await checkout.customerIdOf(userId));
+      if (customer) await checkout.setCustomerEmail(customer, email);
+    } catch (err) {
+      logger.error({ err, userId, event: 'claim_stripe_email_failed' }, 'verified address not set on the Stripe customer');
+    }
+  }
+
   /** MUT-765: `accountant.customer_claimed` on the business profile his grant reads, in the redeem's transaction. */
   async function claimedAudit(c: Context<AppEnv>, person: UserRecord): Promise<AuditEventInput[]> {
     const { accountantUserId, business } = await claimContextOf(store, person);
@@ -281,6 +300,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit, terms: acceptance, termsAudit });
     if (!redeemed) throw unusable(await stateAfterLosing(body.token, at));
     twoFactor.log(c, 'password.reset', person.id, { outcome: link.purpose });
+    if (claim) await verifiedAddressToStripe(person.id, redeemed.email);
     // The database lockout is cleared by the redeem; the in-process sign-in throttle is cleared here, so the sign-in that follows works.
     throttle.clear(normalizeEmail(redeemed.email));
     // MUT-359 (A5): after the commit, and never able to change this answer. "Set" when the person had no password.

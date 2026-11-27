@@ -166,6 +166,8 @@ const ACCOUNTANT_OPERATIONS = [
   'GET /v1/accountant/customers',
   'POST /v1/accountant/customers/{userId}/link',
   'PUT /v1/accountant/customers/{userId}/email',
+  // MUT-766: the activation Checkout for an unclaimed customer.
+  'POST /v1/accountant/customers/{userId}/checkout-session',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */

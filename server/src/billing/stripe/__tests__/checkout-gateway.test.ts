@@ -74,6 +74,34 @@ describe('CheckoutGateway customer (MUT-362 eng review D3)', () => {
   });
 });
 
+describe('CheckoutGateway customer with no address (MUT-766, eng R5)', () => {
+  const searchResult = (data: unknown[]) => ({ object: 'search_result', has_more: false, data, url: '/v1/customers/search' });
+
+  it('finds an unclaimed account’s customer by its metadata, never by an address', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: searchResult([{ id: 'cus_MADE', object: 'customer', email: null, metadata: { mutaba3a_user_id: PERSON.userId } }]) }));
+    expect(await gateway.findOrCreateCustomer({ ...PERSON, email: null })).toBe('cus_MADE');
+    expect(seen.map(route)).toEqual(['GET /v1/customers/search']);
+    expect(seen[0]!.query.get('query')).toBe(`metadata['mutaba3a_user_id']:'${PERSON.userId}'`);
+  });
+
+  it('creates one with no email, the person’s id in its metadata and a per-person key', async () => {
+    const { seen, gateway } = gatewayWith((request) => (request.method === 'GET' ? { status: 200, body: searchResult([]) } : { status: 200, body: { id: 'cus_NEW', object: 'customer', email: null, metadata: { mutaba3a_user_id: PERSON.userId } } }));
+    expect(await gateway.findOrCreateCustomer({ ...PERSON, email: null })).toBe('cus_NEW');
+    expect(seen.map(route)).toEqual(['GET /v1/customers/search', 'POST /v1/customers']);
+    expect(seen[1]!.form.has('email')).toBe(false);
+    expect(seen[1]!.form.get('metadata[mutaba3a_user_id]')).toBe(PERSON.userId);
+    expect(seen[1]!.headers.get('idempotency-key')).toMatch(new RegExp(`^mut766-customer-${PERSON.userId}-[0-9a-f]{12}$`));
+  });
+
+  it('sets the verified address at claim, and finds a customer by the person', async () => {
+    const { seen, gateway } = gatewayWith((request) => (request.method === 'GET' ? { status: 200, body: searchResult([]) } : { status: 200, body: { id: 'cus_MADE', object: 'customer', email: PERSON.email, metadata: {} } }));
+    await gateway.setCustomerEmail('cus_MADE', PERSON.email);
+    expect(seen.map(route)).toEqual(['POST /v1/customers/cus_MADE']);
+    expect(seen[0]!.form.get('email')).toBe(PERSON.email);
+    expect(await gateway.customerIdOf(PERSON.userId)).toBeNull();
+  });
+});
+
 describe('CheckoutGateway before a Checkout (MUT-362 review: no double charge)', () => {
   it('reads every subscription Stripe holds for the customer, whatever the mirror says', async () => {
     const sub = (status: string, end: number) => ({ id: `sub_${status}`, object: 'subscription', status, items: list([{ id: 'si_1', object: 'subscription_item', current_period_end: end }]) });

@@ -26,7 +26,11 @@ export interface PriceFact {
 
 export interface CheckoutPerson {
   userId: string;
-  email: string;
+  /**
+   * MUT-766 (eng R5): null for an account an accountant created that nobody has claimed: the customer is made with no
+   * address (so Stripe mails no receipt to a typo) and found by its metadata; the claim sets the verified address.
+   */
+  email: string | null;
   name: string;
 }
 
@@ -35,6 +39,10 @@ export interface CheckoutGateway {
   pricesByLookupKey(keys: readonly string[]): Promise<Map<string, PriceFact>>;
   /** The customer whose metadata names this person (listed by exact email), else a new one (D3). */
   findOrCreateCustomer(person: CheckoutPerson): Promise<string>;
+  /** MUT-766: the customer whose metadata names this person, if Stripe has one (Search; eventually consistent). */
+  customerIdOf(userId: string): Promise<string | null>;
+  /** MUT-766 (R5): the verified address, set on the customer when an unclaimed account is claimed. */
+  setCustomerEmail(customer: string, email: string): Promise<void>;
   /** Every subscription Stripe holds for the customer, ended ones included (review: no double charge). */
   subscriptionsOf(customer: string): Promise<SubscriptionState[]>;
   /**
@@ -169,17 +177,35 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       inFlight.set(cacheKey, pending);
       return pending;
     },
+    async customerIdOf(userId) {
+      const found = await wrapped(() => stripe.customers.search({ query: `metadata['mutaba3a_user_id']:'${userId.replace(/[^0-9a-f-]/gi, '')}'`, limit: 1 }));
+      return found.data[0]?.id ?? null;
+    },
+    async setCustomerEmail(customer, email) {
+      await wrapped(() => stripe.customers.update(customer, { email }));
+    },
     async findOrCreateCustomer(person) {
+      if (person.email === null) {
+        // MUT-766: no address to list by. Search finds one made earlier; the per-person key covers the last 24 hours,
+        // where Search may not see it yet.
+        const known = await wrapped(() => stripe.customers.search({ query: `metadata['mutaba3a_user_id']:'${person.userId.replace(/[^0-9a-f-]/gi, '')}'`, limit: 1 }));
+        if (known.data[0]) return known.data[0].id;
+        const created = await wrapped(() =>
+          stripe.customers.create({ name: person.name, metadata: { mutaba3a_user_id: person.userId } }, { idempotencyKey: `mut766-customer-${person.userId}-${digestOf(person.name)}` }),
+        );
+        return created.id;
+      }
+      const email = person.email;
       // List, not Search: Search is eventually consistent, so a customer made seconds ago could be missed.
-      const listed = await wrapped(() => stripe.customers.list({ email: person.email, limit: 100 }));
+      const listed = await wrapped(() => stripe.customers.list({ email, limit: 100 }));
       const mine = listed.data.find((c) => c.metadata?.['mutaba3a_user_id'] === person.userId);
       if (mine) return mine.id;
       const created = await wrapped(() =>
         stripe.customers.create(
-          { email: person.email, name: person.name, metadata: { mutaba3a_user_id: person.userId } },
+          { email, name: person.name, metadata: { mutaba3a_user_id: person.userId } },
           // Two tabs (or a double press) within Stripe's 24 h key window get the same customer back. The key carries the
           // parameters' hash: Stripe refuses a reused key with new ones, which a changed email or name would be.
-          { idempotencyKey: `mut362-customer-${person.userId}-${digestOf(person.email, person.name)}` },
+          { idempotencyKey: `mut362-customer-${person.userId}-${digestOf(email, person.name)}` },
         ),
       );
       return created.id;

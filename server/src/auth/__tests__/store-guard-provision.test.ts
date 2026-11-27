@@ -24,6 +24,7 @@ describe('the provision guard class (MUT-763)', () => {
       'provision.customersOf',
       'provision.reissue',
       'provision.setMailStatus',
+      'provision.unclaimedCustomerOf',
     ]);
   });
 
