@@ -50,3 +50,37 @@ run "on_sets_both" {
     error_message = "The trial's start instant reaches the service as given."
   }
 }
+
+# MUT-737 (ADR-289): open sign-up ships off and reaches Cloud Run only with its variable (and only beside Starter).
+run "open_signup_off_by_default" {
+  command = apply
+
+  assert {
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "OPEN_SIGNUP"]) == 0
+    error_message = "With open_signup off the service gets no OPEN_SIGNUP."
+  }
+}
+
+run "open_signup_on_with_starter" {
+  command = apply
+
+  variables {
+    starter_plan = true
+    open_signup  = true
+  }
+
+  assert {
+    condition     = [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "OPEN_SIGNUP"] == ["true"]
+    error_message = "With open_signup on the service gets OPEN_SIGNUP=true."
+  }
+}
+
+run "open_signup_without_starter_refused" {
+  command = plan
+
+  variables {
+    open_signup = true
+  }
+
+  expect_failures = [var.open_signup]
+}

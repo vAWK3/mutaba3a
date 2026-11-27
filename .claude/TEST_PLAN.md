@@ -4938,3 +4938,16 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route | `__tests__/routes-issuing-rules.test.ts` | the default country, the issuer's country, `?country=`, a malformed country (422), the invoicing gate (404), an accountant's read, `Cache-Control` |
 | Route matrices | `route-security.test.ts`, `accountant-route-matrix.test.ts` | the new route is listed and gated |
 | QA | none yet | no screen changes in this piece; the portal piece extends `portal.invoicing.country-not-live` and re-runs the setup and issue flows |
+
+## MUT-737 (server half) — open sign-up (2026-11-27, ADR-289)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `auth/__tests__/self-service.test.ts` | every domain class opens ACTIVE on Starter with `openSignup`; off keeps the review branch |
+| Config | `__tests__/config.test.ts` | `OPEN_SIGNUP` only exactly "true"; refused without `STARTER_PLAN` |
+| Route | `__tests__/routes-open-signup.test.ts` | gmail.com sign-up → ACTIVE, Starter, signs in, class on the audit, no review mail or digest; disposable refused; approve/decline 409 `SIGNUP_REVIEW_RETIRED`, list works; release (Starter, audited, mailed once, ALREADY_DECIDED on re-run, `STARTER_PLAN_OFF`) |
+| Route | `routes-self-service.test.ts`, `routes-operator-accounts.test.ts` | `openSignup` on the doors; `signupDomain` on the account view |
+| CLI | `scripts/__tests__/users-cli.test.ts` | `release-pending-signups` dry run, `--apply`, idempotent re-run, exit 1 on refusal |
+| Wiring | `email/__tests__/review-digest.test.ts`, `index-limiters-pruned.test.ts` | the digest sweep is not scheduled with the flag; index passes the flag |
+| Terraform | `infrastructure/terraform/tests/starter_plan.tftest.hcl` | `OPEN_SIGNUP` off by default, on with Starter, refused without it |
+| QA | with the UI half | `portal-selfservice.signup-webmail-starter`, `first-run-try-solo`, `first-run-stay-starter`, `portal.operator.signups-history` |

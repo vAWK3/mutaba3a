@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.150.0-mut775
+  version: 1.155.0-mut737
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, SIGNUP_REVIEW_RETIRED, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -803,6 +803,7 @@ components:
                 - CONFLICT
                 - PLAN_LIMIT
                 - OPERATION_IN_PROGRESS
+                - SIGNUP_REVIEW_RETIRED
                 - RECONCILE_RUNNING
                 - LINK_ORIGIN_LOOPBACK
                 - TERMS_VERSION_STALE
@@ -1612,12 +1613,15 @@ components:
           type: boolean
         starterPlan:
           type: boolean
+        openSignup:
+          type: boolean
       required:
         - signup
         - recovery
         - malafatSignIn
         - signInCode
         - starterPlan
+        - openSignup
     SelfServiceAccepted:
       type: object
       properties:
@@ -14228,6 +14232,20 @@ components:
                   - firmEnabledAt
                   - firmRequestedAt
                   - billing
+            signupDomain:
+              type: object
+              nullable: true
+              properties:
+                domainClass:
+                  type: string
+                  nullable: true
+                reasons:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - domainClass
+                - reasons
           required:
             - closing
             - operator
@@ -14239,6 +14257,7 @@ components:
             - agentGrantCount
             - availableFeatures
             - profiles
+            - signupDomain
     BillingEntitlement:
       type: object
       properties:
@@ -32760,7 +32779,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off"
           content:
             application/json:
               schema:
@@ -32800,7 +32819,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/signup-reviews/{userId}/release:
+    post:
+      tags:
+        - Admin
+      summary: "Release a signup still waiting for review: the account opens on Starter (no trial) and the person is mailed (MUT-737)"
+      description: "For the move to open sign-up (ADR-289): `npm --prefix server run signups:release` releases every pending review. Works with OPEN_SIGNUP on or off. Audited `user.signup_released`. The mail is keyed per review, so a re-run never mails twice. 409 CONFLICT `details.reason` STARTER_PLAN_OFF while STARTER_PLAN is off. Additive since 1.155.0-mut737."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided; `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No review for this user (unknown, never self-signed-up, or already declined)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off"
           content:
             application/json:
               schema:
@@ -32904,7 +32963,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on"
           content:
             application/json:
               schema:
@@ -32949,7 +33008,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on"
           content:
             application/json:
               schema:
@@ -32994,7 +33053,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on"
           content:
             application/json:
               schema:

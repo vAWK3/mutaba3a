@@ -432,7 +432,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.150.0-mut775';
+export const API_VERSION = '1.155.0-mut737';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -477,6 +477,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const terms = deps.terms ?? CURRENT_TERMS;
   // MUT-367: on the unguarded store, like the mailer's send log.
   const signupReview = deps.signupReview ?? { digest: createReviewDigest({ store: deps.store, mailer, logger: deps.logger, now, to: null }), supportAddress: 'help@example.invalid' };
+  // MUT-737 (ADR-289): OPEN_SIGNUP, carried with the self-service options; it opens every verified sign-up and retires the review.
+  const openSignup = deps.selfService?.openSignup ?? false;
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
@@ -623,7 +625,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).
   app.route('/', accountClosureRoutes({ store, passwordHasher, throttle: signInThrottle, settings: sessions, mailer, logger: deps.logger, stripe: deps.stripe?.accountGateway ?? null }));
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest, twoFactor }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest, twoFactor, openSignup }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
   const selfService = { ...(deps.selfService ?? defaultSelfServiceOptions()), malafatSignIn: Boolean(deps.malafatSignIn) };
   app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: selfService, now }));
@@ -773,10 +775,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
-  app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
+  app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, openSignup }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
-  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
+  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, openSignup, webauthn: deps.webauthn ?? null, reporter }));
   // MUT-735 (ADR-281): Operator › Usage, on the same unguarded store behind the same gate.
   app.route('/', operatorUsageRoutes(deps.store));
   // MUT-735 (ADR-281 §12): the daily usage retention job (/jobs/*, the job token), on the unguarded store.

@@ -45,7 +45,7 @@ export function adminSignupReviewRoutes(options: AdminSignupReviewOptions): Open
   const decisionResponses = {
     200: { description: 'Decided; `mail` says what became of the person’s mail', content: { 'application/json': { schema: SignupReviewDecisionSchema } } },
     404: { description: 'No review for this user (unknown, never self-signed-up, or already declined)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
-    409: { description: 'CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+    409: { description: 'CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
     ...adminErrors,
   } as const;
 
@@ -74,6 +74,21 @@ export function adminSignupReviewRoutes(options: AdminSignupReviewOptions): Open
       responses: decisionResponses,
     }),
     async (c) => c.json(await actions.decline(c.req.valid('param').userId, contextOf(c)), 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/admin/v1/signup-reviews/{userId}/release',
+      tags: ['Admin'],
+      summary: 'Release a signup still waiting for review: the account opens on Starter (no trial) and the person is mailed (MUT-737)',
+      description:
+        'For the move to open sign-up (ADR-289): `npm --prefix server run signups:release` releases every pending review. Works with OPEN_SIGNUP on or off. Audited `user.signup_released`. The mail is keyed per review, so a re-run never mails twice. 409 CONFLICT `details.reason` STARTER_PLAN_OFF while STARTER_PLAN is off. Additive since 1.155.0-mut737.',
+      security: [{ adminToken: [] }],
+      request: { params: UserIdParam },
+      responses: decisionResponses,
+    }),
+    async (c) => c.json(await actions.release(c.req.valid('param').userId, contextOf(c)), 200),
   );
 
   return app;

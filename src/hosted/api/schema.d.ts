@@ -23208,7 +23208,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile */
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -23276,7 +23276,75 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile */
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/signup-reviews/{userId}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release a signup still waiting for review: the account opens on Starter (no trial) and the person is mailed (MUT-737)
+         * @description For the move to open sign-up (ADR-289): `npm --prefix server run signups:release` releases every pending review. Works with OPEN_SIGNUP on or off. Audited `user.signup_released`. The mail is keyed per review, so a re-run never mails twice. 409 CONFLICT `details.reason` STARTER_PLAN_OFF while STARTER_PLAN is off. Additive since 1.155.0-mut737.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Decided; `mail` says what became of the person’s mail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewDecision"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No review for this user (unknown, never self-signed-up, or already declined) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -23426,7 +23494,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend) */
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -23500,7 +23568,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend) */
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -23574,7 +23642,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend) */
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -29408,6 +29476,7 @@ export interface components {
             malafatSignIn: boolean;
             signInCode: boolean;
             starterPlan: boolean;
+            openSignup: boolean;
         };
         SelfServiceAccepted: {
             /** @enum {string} */
@@ -34230,6 +34299,10 @@ export interface components {
                 firmRequestedAt: string | null;
                 billing: components["schemas"]["BillingEntitlement"];
             }[];
+            signupDomain: {
+                domainClass: string | null;
+                reasons: string[];
+            } | null;
         };
         BillingEntitlement: {
             /** @enum {string} */

@@ -1927,6 +1927,11 @@ export const SelfServiceDoorsSchema = z
     signInCode: z.boolean(),
     /** MUT-731: the free Starter plan is on (STARTER_PLAN), so the landing describes it. Additive since 1.144.0-landing. */
     starterPlan: z.boolean(),
+    /**
+     * MUT-737 (ADR-289): every verified sign-up opens at once on Starter (OPEN_SIGNUP); no operator review, so the
+     * operator's Signups page is history only. Additive since 1.155.0-mut737.
+     */
+    openSignup: z.boolean(),
   })
   .openapi('SelfServiceDoors');
 
@@ -2043,6 +2048,12 @@ export const OperatorAccountSchema = UserSummarySchema.extend({
       billing: BillingEntitlementSchema,
     }),
   ),
+  /**
+   * MUT-737 (ADR-289): the domain screen's class at self-service sign-up (`WEBMAIL`, `BUSINESS`, `BUSINESS_UNVERIFIED`,
+   * or null for a link issued before the screen) and its reasons; a risk signal, never a gate. Null for an account
+   * made another way. Additive since 1.155.0-mut737.
+   */
+  signupDomain: z.object({ domainClass: z.string().nullable(), reasons: z.array(z.string()) }).nullable(),
 }).openapi('OperatorAccount');
 
 export const OperatorAccountViewSchema = z.object({ account: OperatorAccountSchema, stepUpUntil: z.string().datetime().nullable() }).openapi('OperatorAccountView');

@@ -161,7 +161,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
 
   const decisionResponses = {
     200: { description: 'Decided (or mailed again); `mail` says what became of the person’s mail', content: { 'application/json': { schema: SignupReviewDecisionSchema } } },
-    409: errorResponse('CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)'),
+    409: errorResponse('CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on'),
     ...operatorErrors,
   } as const;
 

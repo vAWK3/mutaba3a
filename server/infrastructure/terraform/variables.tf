@@ -561,6 +561,17 @@ variable "starter_plan" {
   default     = false
 }
 
+variable "open_signup" {
+  description = "MUT-737 (ADR-289): sets OPEN_SIGNUP=true: every verified self-service sign-up the domain screen lets through opens ACTIVE on Starter, with no operator review and no review digest. Needs starter_plan (the server refuses to boot otherwise). Before turning it on: npm --prefix server run signups:release -- --apply. false (default) = webmail and unverified domains wait for review."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.open_signup || var.starter_plan
+    error_message = "open_signup needs starter_plan: the server refuses OPEN_SIGNUP without STARTER_PLAN."
+  }
+}
+
 variable "plan_checkout" {
   description = "MUT-702 Part B (ADR-288): sets PLAN_CHECKOUT=true: Solo, Business and Firm are on sale through Stripe Checkout (GET /v1/billing plans), and Starter's limit refusals offer the upgrade. false (default) = only the legacy Freelancer Checkout. Turn on with MUT-703, after the live catalog run (npm run billing:plans -- --apply --live)."
   type        = bool

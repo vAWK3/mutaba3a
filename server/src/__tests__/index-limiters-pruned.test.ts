@@ -24,3 +24,16 @@ describe('index.ts prunes every limiter it builds', () => {
     expect(source).toMatch(/oauth: config\.OAUTH_DERIVE_KEY \? \{[^}]*limiters: oauthLimiters, agentLimiter, agentPersonLimiter \}/);
   });
 });
+
+describe('index.ts and OPEN_SIGNUP (MUT-737)', () => {
+  const source = readFileSync(fileURLToPath(new URL('../index.ts', import.meta.url)), 'utf8');
+
+  it('schedules the review digest only through scheduleReviewDigest, which skips it with OPEN_SIGNUP on', () => {
+    expect(source).toMatch(/scheduleReviewDigest\(reviewDigest, \{ openSignup: config\.OPEN_SIGNUP/);
+    expect(source).not.toMatch(/msUntilNextSweep/);
+  });
+
+  it('hands OPEN_SIGNUP to the self-service options the routes read', () => {
+    expect(source).toMatch(/openSignup: config\.OPEN_SIGNUP,/);
+  });
+});

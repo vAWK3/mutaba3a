@@ -199,6 +199,8 @@ export function accountActions(options: AccountActionOptions) {
       store.oauth.listLiveGrants(user.id, at),
       memberProfilesForBilling(store, user.id),
     ]);
+    const personalProfile = members.find(({ organization }) => organization.personalOwnerUserId === user.id)?.organization ?? null;
+    const signupDomain = personalProfile ? await signupDomainOf(store, personalProfile.id, user.id) : null;
     // One membership read for both the rows and their billing, so every row has its entitlement.
     const entitlements = members.length > 0 ? await entitlementsFor(store, members, at) : new Map<string, Entitlement>();
     const profiles = members.map(({ organization, membership }) => ({
@@ -223,6 +225,7 @@ export function accountActions(options: AccountActionOptions) {
       agentGrantCount: agentGrants.length,
       availableFeatures: [...FEATURES],
       profiles,
+      signupDomain,
     };
   }
 
@@ -248,6 +251,21 @@ export function accountActions(options: AccountActionOptions) {
   }
 
   return { findByEmail, mustGet, memberOrganizations, audit, setStatus, revokeSessions, issueSetupLink, view, list };
+}
+
+/**
+ * MUT-737 (ADR-289, AC3): the domain screen's class at self-service sign-up, from the `user.signed_up` audit entry on
+ * the personal profile. Null for an account made another way (operator, Malafat, accountant) or before the screen
+ * recorded it on the audit. A risk signal for the operator only.
+ */
+async function signupDomainOf(store: LedgerStore, personalOrganizationId: string, userId: string): Promise<{ domainClass: string | null; reasons: string[] } | null> {
+  const page = await store.audit.list(personalOrganizationId, { action: 'user.signed_up', entityType: 'user', entityId: userId }, { limit: 1, cursor: null });
+  const metadata = page.items[0]?.metadata as { domainClass?: unknown; reasons?: unknown } | null | undefined;
+  if (!metadata || !('domainClass' in metadata)) return null;
+  return {
+    domainClass: typeof metadata.domainClass === 'string' ? metadata.domainClass : null,
+    reasons: Array.isArray(metadata.reasons) ? metadata.reasons.filter((r): r is string => typeof r === 'string') : [],
+  };
 }
 
 /** The newest of several instants, as ISO; null when there is none. */

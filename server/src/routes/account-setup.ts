@@ -52,12 +52,15 @@ export interface AccountSetupRouteOptions {
   reviewDigest: ReviewDigest;
   /** MUT-710 (ADR-274 D11): every person link asks for the second step when the person has it on. */
   twoFactor: TwoFactorFlow;
+  /** MUT-737 (ADR-289): OPEN_SIGNUP. On, every SIGNUP link opens ACTIVE (no review); absent = off. */
+  openSignup?: boolean;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
   const { store, passwordHasher, settings, ipLimiter, throttle, terms, mailer, logger, reviewDigest, twoFactor } = options;
+  const openSignup = options.openSignup ?? false;
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
@@ -247,7 +250,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     const acceptance = termsAcceptanceOf(terms, body.termsLocale ?? link.locale, 'cookie', body.clientRelease);
     const requestId = c.get('requestId');
     const at = c.get('now')();
-    const outcome = signupAccountOutcome(link, at, { starter: store.billing.starterPlan });
+    const outcome = signupAccountOutcome(link, at, { starter: store.billing.starterPlan, openSignup });
     const created = await store.accountSetup.redeemSignup({
       tokenDigest: link.tokenDigest,
       passwordHash,
@@ -260,7 +263,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       terms: acceptance,
       auditFor: ({ userId, personalOrganizationId }) => [
         { organizationId: personalOrganizationId, actorType: 'USER', actorId: userId, action: 'organization.created', entityType: 'organization', entityId: personalOrganizationId, metadata: { personal: true, ownerUserId: userId }, requestId },
-        { organizationId: personalOrganizationId, actorType: 'USER', actorId: userId, action: 'user.signed_up', entityType: 'user', entityId: userId, metadata: { linkId: link.id, locale: link.locale, status: outcome.status }, requestId },
+        { organizationId: personalOrganizationId, actorType: 'USER', actorId: userId, action: 'user.signed_up', entityType: 'user', entityId: userId, metadata: { linkId: link.id, locale: link.locale, status: outcome.status, ...signupRiskOf(link) }, requestId },
         termsAcceptedEvent(personalOrganizationId, userId, acceptance, requestId),
       ],
     });
@@ -305,6 +308,14 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
 }
 
 type SetupLinkRefusal = Exclude<SetupLinkState, 'valid'>;
+
+/**
+ * MUT-737 (ADR-289, AC3): the domain screen's verdict, kept on `user.signed_up` as a risk signal only (the operator's
+ * account page shows it); never a gate. A link issued before the screen existed has no class.
+ */
+export function signupRiskOf(link: Pick<SignupLinkRecord, 'domainClass' | 'domainReasons'>): { domainClass: string | null; reasons: string[] } {
+  return { domainClass: link.domainClass, reasons: [...link.domainReasons] };
+}
 
 /** A 'valid' state reaching a refusal means its link or person vanished between reads: treat it as unknown. */
 function refusalOf(state: SetupLinkState): SetupLinkRefusal {

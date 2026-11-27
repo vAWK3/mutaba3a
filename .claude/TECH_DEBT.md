@@ -709,7 +709,7 @@
 **Fix**: Fold the mailer's recent outcome (cap reached, provider refusing) into `recovery`, or show a banner from the operator's alert channel.
 
 ### TD-213: A business domain gives every address on it an instant trial
-**Status**: Open
+**Status**: Resolved by Starter (ADR-284, ADR-289: with `STARTER_PLAN` on no sign-up gets a trial, and `OPEN_SIGNUP` is refused without it)
 **Ticket**: MUT-367 (eng review, deferred)
 **Added**: 2026-10-23
 **Priority**: Low (before signup volume grows)
