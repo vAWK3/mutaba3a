@@ -4379,6 +4379,11 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
   - Receipts review: AC1 vendor-only read, R5/R6 read currency and amount kept, a late rate replacing a vendor VAT, R10.
 - **Release-QA:** `portal.expenses.vendor-defaults` and `portal.receipts.vendor-defaults` (passed 2026-11-02, with vendor-typeahead, vat and vat-from-receipt alongside). Phone: `ios.capture.vendor-defaults`, with the Flutter half.
 
+## MUT-775 — a known vendor's registration no. fills its last category (ADR-239 amendment)
+- **Server** `routes-vendors.test.ts`: `vendorDefaults.categoryId` by registration no. (AC1, not in `suggested`); null on a name-only match (D2), with no last category, with an archived one (D3); another profile's vendor gives no defaults (AC3).
+- **Server** `routes-receipt-reading.test.ts` (through the read job): the vendor's name (confidence 1) and its category (AC1); no match leaves the read vendor and no defaults (AC2); a stored vendor name stays (D4); a receipt moved to a profile without the vendor fills nothing (AC3).
+- **Portal / phone / release-QA:** none yet; the category fill on the review is a client follow-up (brief, "Not built here").
+
 ## MUT-532 — pause instead of cancel, the stay offer and MTB3A's own cancel (ADR-240)
 - **Sandbox spike (2026-11-02, `qa/support/mut532-pause-spike.mjs`, `.claude/designs/mut-532-pause-spike-result.md`):** (a) `pause_collection` void from the period end with `resumes_at` = boundary + 2 months − 1 h: status stays `active`, two invoices voided, the third charged 2900, Stripe clears the pause and leaves the metadata; (b) Resume now with `billing_cycle_anchor[type]=now` alone makes no invoice (any proration behaviour), so the month is its own invoice: paid 2900, the next cycle on the new day; a declined card → `past_due` with retries; (d) the repeating 2-month 50% coupon: 1450, 1450, 2900. A probe: `cancel_at_period_end: false` clears the portal's `cancel_at` too; a founder schedule refuses cancel changes.
 - **Server unit:** `retention.test.ts` — `cycleBoundaryAfter` (the spike's dates, Jan 31 → Feb 28 → Mar 31, Feb 29 in a leap year, across a year), `pauseOptionsOf` (1–3 months from the period end, resuming an hour before; trialist, yearly/founder/unknown price, not active, cancelling, paused, once in 12 months at the boundary, a pause undone before it started vs one resumed early, no period), `stayOfferOf` (Stripe's rounding in ILS/USD; once ever; founders/yearly; discount; every wrong coupon shape; no price). `entitlement.test.ts` — a pause to come covers; running → READ_ONLY · STRIPE `paused` until it restarts; exactly at `pausedFrom` and `pauseResumesAt` ± 1 ms; no end; never LOCKED after an ended trial; Malafat and grants win; another covering subscription covers; Stripe's own `paused` status stays unflagged. `gate.test.ts` — the 402's `paused` and its message. `mirror.test.ts` — MTB3A's pause, metadata left after a resume, a pause not ours (`PAUSE_NOT_OURS`, from epoch 0), no `resumes_at`. `offer.test.ts` — `kind`, the stay entry, the QA overrides, a monthly Checkout never takes the stay coupon. `config.test.ts` — `BILLING_STAY_COUPON_ID` refused live.
@@ -4933,3 +4938,50 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route | `__tests__/routes-issuing-rules.test.ts` | the default country, the issuer's country, `?country=`, a malformed country (422), the invoicing gate (404), an accountant's read, `Cache-Control` |
 | Route matrices | `route-security.test.ts`, `accountant-route-matrix.test.ts` | the new route is listed and gated |
 | QA | none yet | no screen changes in this piece; the portal piece extends `portal.invoicing.country-not-live` and re-runs the setup and issue flows |
+
+## MUT-745 — the pack contract and per-pack fixtures (ADR-287 §8)
+
+| Layer | File | Covers |
+|---|---|---|
+| Fixtures | `jurisdictions/__tests__/fixtures/{index,il,types}.ts` | each registered pack's rules by hand, golden hashes, route inputs and clearance failure; Israel's are the MUT-741/742/743 assertions, unchanged |
+| Pack | `jurisdictions/__tests__/pack.contract.test.ts` + `pack-contract.ts` | every registered pack passes every check (identity, document types, dealers, languages, tax IDs, dated rules, lines add up, hooks, fixture present) and answers its fixture exactly; 28 broken packs each fail their check; every check is proven by one |
+| Golden | `jurisdictions/__tests__/golden.test.ts` | per pack: composed-document hashes and statutory-file bytes from the fixture (Israel's 11 hashes and the uniform file, unchanged) |
+| Pack (IL only) | `jurisdictions/__tests__/il-pack.contract.test.ts` | the Tax Authority codes, `DOC_TYPE_RANK` = Israeli code order, the registry and boot check |
+| Boundary | `jurisdictions/__tests__/boundary.test.ts` | core imports no pack directory (any `<cc>`); Israel's allowlist unchanged; self-test for another pack |
+| Routes | `__tests__/routes-pack-contract.test.ts` | per pack: the stamp, numbers 1-2-3 with no gaps, an idempotent retry, lines adding up, no change after issue, a refused clearance leaving no trace |
+| QA | none | AC3 (`invoicing-<cc>.yaml`) open: the portal specs run on a stubbed API (brief, "Not done") |
+
+## MUT-737 (server half) — open sign-up (2026-11-27, ADR-289)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `auth/__tests__/self-service.test.ts` | every domain class opens ACTIVE on Starter with `openSignup`; off keeps the review branch |
+| Config | `__tests__/config.test.ts` | `OPEN_SIGNUP` only exactly "true"; refused without `STARTER_PLAN` |
+| Route | `__tests__/routes-open-signup.test.ts` | gmail.com sign-up → ACTIVE, Starter, signs in, class on the audit, no review mail or digest; disposable refused; approve/decline 409 `SIGNUP_REVIEW_RETIRED`, list works; release (Starter, audited, mailed once, ALREADY_DECIDED on re-run, `STARTER_PLAN_OFF`) |
+| Route | `routes-self-service.test.ts`, `routes-operator-accounts.test.ts` | `openSignup` on the doors; `signupDomain` on the account view |
+| CLI | `scripts/__tests__/users-cli.test.ts` | `release-pending-signups` dry run, `--apply`, idempotent re-run, exit 1 on refusal |
+| Wiring | `email/__tests__/review-digest.test.ts`, `index-limiters-pruned.test.ts` | the digest sweep is not scheduled with the flag; index passes the flag |
+| Terraform | `infrastructure/terraform/tests/starter_plan.tftest.hcl` | `OPEN_SIGNUP` off by default, on with Starter, refused without it |
+| QA | with the UI half | `portal-selfservice.signup-webmail-starter`, `first-run-try-solo`, `first-run-stay-starter`, `portal.operator.signups-history` |
+
+## MUT-750 slice A (server half) — Israeli VAT follows the item and the address (2026-11-27, ADR-290)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/checkout.test.ts` | `taxRatesFor` IL / elsewhere / no country / IL with no rate |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | `planOf` reads item rates; the switch sends them (and nothing when none); `retax` both directions, no proration, its key |
+| Sync | `billing/stripe/__tests__/retax.test.ts` | into/out of Israel and no-op; IL→JO and JO→IL re-tax once, same country nothing; Freelancer never; transient 500 and refused code leave the old country |
+| Route | `billing-yearly-switch.test.ts`, `billing-plan-checkout.test.ts` | an Israeli item keeps its rate through the switch; `vatRate` on `GET /v1/billing` |
+| QA | with the UI half | `portal.billing.vat-lines-israel`, `portal.billing.no-vat-abroad`, `portal-live.billing.address-moves-out` |
+
+## MUT-734 (server half) — plan changes (2026-11-27, ADR-291)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/plan-change.test.ts` | every tier pair, Starter, business counts at cap−1/cap/cap+1, invalid picks, each refusal in order; the options |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | upgrade payload (proration, pending_if_incomplete, tax rates, metadata, key); two-phase schedule; release |
+| Route | `__tests__/billing-plan-change.test.ts` | previews; upgrade applied/pending/failed/AMOUNT_CHANGED/PREVIEW_EXPIRED; downgrade with and without a pick, mail, scheduled line, SCHEDULE_PENDING; undo; to Starter and its undo; the mirror applies a scheduled downgrade; PAID_BUSINESS_CAPS on/off |
+| Mail | `email/__tests__/templates.test.ts`, `mailer.test.ts` | `plan-change-scheduled` in both languages |
+| Terraform | `starter_plan.tftest.hcl` | `PAID_BUSINESS_CAPS` off by default, on when set |
+| test:db | (CI) | the migration; cascade on closure (purge list entry) |
+| QA | with the UI half | `portal-live.billing.upgrade-solo-business`, `downgrade-business-solo`, `to-starter`, `undo-downgrade`, `portal.billing.change-plan-pane` |

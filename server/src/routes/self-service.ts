@@ -39,6 +39,8 @@ export interface SelfServiceOptions {
   malafatSignIn?: boolean;
   /** MUT-731: STARTER_PLAN, published on the doors so the landing describes the free plan only while it is on. Absent = false. */
   starterPlan?: boolean;
+  /** MUT-737 (ADR-289): OPEN_SIGNUP, published on the doors (the operator console reads it). Absent = false. */
+  openSignup?: boolean;
   /**
    * MUT-368 (D1): this server really mails links: a mailer other than noop and a Turnstile secret. GET /v1/self-service
    * reports it, so the portal shows no door that can only fail. Absent = false. Recovery itself stays on either way.
@@ -131,7 +133,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     (c) => {
       const mails = options.mailsLinks ?? false;
       c.header('Access-Control-Allow-Origin', '*');
-      return c.json({ signup: mails && options.signupEnabled, recovery: mails, malafatSignIn: options.malafatSignIn ?? false, signInCode: mails, starterPlan: options.starterPlan ?? false }, 200);
+      return c.json({ signup: mails && options.signupEnabled, recovery: mails, malafatSignIn: options.malafatSignIn ?? false, signInCode: mails, starterPlan: options.starterPlan ?? false, openSignup: options.openSignup ?? false }, 200);
     },
   );
 

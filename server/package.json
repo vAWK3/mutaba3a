@@ -48,6 +48,7 @@
     "firm:disable": "tsx src/scripts/users.ts firm-disable",
     "firm:decline": "tsx src/scripts/users.ts firm-decline",
     "signups:review": "./scripts/live-admin.sh signup-reviews",
+    "signups:release": "./scripts/live-admin.sh release-pending-signups",
     "billing:grant": "tsx src/scripts/users.ts billing-grant",
     "billing:revoke": "tsx src/scripts/users.ts billing-revoke",
     "billing:grants": "tsx src/scripts/users.ts billing-grants",

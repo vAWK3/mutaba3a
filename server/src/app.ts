@@ -52,10 +52,12 @@ import { renewalMailRoutes } from './routes/renewal-mail.js';
 import type { OfferEntry } from './billing/offer.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
 import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
-import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js';
+import { BILLING_COUNTRIES, israelVatPercent, type BillingCountries } from './billing/checkout.js';
+import { createTaxFollowsAddress } from './billing/stripe/retax.js';
 import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, billingPlanRoutes } from './routes/billing-plan.js';
+import { billingPlanChangeRoutes } from './routes/billing-plan-change.js';
 import { BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, billingStarterRoutes } from './routes/billing-starter.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { agentAuditFor } from './oauth/audit.js';
@@ -439,7 +441,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.150.0-mut764';
+export const API_VERSION = '1.158.0-mut764';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -484,6 +486,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const terms = deps.terms ?? CURRENT_TERMS;
   // MUT-367: on the unguarded store, like the mailer's send log.
   const signupReview = deps.signupReview ?? { digest: createReviewDigest({ store: deps.store, mailer, logger: deps.logger, now, to: null }), supportAddress: 'help@example.invalid' };
+  // MUT-737 (ADR-289): OPEN_SIGNUP, carried with the self-service options; it opens every verified sign-up and retires the review.
+  const openSignup = deps.selfService?.openSignup ?? false;
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
@@ -631,7 +635,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).
   app.route('/', accountClosureRoutes({ store, passwordHasher, throttle: signInThrottle, settings: sessions, mailer, logger: deps.logger, stripe: deps.stripe?.accountGateway ?? null }));
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest, twoFactor }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest, twoFactor, openSignup }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
   const selfService = { ...(deps.selfService ?? defaultSelfServiceOptions()), malafatSignIn: Boolean(deps.malafatSignIn) };
   app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: selfService, now }));
@@ -750,6 +754,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ...(deps.offers ? { offers: deps.offers } : {}),
     }),
   );
+  // MUT-734 (ADR-291): changing between plans, behind PLAN_CHECKOUT, sharing the billing limiter.
+  app.route(
+    '/',
+    billingPlanChangeRoutes(store, {
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      plan: deps.stripe?.planGateway ?? null,
+      planSales: deps.planSales ?? false,
+      limiter: billingLimiter,
+      logger: deps.logger,
+      mailer,
+      settings: sessions,
+    }),
+  );
   // MUT-731 (ADR-284): the person's Starter choices (continue free, the active business, the trial step shown).
   app.route('/', billingStarterRoutes(store));
   // MUT-441: the server's reader, on the unguarded store (a job, and the uploader's grant, act for no principal).
@@ -782,10 +799,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
-  app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
+  app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, openSignup }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
-  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
+  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, openSignup, webauthn: deps.webauthn ?? null, reporter }));
   // MUT-735 (ADR-281): Operator › Usage, on the same unguarded store behind the same gate.
   app.route('/', operatorUsageRoutes(deps.store));
   app.route('/', operatorProvisioningRoutes(deps.store));
@@ -793,10 +810,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
+  // MUT-750 (ADR-290): the tax follows an address that moves into or out of Israel (needs the plan and checkout doors).
+  const billingCountries = deps.billingCountries ?? BILLING_COUNTRIES;
+  const vatPercent = israelVatPercent(billingCountries);
+  const checkoutDoor = deps.stripe?.checkoutGateway;
+  const taxFollowsAddress =
+    deps.stripe?.planGateway && checkoutDoor
+      ? createTaxFollowsAddress({ plan: deps.stripe.planGateway, israelVatRateId: async () => (vatPercent === null ? null : checkoutDoor.israelVatRateId(vatPercent)) })
+      : null;
   const stripe = deps.stripe
     ? {
         webhookGateway: deps.stripe.webhookGateway,
-        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway } : {}), logger: deps.logger, now }),
+        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway } : {}), ...(taxFollowsAddress ? { taxFollowsAddress } : {}), logger: deps.logger, now }),
       }
     : null;
   app.route(

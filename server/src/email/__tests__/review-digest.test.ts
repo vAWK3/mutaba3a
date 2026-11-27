@@ -1,8 +1,8 @@
 import pino from 'pino';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMailer } from '../mailer.js';
 import { MemoryMailTransport } from '../transports/memory.js';
-import { createReviewDigest, msUntilNextSweep, REVIEW_COMMAND } from '../review-digest.js';
+import { createReviewDigest, msUntilNextSweep, REVIEW_COMMAND, scheduleReviewDigest } from '../review-digest.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { LedgerStore } from '../../repositories/ports.js';
 
@@ -116,5 +116,27 @@ describe('review digest (MUT-367)', () => {
     expect(msUntilNextSweep(new Date('2026-10-24T09:00:00Z'))).toBe(5 * 60_000);
     expect(msUntilNextSweep(new Date('2026-10-24T09:10:00Z'))).toBe(55 * 60_000);
     expect(msUntilNextSweep(new Date('2026-10-24T09:04:00Z'))).toBe(60_000);
+  });
+});
+
+describe('scheduleReviewDigest (MUT-737)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('schedules nothing with OPEN_SIGNUP on', () => {
+    const announce = vi.fn(async () => 'idle' as const);
+    expect(scheduleReviewDigest({ announce }, { openSignup: true, now: () => new Date() })).toBeNull();
+  });
+
+  it('sweeps a few minutes past each hour with it off, until stopped', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-24T09:00:00Z') });
+    const announce = vi.fn(async () => 'idle' as const);
+    const sweep = scheduleReviewDigest({ announce }, { openSignup: false, now: () => new Date() });
+    vi.advanceTimersByTime(5 * 60_000);
+    expect(announce).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60 * 60_000);
+    expect(announce).toHaveBeenCalledTimes(2);
+    sweep?.stop();
+    vi.advanceTimersByTime(3 * 60 * 60_000);
+    expect(announce).toHaveBeenCalledTimes(2);
   });
 });

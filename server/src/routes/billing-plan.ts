@@ -64,6 +64,10 @@ export const BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> =
   'POST /v1/billing/cancellation',
   'DELETE /v1/billing/cancellation',
   'POST /v1/billing/stay-offer',
+  // MUT-734 (routes/billing-plan-change.ts): changing between plans.
+  'POST /v1/billing/plan-change/preview',
+  'POST /v1/billing/plan-change',
+  'DELETE /v1/billing/plan-change',
 ]);
 
 export interface BillingPlanRouteOptions {
@@ -146,7 +150,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
   }
 
   async function preview(user: UserRecord, plan: PlanGateway, live: LivePlan, yearlyPriceId: string, prorationDate: Date) {
-    return viaStripe(() => plan.previewYearlySwitch({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId, prorationDate }), user, live.customer, options.logger);
+    return viaStripe(() => plan.previewYearlySwitch({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId, prorationDate, taxRates: live.taxRateIds }), user, live.customer, options.logger);
   }
 
   app.openapi(
@@ -199,7 +203,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
       const again = await preview(user, plan, live, decision.yearly.id, prorationDate);
       if (again.amountDue !== body.expectedAmountDue || again.currency !== decision.currency) throw planConflict('AMOUNT_CHANGED');
       const result = await viaStripe(
-        () => plan.switchToYearly({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId: decision.yearly.id, prorationDate }),
+        () => plan.switchToYearly({ subscriptionId: live.id, customer: live.customer, itemId: live.itemId, yearlyPriceId: decision.yearly.id, prorationDate, taxRates: live.taxRateIds }),
         user,
         live.customer,
         options.logger,

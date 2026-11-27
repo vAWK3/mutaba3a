@@ -56,6 +56,10 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/billing/cancellation': 'open',
   'DELETE /v1/billing/cancellation': 'open',
   'POST /v1/billing/stay-offer': 'open',
+  // MUT-734: changing plan moves money, never a record (and moving up is how a capped person writes again).
+  'POST /v1/billing/plan-change/preview': 'open',
+  'POST /v1/billing/plan-change': 'open',
+  'DELETE /v1/billing/plan-change': 'open',
   // MUT-731 (ADR-284): choosing Starter or the active business is how a read-only person writes again; the trial step
   // shown is the person's own onboarding.
   'POST /v1/billing/starter': 'open',

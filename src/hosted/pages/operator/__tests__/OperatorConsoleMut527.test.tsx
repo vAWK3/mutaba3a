@@ -45,6 +45,8 @@ const mine = (overrides: Partial<OperatorAccount> = {}): OperatorAccount => ({
   activeSessionCount: 1,
   agentGrantCount: 0,
   availableFeatures: ['agent_access', 'accountant_access', 'bank_feeds'],
+  signupDomain: null,
+  planHistory: [],
   profiles: [],
   ...overrides,
 });

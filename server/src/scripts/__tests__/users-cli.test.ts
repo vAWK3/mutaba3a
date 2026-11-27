@@ -578,6 +578,34 @@ describe('signups:review (MUT-367)', () => {
     expect(h.err.at(-1)).toMatch(/409 CONFLICT/);
   });
 
+  it('MUT-737: release-pending-signups lists by default, releases on Starter with --apply, mails once, and re-runs clean', async () => {
+    const h = harness({ store: new MemoryLedgerStore({ starterPlan: true }) });
+    const rana = await pendingSignup(h.store, 'rana@gmail.com');
+    const omar = await pendingSignup(h.store, 'omar.k@gmail.com');
+    expect(await h.run(['release-pending-signups'])).toBe(0);
+    expect(h.out.join('\n')).toMatch(/rana@gmail\.com — WEBMAIL webmail — waiting since /);
+    expect(h.out.at(-1)).toBe('2 waiting; dry run, nothing changed. Release them: --apply');
+    expect((await h.store.users.getById(rana.id))?.status).toBe('PENDING_REVIEW');
+
+    expect(await h.run(['release-pending-signups', '--apply'])).toBe(0);
+    expect(h.out.join('\n')).toMatch(/rana@gmail\.com released on Starter \(mail: disabled\)/);
+    expect(h.out.at(-1)).toBe('2 released, 0 failed');
+    for (const id of [rana.id, omar.id]) {
+      expect((await h.store.users.getById(id))?.status).toBe('ACTIVE');
+      expect((await h.store.billing.summaryOf(id)).trialStartedAt).toBeNull();
+    }
+    expect(await h.run(['release-pending-signups', '--apply'])).toBe(0);
+    expect(h.out.at(-1)).toBe('0 released, 0 failed');
+  });
+
+  it('MUT-737: release-pending-signups --apply exits 1 when the server refuses (STARTER_PLAN off)', async () => {
+    const h = harness();
+    await pendingSignup(h.store, 'rana@gmail.com');
+    expect(await h.run(['release-pending-signups', '--apply'])).toBe(1);
+    expect(h.out.join('\n')).toMatch(/rana@gmail\.com failed: .*409 CONFLICT/);
+    expect(h.out.at(-1)).toBe('0 released, 1 failed');
+  });
+
   it('declines by address, deleting the empty account; both flags at once is refused', async () => {
     const h = harness();
     const user = await pendingSignup(h.store, 'omar.k@gmail.com');

@@ -1,4 +1,4 @@
-import { ENFORCED_BUSINESS_CAPS } from '../billing/plans.js';
+import { enforcedBusinessCapsOf } from '../billing/plans.js';
 import { nextPlanFor, planLimitError } from '../billing/plan-limit.js';
 import { stockLimitOf } from '../usage/caps.js';
 import { personPlanOf } from '../usage/plan-of.js';
@@ -111,7 +111,8 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // refused for it (Basel Q9: the extras arrive read-only and the person picks).
       const plan = body.carriedOver ? null : await personPlanOf(store, user.id, now);
       const planCap = plan ? stockLimitOf(plan, 'businesses') : null;
-      if (plan && planCap !== null && ENFORCED_BUSINESS_CAPS.has(plan)) {
+      // MUT-734: the paid plans' counts too, with PAID_BUSINESS_CAPS on.
+      if (plan && planCap !== null && enforcedBusinessCapsOf(store.billing.paidBusinessCaps).has(plan)) {
         const businesses = (await store.organizations.countOwnedBy(user.id)) - 1;
         if (businesses >= planCap) throw planLimitError({ limit: 'businesses', plan, nextPlan: nextPlanFor(plan), canUpgrade: c.get('planCheckout'), used: businesses, cap: planCap });
       }

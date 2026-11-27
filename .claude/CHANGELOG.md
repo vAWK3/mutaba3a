@@ -28,6 +28,91 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — Change plan: up now, down at the period end, to Starter (MUT-734 server half, ADR-291, API 1.157.0-mut734)
+
+Epic MUT-701. Plan `.claude/designs/mut-734-plan-change-plan.md` (approved with defaults). Server only; the portal's Change-plan pane, the cancel flow's "Move to Starter instead", the scheduled line with Undo and the operator's Plan history list come with the UI half. Behind `PLAN_CHECKOUT` (plan changes) and `PAID_BUSINESS_CAPS` (the paid plans' business counts), both off.
+
+### Added
+- Migration `20261127180000_mut734_plan_changes` (additive: one table `billing_plan_changes`, CHECKs on kind/state/tiers, a partial unique index for one SCHEDULED per person, ON DELETE CASCADE; in the closure purge list). **Merging it restarts the shared dev API.**
+- `billing/plan-change.ts`: `planChangeOf` (upgrade / downgrade / to_starter, or a refusal: NOT_SUBSCRIBED, SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING, LEGACY_PLAN, ACTIVE_BUSINESSES_REQUIRED), `planChangeOptionsOf`, the views.
+- `POST /v1/billing/plan-change/preview`, `POST /v1/billing/plan-change` (200 applied / 202 pending / 200 scheduled), `DELETE /v1/billing/plan-change` (undo). Up: Stripe's proration at the previewed date (≤15 min), `always_invoice` + `pending_if_incomplete`, the item's tax rates kept (ADR-290). Down: a Stripe subscription schedule (two phases, then released). To Starter: cancel at the period end + `starterChosenAt` now. Kept businesses stored at scheduling. Audited `billing.plan_change_*`; mail `plan-change-scheduled` (ar, en).
+- `PlanGateway.changePlan`, `scheduleDowngrade`, `releaseSchedule`; `LivePlan.scheduleId`.
+- The sync settles PENDING/SCHEDULED changes to APPLIED when the subscription's tier is the target's (a move to Starter when it ends).
+- `GET /v1/billing`: `scheduledChange`, `pendingChange`, `planChange { canUpgradeTo, canDowngradeTo }` (additive); `GET /v1/operator/accounts/{id}` `planHistory`.
+- `PAID_BUSINESS_CAPS` (Terraform `paid_business_caps`, default off): Solo 1 / Business 3 / Firm 6 businesses active (the rest read-only until picked) and `POST /v1/profiles` past the count is 409 PLAN_LIMIT businesses. The business-cap pass now keeps one cap per owner.
+
+### Unchanged
+- The interval is kept (Q1); the legacy Freelancer and founder plans are refused LEGACY_PLAN until MUT-707 (Q3); the phone shows only (Q4).
+
+---
+
+## [Unreleased] - 2026-11-27 — Israeli VAT follows every change to an Israeli plan (MUT-750 slice A, server half, ADR-290, API 1.156.0-mut750)
+
+Epic MUT-566. Plan `.claude/designs/mut-750-israeli-vat-plan.md` (approved with defaults; slice B, the tax documents, is MUT-776). Server only; the portal's price / VAT / total lines read the new `vatRate`. No migration, no new env.
+
+### Added
+- `taxRatesFor(country, israelVatRateId)` (`billing/checkout.ts`): the one tax rule for a profile plan's item, used by Checkout and every later change.
+- `PlanGateway.retax` and `LivePlan.taxRateIds`; the yearly switch (preview and switch) sends the item's tax rates explicitly.
+- `billing/stripe/retax.ts` (`createTaxFollowsAddress`): on `customer.updated`, an address that crossed into or out of Israel re-taxes each Solo/Business/Firm subscription that still invoices, from the next invoice (`proration_behavior: none`, keyed per subscription, country and minute). Done before the country is saved: a transient failure answers 500 (redelivery); a refusal is recorded as `STRIPE_RETAX_FAILED`, a missing VAT rate as `STRIPE_ISRAEL_VAT_RATE_MISSING`.
+- `GET /v1/billing` `vatRate: { country: 'IL', percent } | null` (additive).
+
+### Unchanged
+- The legacy Freelancer Checkout and its subscriptions keep Stripe Tax (plan Q2 default: today's payers wait for MUT-707). Pause ends and renewals keep the item's rates (Stripe carries them).
+- Docs: `pilot-offer.md` and `billing-spike.md` say "Prices exclude VAT. Israeli VAT is added for an Israeli address."
+
+---
+
+## [Unreleased] - 2026-11-27 — The pack contract: every jurisdiction pack passes one suite, with its own fixture (MUT-745, epic MUT-738, tests only)
+
+Brief: `.claude/designs/mut-745-pack-contract.md` (built under Basel's 2026-11-27 go-ahead). ADR-287 §8 built.
+
+### Added
+- `JurisdictionPack.datedTables`: each dated rate/threshold table by its step start dates; Israel declares `vat.standardRate` and `expense.allocationThreshold`. Not in any API; pack version unchanged.
+- `server/src/jurisdictions/__tests__/pack-contract.ts`: the pure contract checks; `pack.contract.test.ts` runs them for every registered pack, checks each pack against its fixture, and proves every check with deliberately broken packs.
+- `server/src/jurisdictions/__tests__/fixtures/` (`il.ts`, `index.ts`, `types.ts`): one fixture per pack.
+- `server/src/__tests__/routes-pack-contract.test.ts`: the issuing contract under every pack: stamp, gap-free numbers, idempotent retry, lines adding up, no change after issue, refused clearance leaves no trace.
+- `docs/operations/jurisdiction-packs.md`: version and review date per pack.
+
+### Changed
+- `golden.test.ts` reads each pack's golden cases from its fixture (Israel's hashes unchanged); `il-pack.contract.test.ts` keeps only Israel-only promises and the registry, the rest moved into the Israel fixture unchanged; `boundary.test.ts` guards every pack directory, not only `il/`.
+
+### Open
+- AC3 (a release-QA map per live pack) is TD-352.
+
+---
+
+## [Unreleased] - 2026-11-27 — Open sign-up: no email review, every verified sign-up opens on Starter (MUT-737 server half, ADR-289, API 1.155.0-mut737)
+
+Epic MUT-701. Plan `.claude/designs/mut-737-open-signup-plan.md` (approved with defaults). Server only; the portal (Signups page read-only, the domain chip, the first-run analytics events) and the legal-draft edit come with the UI half. Dark behind `OPEN_SIGNUP`. No migration.
+
+### Added
+- `OPEN_SIGNUP` (Terraform `open_signup`, default off; refused at boot, and by a Terraform validation, without `STARTER_PLAN`): every SIGNUP link the domain screen let through opens ACTIVE on Starter; no review row, no "we're reviewing" mail, no review digest (the hourly sweep is not scheduled).
+- `GET /v1/self-service` `openSignup` (additive).
+- `user.signed_up` audit metadata carries `domainClass` and `reasons` (a risk signal, never a gate); `GET /v1/operator/accounts/{userId}` `account.signupDomain` reads it (null for accounts made another way).
+- `POST /admin/v1/signup-reviews/{userId}/release`: a pending account opens on Starter (no trial), the "your account is ready" mail keyed per review, audit `user.signup_released`, an operator log line; 409 CONFLICT `STARTER_PLAN_OFF` while Starter is off. CLI `users.ts release-pending-signups [--apply]` (`npm --prefix server run signups:release`): dry run by default, exit 1 on any failure, re-runnable.
+- Error code `SIGNUP_REVIEW_RETIRED` (409): approve and decline (admin and operator) with `OPEN_SIGNUP` on; the list keeps working as history.
+
+### Unchanged
+- Disposable and no-mail refusals, Turnstile, the per-IP and per-address budgets, verification by link, `SELF_SIGNUP_ENABLED`. `ACCOUNT_UNDER_REVIEW` at sign-in stays for any account not released yet. `signup_reviews` and `PENDING_REVIEW` stay (history, rollback).
+
+---
+
+## [Unreleased] - 2026-11-27 — A known vendor's registration no. offers its last category (MUT-775, server only, API 1.150.0-mut775)
+
+Brief: `.claude/designs/mut-775-vendor-fill.md` (built under Basel's 2026-11-27 go-ahead; defaults chosen conservatively). ADR-239 amended.
+
+### Added
+- `GET /v1/receipts/{id}` `vendorDefaults.categoryId`: the matched vendor's last category, only when the receipt's read registration no. names the vendor and the category is live on the receipt's profile; else null. Never written into `suggested`. Additive; no migration.
+
+### Unchanged
+- The vendor name: the reader already fills an absent `vendorName` from a registration-no. match on the receipt's own profile (MUT-254, confidence 1); a stored name is never overwritten.
+
+### Not yet (client follow-ups)
+- Portal `ReceiptReview.tsx` and the phone's receipt review must fill the category from `vendorDefaults.categoryId` into an empty, untouched category; the release-QA flow (AC4) waits for the portal half.
+
+### Files
+- `server/src/vendors/receipt-defaults.ts`, `server/src/schemas.ts`, `server/src/app.ts` (API version) and its pins, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `server/src/__tests__/routes-vendors.test.ts`, `server/src/__tests__/routes-receipt-reading.test.ts`.
+
 ## [Unreleased] - 2026-11-27 — Accountant provisioning: migration and store (MUT-763, epic MUT-762, no route, no API change)
 
 Plan: `docs/designs/accountant-channel.md` (eng review R1–R6). Store layer only; the route (MUT-764), claim code (MUT-765) and the UI come in their own tickets.

@@ -67,6 +67,23 @@ export function israelVatPercent(countries: BillingCountries): number | null {
   return countries.vatRates?.[ISRAEL_VAT.country] ?? null;
 }
 
+/** MUT-750 (ADR-290): how a subscription item is taxed: the Israeli VAT rate on the item, or Stripe Tax. */
+export interface ItemTax {
+  taxRates: string[];
+  automaticTax: boolean;
+}
+
+/**
+ * MUT-750 (ADR-290): the one tax rule for a profile plan's item, at Checkout and on every later change (the yearly
+ * switch, a plan change, an address that moves into or out of Israel). An Israeli address carries the Israeli VAT
+ * rate with Stripe Tax off; anywhere else (or no country) Stripe Tax with no fixed rate. Null when the address is
+ * Israeli and no rate exists in Stripe: Israel is not sold without its VAT.
+ */
+export function taxRatesFor(country: string | null, israelVatRateId: string | null): ItemTax | null {
+  if (country === ISRAEL_VAT.country) return israelVatRateId ? { taxRates: [israelVatRateId], automaticTax: false } : null;
+  return { taxRates: [], automaticTax: true };
+}
+
 /** MUT-731 (Basel Q7): the Solo trial's length; a card up front. */
 export const SOLO_TRIAL_DAYS = 14;
 
@@ -388,7 +405,8 @@ function paramsOf(input: CheckoutInput, currency: BillingCurrency, price: Catalo
   // Stripe's page shows it and can't change it (the currency was already chosen from it).
   const planMetadata = plan ? { [CHECKOUT_PLAN_METADATA_KEY]: plan, [SELLER_METADATA_KEY]: SELLER } : null;
   const trialData = soloTrial ? { trial_period_days: SOLO_TRIAL_DAYS, trial_settings: { end_behavior: { missing_payment_method: 'cancel' as const } } } : {};
-  const israeliVat = plan !== null && input.country === ISRAEL_VAT.country && input.israelVatRateId ? input.israelVatRateId : null;
+  // MUT-750: the legacy Freelancer Checkout keeps Stripe Tax (plan Q2: today's payers stay as they are until MUT-707).
+  const israeliVat = plan !== null ? (taxRatesFor(input.country, input.israelVatRateId ?? null)?.taxRates[0] ?? null) : null;
   return {
     mode: 'subscription',
     line_items: [{ price: price.id, quantity: 1, ...(israeliVat ? { tax_rates: [israeliVat] } : {}) }],

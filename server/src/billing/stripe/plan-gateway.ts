@@ -59,6 +59,46 @@ export interface PlanGateway {
    * count has moved on and a new card can be tried. A decline or a bank that wants the person to confirm is an outcome.
    */
   retryPayment(invoiceId: string, attemptCount: number): Promise<CardRetryResult>;
+  /**
+   * MUT-750 (ADR-290): re-taxes the item after the billing address moved into or out of Israel, from the next invoice
+   * (no proration). Keyed on the subscription, the new country and the minute: a redelivery makes one change.
+   */
+  retax(input: RetaxInput): Promise<void>;
+  /**
+   * MUT-734 (ADR-291): an upgrade, as the yearly switch: the item moves to `priceId` at the previewed proration date,
+   * charged now (`always_invoice`), and a payment that didn't go through leaves the plan as it was
+   * (`pending_if_incomplete`). The item's tax rates go with it (ADR-290); `mutaba3a_plan` names the new plan.
+   */
+  changePlan(input: SwitchInput & { plan: string }): Promise<SwitchResult>;
+  /**
+   * MUT-734: a downgrade at the paid period's end: a subscription schedule from the subscription, phase 1 the current
+   * price to the period end, phase 2 the lower plan's price for one cycle, then released (the subscription carries on
+   * at it). Keyed on the subscription and the target price.
+   */
+  scheduleDowngrade(input: ScheduleDowngradeInput): Promise<{ scheduleId: string }>;
+  /** MUT-734: undoes a scheduled downgrade: releases the schedule, keeping the current price. */
+  releaseSchedule(scheduleId: string): Promise<void>;
+}
+
+export interface ScheduleDowngradeInput {
+  subscriptionId: string;
+  currentPriceId: string;
+  targetPriceId: string;
+  /** The current price's interval: the schedule's second phase runs one of it. */
+  interval: 'month' | 'year';
+  /** The paid period's end: where the lower price starts. */
+  periodEnd: Date;
+  plan: string;
+  taxRates: string[];
+}
+
+export interface RetaxInput {
+  subscriptionId: string;
+  itemId: string;
+  /** The billing address's new country (null: none); names the idempotency key. */
+  country: string | null;
+  taxRates: string[];
+  automaticTax: boolean;
 }
 
 export type CardRetryResult = { outcome: 'paid' | 'declined' | 'needs-action'; hostedInvoiceUrl: string | null };
@@ -97,8 +137,12 @@ export interface LivePlan {
   /** MUT-532: the pause Stripe holds, as the mirror reads it. Null with none set. */
   pause: { from: Date | null; resumesAt: Date | null } | null;
   automaticTax: boolean;
+  /** MUT-750: the fixed tax rates on the item (the Israeli VAT rate for an Israeli address); empty under Stripe Tax. */
+  taxRateIds: string[];
   /** A founder price runs on a subscription schedule, which refuses direct cancel changes (the probe). */
   managedBySchedule: boolean;
+  /** MUT-734: that schedule's id (to release a scheduled downgrade); null with none. */
+  scheduleId: string | null;
 }
 
 export interface SwitchInput {
@@ -107,6 +151,8 @@ export interface SwitchInput {
   itemId: string;
   yearlyPriceId: string;
   prorationDate: Date;
+  /** MUT-750 (ADR-290): the item's tax rates, sent explicitly with the new price so an Israeli plan keeps its VAT. */
+  taxRates?: string[];
 }
 
 export type SwitchResult =
@@ -185,7 +231,9 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
         couponIds: (sub.discounts ?? []).flatMap((discount) => couponIdOf(discount)),
         pause: pauseFactOf(sub),
         automaticTax: sub.automatic_tax?.enabled === true,
+        taxRateIds: (item.tax_rates ?? []).map((rate) => (typeof rate === 'string' ? rate : rate.id)),
         managedBySchedule: sub.schedule !== null && sub.schedule !== undefined,
+        scheduleId: typeof sub.schedule === 'string' ? sub.schedule : (sub.schedule?.id ?? null),
       };
     },
     async paidInvoiceCount(subscriptionId, { fresh = false } = {}) {
@@ -201,7 +249,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
           customer: input.customer,
           subscription: input.subscriptionId,
           subscription_details: {
-            items: [{ id: input.itemId, price: input.yearlyPriceId }],
+            items: [{ id: input.itemId, price: input.yearlyPriceId, ...taxRatesOf(input) }],
             proration_behavior: 'always_invoice',
             proration_date: seconds(input.prorationDate),
           },
@@ -216,7 +264,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
         stripe.subscriptions.update(
           input.subscriptionId,
           {
-            items: [{ id: input.itemId, price: input.yearlyPriceId }],
+            items: [{ id: input.itemId, price: input.yearlyPriceId, ...taxRatesOf(input) }],
             proration_behavior: 'always_invoice',
             proration_date: seconds(input.prorationDate),
             payment_behavior: 'pending_if_incomplete',
@@ -228,6 +276,56 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
       if (!sub.pending_update) return { outcome: 'switched', currentPeriodEnd: periodEndOf(sub) };
       const invoice = sub.latest_invoice;
       return unpaidOutcome(typeof invoice === 'string' ? invoice : (invoice?.id ?? null));
+    },
+    async changePlan(input) {
+      const sub = await wrapped(() =>
+        stripe.subscriptions.update(
+          input.subscriptionId,
+          {
+            items: [{ id: input.itemId, price: input.yearlyPriceId, ...taxRatesOf(input) }],
+            proration_behavior: 'always_invoice',
+            proration_date: seconds(input.prorationDate),
+            payment_behavior: 'pending_if_incomplete',
+            metadata: { mutaba3a_plan: input.plan },
+          },
+          { idempotencyKey: `mut734-up-${input.subscriptionId}-${input.yearlyPriceId}-${seconds(input.prorationDate)}` },
+        ),
+      );
+      if (!sub.pending_update) return { outcome: 'switched', currentPeriodEnd: periodEndOf(sub) };
+      const invoice = sub.latest_invoice;
+      return unpaidOutcome(typeof invoice === 'string' ? invoice : (invoice?.id ?? null));
+    },
+    async scheduleDowngrade(input) {
+      const key = `mut734-down-${input.subscriptionId}-${input.targetPriceId}`;
+      const created = await wrapped(() => stripe.subscriptionSchedules.create({ from_subscription: input.subscriptionId }, { idempotencyKey: `${key}-create` }));
+      const first = created.phases[0];
+      const taxes = input.taxRates.length > 0 ? { tax_rates: input.taxRates } : {};
+      await wrapped(() =>
+        stripe.subscriptionSchedules.update(
+          created.id,
+          {
+            end_behavior: 'release',
+            phases: [
+              { items: [{ price: input.currentPriceId, quantity: 1, ...taxes }], ...(first ? { start_date: first.start_date } : {}), end_date: seconds(input.periodEnd), proration_behavior: 'none' },
+              { items: [{ price: input.targetPriceId, quantity: 1, ...taxes }], duration: { interval: input.interval, interval_count: 1 }, proration_behavior: 'none', metadata: { mutaba3a_plan: input.plan } },
+            ],
+          },
+          { idempotencyKey: `${key}-phases` },
+        ),
+      );
+      return { scheduleId: created.id };
+    },
+    async releaseSchedule(scheduleId) {
+      await wrapped(() => stripe.subscriptionSchedules.release(scheduleId, {}, { idempotencyKey: `mut734-release-${scheduleId}-${minuteOf(options.now())}` }));
+    },
+    async retax({ subscriptionId, itemId, country, taxRates, automaticTax }) {
+      await wrapped(() =>
+        stripe.subscriptions.update(
+          subscriptionId,
+          { items: [{ id: itemId, tax_rates: taxRates.length > 0 ? taxRates : '' }], automatic_tax: { enabled: automaticTax }, proration_behavior: 'none' },
+          { idempotencyKey: `mut750-retax-${subscriptionId}-${country ?? 'none'}-${minuteOf(options.now())}` },
+        ),
+      );
     },
     async schedulePause({ subscriptionId, from, resumesAt, months }) {
       await wrapped(() =>
@@ -384,4 +482,9 @@ async function wrapped<T>(call: () => Promise<T>): Promise<T> {
   } catch (err) {
     throw toGatewayError(err);
   }
+}
+
+/** MUT-750: an item update names its tax rates only when it has some; Stripe keeps none on an item that had none. */
+function taxRatesOf(input: Pick<SwitchInput, 'taxRates'>): { tax_rates?: string[] } {
+  return input.taxRates && input.taxRates.length > 0 ? { tax_rates: input.taxRates } : {};
 }

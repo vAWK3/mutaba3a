@@ -335,5 +335,52 @@ describe('vendor defaults: currency and VAT (MUT-303)', () => {
       expect(got.suggested.currency).toBeUndefined();
       expect(got.suggested.totalMinor.value).toBe('1234');
     });
+
+    describe('MUT-775: the category of a vendor matched by its registration no.', () => {
+      const REG = '520031931';
+
+      it('AC1: a registration no. of a saved vendor gives its last category, and never into what was read', async () => {
+        const s = await setup();
+        const travel = await s.category('Travel');
+        await s.create({ vendor: 'Bezeq', vendorDetails: { registrationNo: REG }, categoryId: travel.id });
+        const r = await toReview(s, { readerVersion: 'test', registrationNo: regNo('52-003193-1') });
+        const got = await getReceipt(s, r.id);
+        expect(got.vendorDefaults).toMatchObject({ vendorId: expect.any(String), categoryId: travel.id });
+        expect(got.suggested).toEqual({ readerVersion: 'test', registrationNo: regNo('52-003193-1') });
+      });
+
+      it('D2: a match by name alone gives the currency but no category', async () => {
+        const s = await setup();
+        const travel = await s.category('Travel');
+        await s.create({ vendor: 'Bezeq', currency: 'EUR', categoryId: travel.id });
+        const r = await toReview(s, { readerVersion: 'test', vendorName: { value: 'Bezeq', source: 'ocr', confidence: 0.8 } });
+        expect((await getReceipt(s, r.id)).vendorDefaults).toMatchObject({ currency: 'EUR', categoryId: null });
+      });
+
+      it('a vendor never filed under a category gives none', async () => {
+        const s = await setup();
+        await s.create({ vendor: 'Bezeq', vendorDetails: { registrationNo: REG } });
+        const r = await toReview(s, { readerVersion: 'test', registrationNo: regNo(REG) });
+        expect((await getReceipt(s, r.id)).vendorDefaults).toMatchObject({ categoryId: null });
+      });
+
+      it('D3: an archived last category gives none', async () => {
+        const s = await setup();
+        const travel = await s.category('Travel');
+        await s.create({ vendor: 'Bezeq', vendorDetails: { registrationNo: REG }, categoryId: travel.id });
+        const archived = await s.app.request(`/v1/expense-categories/${travel.id}`, json({ archived: true }, { ...s.as(), 'if-match': String(travel.version) }, 'PATCH'));
+        expect(archived.status).toBe(200);
+        const r = await toReview(s, { readerVersion: 'test', registrationNo: regNo(REG) });
+        expect((await getReceipt(s, r.id)).vendorDefaults).toMatchObject({ vendorId: expect.any(String), categoryId: null });
+      });
+
+      it('AC3: the registration no. saved on another profile fills nothing here', async () => {
+        const s = await setup();
+        const travel = await s.category('Travel', s.b.id);
+        await s.create({ vendor: 'Bezeq', vendorDetails: { registrationNo: REG }, categoryId: travel.id }, s.b.id);
+        const r = await toReview(s, { readerVersion: 'test', registrationNo: regNo(REG) });
+        expect((await getReceipt(s, r.id)).vendorDefaults).toBeNull();
+      });
+    });
   });
 });

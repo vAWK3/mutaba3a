@@ -227,6 +227,19 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...base, STARTER_PLAN: 'yes' })).toThrow(/STARTER_PLAN/);
   });
 
+  it('PAID_BUSINESS_CAPS (MUT-734): off unless exactly "true"', () => {
+    expect(loadConfig(base).PAID_BUSINESS_CAPS).toBe(false);
+    expect(loadConfig({ ...base, PAID_BUSINESS_CAPS: 'true' }).PAID_BUSINESS_CAPS).toBe(true);
+    expect(() => loadConfig({ ...base, PAID_BUSINESS_CAPS: 'yes' })).toThrow(/PAID_BUSINESS_CAPS/);
+  });
+
+  it('OPEN_SIGNUP (MUT-737): off unless exactly "true"; refused without STARTER_PLAN', () => {
+    expect(loadConfig(base).OPEN_SIGNUP).toBe(false);
+    expect(loadConfig({ ...base, OPEN_SIGNUP: 'true', STARTER_PLAN: 'true' }).OPEN_SIGNUP).toBe(true);
+    expect(() => loadConfig({ ...base, OPEN_SIGNUP: 'yes', STARTER_PLAN: 'true' })).toThrow(/OPEN_SIGNUP/);
+    expect(() => loadConfig({ ...base, OPEN_SIGNUP: 'true' })).toThrow(/OPEN_SIGNUP: needs STARTER_PLAN/);
+  });
+
   it('SOLO_TRIAL_OFFER_SINCE (MUT-731): unset = off; an RFC 3339 instant; anything else refused', () => {
     expect(loadConfig(base).SOLO_TRIAL_OFFER_SINCE).toBeUndefined();
     expect(loadConfig({ ...base, SOLO_TRIAL_OFFER_SINCE: '2027-01-15T00:00:00Z' }).SOLO_TRIAL_OFFER_SINCE).toEqual(new Date('2027-01-15T00:00:00Z'));

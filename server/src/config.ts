@@ -153,6 +153,13 @@ const envSchema = z.object({
    */
   STARTER_PLAN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-737 (ADR-289): open sign-up. Only exactly "true" turns it on: every verified self-service sign-up the domain
+   * screen lets through opens ACTIVE on Starter (no operator review, no review digest); the domain class is kept as a
+   * risk signal on the `user.signed_up` audit entry. Refused without STARTER_PLAN (a free 14-day trial for any webmail
+   * address is TD-213's abuse case). Off: webmail and unverified domains wait for review, as before.
+   */
+  OPEN_SIGNUP: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-731 (ADR-284, Basel Q7): the one-time 14-day Solo trial (card up front) in web onboarding. Accounts created at or
    * after this instant are offered it once; earlier accounts never are. Unset = the step is off (TODO MUT-702 Part B:
    * set it at release, once Solo can be bought through Checkout with `trial: true`).
@@ -164,6 +171,12 @@ const envSchema = z.object({
    * today. Goes on with MUT-703 (the offers per plan), after the live catalog run and Stripe Tax's Israel registration.
    */
   PLAN_CHECKOUT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-734 (ADR-291; MUT-704 AC1/AC6): Solo, Business and Firm enforce their business count, as Starter does: past it
+   * the person picks which stay active (the rest read-only) and creating another is 409 PLAN_LIMIT businesses. Only
+   * exactly "true" turns it on; off = only Starter's count is enforced (today). On with the pricing release (plan Q2).
+   */
+  PAID_BUSINESS_CAPS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
@@ -543,6 +556,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (config.BILLING_STAY_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
     throw new ConfigError('Invalid configuration:\n  BILLING_STAY_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
+  }
+  if (config.OPEN_SIGNUP && !config.STARTER_PLAN) {
+    throw new ConfigError('Invalid configuration:\n  OPEN_SIGNUP: needs STARTER_PLAN, or every webmail address would open with a free 14-day trial');
   }
   receiptReadingConfig(config);
   issuingSignerConfig(config);

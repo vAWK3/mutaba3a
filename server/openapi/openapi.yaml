@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.150.0-mut764
+  version: 1.158.0-mut764
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, SIGNUP_REVIEW_RETIRED, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -804,6 +804,7 @@ components:
                 - CONFLICT
                 - PLAN_LIMIT
                 - OPERATION_IN_PROGRESS
+                - SIGNUP_REVIEW_RETIRED
                 - RECONCILE_RUNNING
                 - LINK_ORIGIN_LOOPBACK
                 - TERMS_VERSION_STALE
@@ -1613,12 +1614,15 @@ components:
           type: boolean
         starterPlan:
           type: boolean
+        openSignup:
+          type: boolean
       required:
         - signup
         - recovery
         - malafatSignIn
         - signInCode
         - starterPlan
+        - openSignup
     SelfServiceAccepted:
       type: object
       properties:
@@ -12208,6 +12212,67 @@ components:
           anyOf:
             - $ref: "#/components/schemas/BillingAddress"
             - nullable: true
+        vatRate:
+          anyOf:
+            - type: object
+              properties:
+                country:
+                  type: string
+                  enum:
+                    - IL
+                percent:
+                  type: number
+              required:
+                - country
+                - percent
+            - nullable: true
+        scheduledChange:
+          anyOf:
+            - type: object
+              properties:
+                plan:
+                  type: string
+                at:
+                  type: string
+                  format: date-time
+                kind:
+                  type: string
+                  enum:
+                    - UPGRADE
+                    - DOWNGRADE
+                    - TO_STARTER
+              required:
+                - plan
+                - at
+                - kind
+            - nullable: true
+        pendingChange:
+          anyOf:
+            - type: object
+              properties:
+                plan:
+                  type: string
+                since:
+                  type: string
+                  format: date-time
+              required:
+                - plan
+                - since
+            - nullable: true
+        planChange:
+          type: object
+          properties:
+            canUpgradeTo:
+              type: array
+              items:
+                type: string
+            canDowngradeTo:
+              type: array
+              items:
+                type: string
+          required:
+            - canUpgradeTo
+            - canDowngradeTo
       required:
         - configured
         - subscription
@@ -12928,6 +12993,196 @@ components:
       required:
         - reason
       additionalProperties: false
+    PlanChangePreview:
+      oneOf:
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - upgrade
+            plan:
+              $ref: "#/components/schemas/PlanChangeTarget"
+            amountDue:
+              type: integer
+            currency:
+              type: string
+            prorationAt:
+              type: string
+              format: date-time
+            limits:
+              type: object
+              properties:
+                businesses:
+                  type: integer
+                partners:
+                  type: integer
+                documentsPerMonth:
+                  type: integer
+                scansPerMonth:
+                  type: integer
+              required:
+                - businesses
+                - partners
+                - documentsPerMonth
+                - scansPerMonth
+          required:
+            - kind
+            - plan
+            - amountDue
+            - currency
+            - prorationAt
+            - limits
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - downgrade
+                - to_starter
+            plan:
+              $ref: "#/components/schemas/PlanChangeTarget"
+            effectiveAt:
+              type: string
+              format: date-time
+            limits:
+              type: object
+              properties:
+                businesses:
+                  type: integer
+                partners:
+                  type: integer
+                documentsPerMonth:
+                  type: integer
+                scansPerMonth:
+                  type: integer
+              required:
+                - businesses
+                - partners
+                - documentsPerMonth
+                - scansPerMonth
+            cap:
+              type: integer
+            businesses:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                required:
+                  - id
+                  - name
+            mustChoose:
+              type: boolean
+          required:
+            - kind
+            - plan
+            - effectiveAt
+            - limits
+            - cap
+            - businesses
+            - mustChoose
+    PlanChangeTarget:
+      type: string
+      enum:
+        - solo
+        - business
+        - firm
+        - starter
+    PlanChangePreviewRequest:
+      type: object
+      properties:
+        plan:
+          $ref: "#/components/schemas/PlanChangeTarget"
+      required:
+        - plan
+    PlanChangeResult:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - applied
+            - pending
+            - scheduled
+        change:
+          $ref: "#/components/schemas/PlanChange"
+        hostedInvoiceUrl:
+          type: string
+          nullable: true
+          format: uri
+      required:
+        - state
+        - change
+        - hostedInvoiceUrl
+    PlanChange:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - UPGRADE
+            - DOWNGRADE
+            - TO_STARTER
+        state:
+          type: string
+          enum:
+            - APPLIED
+            - PENDING
+            - SCHEDULED
+            - UNDONE
+            - FAILED
+        fromPlan:
+          type: string
+        toPlan:
+          type: string
+        effectiveAt:
+          type: string
+          format: date-time
+        amountMinor:
+          type: integer
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - kind
+        - state
+        - fromPlan
+        - toPlan
+        - effectiveAt
+        - amountMinor
+        - currency
+        - createdAt
+    PlanChangeRequest:
+      type: object
+      properties:
+        plan:
+          $ref: "#/components/schemas/PlanChangeTarget"
+        prorationAt:
+          type: string
+          format: date-time
+        expectedAmountDue:
+          type: integer
+        activeBusinessIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 10
+      required:
+        - plan
     StarterChoice:
       type: object
       properties:
@@ -13167,10 +13422,15 @@ components:
             - nullable: true
         vat:
           $ref: "#/components/schemas/VendorVat"
+        categoryId:
+          type: string
+          nullable: true
+          format: uuid
       required:
         - vendorId
         - currency
         - vat
+        - categoryId
     ApproveReceiptResponse:
       type: object
       properties:
@@ -14308,6 +14568,68 @@ components:
                   - firmEnabledAt
                   - firmRequestedAt
                   - billing
+            signupDomain:
+              type: object
+              nullable: true
+              properties:
+                domainClass:
+                  type: string
+                  nullable: true
+                reasons:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - domainClass
+                - reasons
+            planHistory:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  kind:
+                    type: string
+                    enum:
+                      - UPGRADE
+                      - DOWNGRADE
+                      - TO_STARTER
+                  state:
+                    type: string
+                    enum:
+                      - APPLIED
+                      - PENDING
+                      - SCHEDULED
+                      - UNDONE
+                      - FAILED
+                  fromPlan:
+                    type: string
+                  toPlan:
+                    type: string
+                  effectiveAt:
+                    type: string
+                    format: date-time
+                  amountMinor:
+                    type: integer
+                    nullable: true
+                  currency:
+                    type: string
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                required:
+                  - id
+                  - kind
+                  - state
+                  - fromPlan
+                  - toPlan
+                  - effectiveAt
+                  - amountMinor
+                  - currency
+                  - createdAt
           required:
             - closing
             - operator
@@ -14319,6 +14641,8 @@ components:
             - agentGrantCount
             - availableFeatures
             - profiles
+            - signupDomain
+            - planHistory
     BillingEntitlement:
       type: object
       properties:
@@ -14785,6 +15109,101 @@ components:
         - to
         - routes
         - stepUpUntil
+    OperatorProvisioningApproval:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        createLimitPerDay:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 1000
+        lookupLimitPerDay:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 1000
+        defaults:
+          type: object
+          properties:
+            createLimitPerDay:
+              type: integer
+            lookupLimitPerDay:
+              type: integer
+          required:
+            - createLimitPerDay
+            - lookupLimitPerDay
+        createdToday:
+          type: integer
+        lookupsToday:
+          type: integer
+      required:
+        - userId
+        - enabled
+        - createLimitPerDay
+        - lookupLimitPerDay
+        - defaults
+        - createdToday
+        - lookupsToday
+    OperatorProvisioningRequest:
+      type: object
+      properties:
+        createLimitPerDay:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 1000
+        lookupLimitPerDay:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 1000
+      additionalProperties: false
+    OperatorProvisionedAccounts:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                format: uuid
+              email:
+                type: string
+              displayName:
+                type: string
+              provisionedAt:
+                type: string
+                format: date-time
+              accountant:
+                type: object
+                nullable: true
+                properties:
+                  userId:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                required:
+                  - userId
+                  - email
+              paid:
+                type: boolean
+            required:
+              - userId
+              - email
+              - displayName
+              - provisionedAt
+              - accountant
+              - paid
+      required:
+        - items
     UsagePruneSummary:
       type: object
       properties:
@@ -30664,6 +31083,202 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/plan-change/preview:
+    post:
+      tags:
+        - Billing
+      summary: Preview a plan change (MUT-734)
+      description: "Up a rank: Stripe’s proration charged now, tax included, at `prorationAt`. Down (or to Starter): from the paid period’s end, no refund; past the target’s business count the person picks which businesses stay active (`mustChoose`). The interval is kept. Additive since 1.157.0-mut734."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanChangePreviewRequest"
+      responses:
+        "200":
+          description: The preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanChangePreview"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT; `details.reason` is PLAN_CHECKOUT_OFF, NOT_SUBSCRIBED (use Checkout), SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING (undo it first), LEGACY_PLAN (Freelancer and founder plans move with MUT-707), PRICES_NOT_SET, PREVIEW_EXPIRED (preview again), AMOUNT_CHANGED (nothing charged), PAYMENT_FAILED (the plan stays as it was), or NOTHING_SCHEDULED (undo)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED; `details.reason` ACTIVE_BUSINESSES_REQUIRED with `cap` and `businesses` (the person must pick which stay active)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/plan-change:
+    post:
+      tags:
+        - Billing
+      summary: Change plan (MUT-734)
+      description: "Up: moves the subscription to the higher plan at the preview’s `prorationAt` (at most 15 minutes old), charging Stripe’s proration at once; Stripe previews again first and an amount other than `expectedAmountDue` charges nothing. A payment the bank wants approved answers 202 `pending` with Stripe’s page; one that fails leaves the plan as it was. Down: a Stripe subscription schedule switches to the lower plan at the period end. To Starter: cancel at the period end and Starter chosen now (no read-only gap). Past the target’s business count, `activeBusinessIds` is required. Every change is recorded (`billing_plan_changes`) and audited `billing.plan_change_*`; a scheduled one is mailed. Additive since 1.157.0-mut734."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanChangeRequest"
+      responses:
+        "200":
+          description: Applied, or scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanChangeResult"
+        "202":
+          description: "Pending: the bank wants the person to approve the charge on `hostedInvoiceUrl`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanChangeResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT; `details.reason` is PLAN_CHECKOUT_OFF, NOT_SUBSCRIBED (use Checkout), SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING (undo it first), LEGACY_PLAN (Freelancer and founder plans move with MUT-707), PRICES_NOT_SET, PREVIEW_EXPIRED (preview again), AMOUNT_CHANGED (nothing charged), PAYMENT_FAILED (the plan stays as it was), or NOTHING_SCHEDULED (undo)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED; `details.reason` ACTIVE_BUSINESSES_REQUIRED with `cap` and `businesses` (the person must pick which stay active)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Billing
+      summary: Undo a scheduled plan change (MUT-734)
+      description: "Before its day: a scheduled downgrade’s Stripe schedule is released (the current plan renews); a move to Starter takes the cancel back and clears the Starter choice. 409 NOTHING_SCHEDULED otherwise. Additive since 1.157.0-mut734."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Undone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  change:
+                    $ref: "#/components/schemas/PlanChange"
+                required:
+                  - change
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT; `details.reason` is PLAN_CHECKOUT_OFF, NOT_SUBSCRIBED (use Checkout), SAME_PLAN, PAUSED, PAST_DUE, CANCELLING, SCHEDULE_PENDING (undo it first), LEGACY_PLAN (Freelancer and founder plans move with MUT-707), PRICES_NOT_SET, PREVIEW_EXPIRED (preview again), AMOUNT_CHANGED (nothing charged), PAYMENT_FAILED (the plan stays as it was), or NOTHING_SCHEDULED (undo)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED; `details.reason` ACTIVE_BUSINESSES_REQUIRED with `cap` and `businesses` (the person must pick which stay active)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/billing/starter:
     post:
       tags:
@@ -32892,7 +33507,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off"
           content:
             application/json:
               schema:
@@ -32932,7 +33547,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/signup-reviews/{userId}/release:
+    post:
+      tags:
+        - Admin
+      summary: "Release a signup still waiting for review: the account opens on Starter (no trial) and the person is mailed (MUT-737)"
+      description: "For the move to open sign-up (ADR-289): `npm --prefix server run signups:release` releases every pending review. Works with OPEN_SIGNUP on or off. Audited `user.signup_released`. The mail is keyed per review, so a re-run never mails twice. 409 CONFLICT `details.reason` STARTER_PLAN_OFF while STARTER_PLAN is off. Additive since 1.155.0-mut737."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided; `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No review for this user (unknown, never self-signed-up, or already declined)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile. MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on; CONFLICT STARTER_PLAN_OFF (release) while STARTER_PLAN is off"
           content:
             application/json:
               schema:
@@ -33036,7 +33691,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on"
           content:
             application/json:
               schema:
@@ -33081,7 +33736,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on"
           content:
             application/json:
               schema:
@@ -33126,7 +33781,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend). MUT-737: SIGNUP_REVIEW_RETIRED (approve, decline) with OPEN_SIGNUP on"
           content:
             application/json:
               schema:
@@ -34345,6 +35000,191 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed (a malformed month, day or cursor)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/accountant-provisioning:
+    get:
+      tags:
+        - Operator
+      summary: Whether the person may create customers, their two daily limits and what they did today (MUT-764)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The approval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorProvisioningApproval"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator, or no such person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (a limit that is not a whole number from 1 to 1000)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    put:
+      tags:
+        - Operator
+      summary: Approve the person to create customers, with their two daily limits (idempotent; a null or omitted limit is the default) (MUT-764)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorProvisioningRequest"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorProvisioningApproval"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator, or no such person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (a limit that is not a whole number from 1 to 1000)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Operator
+      summary: Withdraw the approval to create customers; the limits are kept for a later approval (idempotent) (MUT-764)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorProvisioningApproval"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator, or no such person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (a limit that is not a whole number from 1 to 1000)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/provisioned-accounts:
+    get:
+      tags:
+        - Operator
+      summary: Accounts an accountant created that have no password yet, newest first, with whether they already paid (MUT-764)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: The unclaimed accounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorProvisionedAccounts"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED on a write (the passkey step-up)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator, or no such person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (a limit that is not a whole number from 1 to 1000)
           content:
             application/json:
               schema:

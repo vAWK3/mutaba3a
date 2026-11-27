@@ -1,6 +1,7 @@
 import { profileOwnerOf } from '../personal-profile.js';
 import type { BillingFactsRecord, LedgerStore, MembershipRecord, Organization } from '../repositories/ports.js';
-import { applyBusinessCap, type BusinessCapState } from './business-cap.js';
+import { applyBusinessCap, enforcedBusinessCapOf, type BusinessCapState } from './business-cap.js';
+import { enforcedBusinessCapsOf } from './plans.js';
 import { resolveEntitlement, type Entitlement } from './entitlement.js';
 import { personStanding, type Standing } from './gate.js';
 
@@ -32,7 +33,8 @@ export async function entitlementsWithFactsFor(
   const facts = await factsOf(store, profiles, personUserId);
   const starter = starterOn(store);
   const entitlements = new Map(profiles.map((profile) => [profile.organization.id, resolve(profile, facts, now, starter)]));
-  const businessCaps = starter ? await applyStarterBusinessCap(store, profiles, entitlements, facts, now) : new Map<string, BusinessCapState>();
+  const paidCaps = store.billing.paidBusinessCaps === true;
+  const businessCaps = starter || paidCaps ? await applyStarterBusinessCap(store, profiles, entitlements, facts, now, enforcedBusinessCapsOf(paidCaps)) : new Map<string, BusinessCapState>();
   return { entitlements, facts, businessCaps };
 }
 
@@ -53,11 +55,14 @@ async function applyStarterBusinessCap(
   entitlements: Map<string, Entitlement>,
   facts: BillingFactsRecord,
   now: Date,
+  enforced: ReadonlySet<string>,
 ): Promise<Map<string, BusinessCapState>> {
   const owners = new Set<string>();
   for (const { organization } of profiles) {
     const isBusiness = organization.ownerUserId !== null && organization.personalOwnerUserId === null;
-    if (isBusiness && entitlements.get(organization.id)?.source === 'STARTER') owners.add(organization.ownerUserId!);
+    const entitlement = entitlements.get(organization.id);
+    // MUT-734: a paid plan's businesses too, once PAID_BUSINESS_CAPS enforces their count.
+    if (isBusiness && entitlement && (entitlement.source === 'STARTER' || enforcedBusinessCapOf(entitlement, enforced) !== null)) owners.add(organization.ownerUserId!);
   }
   if (owners.size === 0) return new Map();
   const owned = await store.billing.ownedBusinessesOf([...owners]);
@@ -65,9 +70,9 @@ async function applyStarterBusinessCap(
   const all = new Map(entitlements);
   if (missing.length > 0) {
     const more = await store.billing.factsFor({ ownerUserIds: [...owners], organizationIds: missing.map((b) => b.organization.id) });
-    for (const b of missing) all.set(b.organization.id, resolve({ organization: b.organization, malafatConnected: b.malafatConnected }, more, now, true));
+    for (const b of missing) all.set(b.organization.id, resolve({ organization: b.organization, malafatConnected: b.malafatConnected }, more, now, starterOn(store)));
   }
-  const states = applyBusinessCap(all, owned.map((b) => ({ organizationId: b.organization.id, ownerUserId: b.ownerUserId })), facts.activeBusinesses ?? new Map());
+  const states = applyBusinessCap(all, owned.map((b) => ({ organizationId: b.organization.id, ownerUserId: b.ownerUserId })), facts.activeBusinesses ?? new Map(), enforced);
   for (const id of entitlements.keys()) entitlements.set(id, all.get(id)!);
   return states;
 }

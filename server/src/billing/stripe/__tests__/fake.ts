@@ -5,7 +5,7 @@ import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
 import type { BillingAddress, CheckoutPlanName } from '../../checkout.js';
-import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
+import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, RetaxInput, ScheduleDowngradeInput, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 import type { FailedPaymentFacts } from '../../card-failed-mail.js';
 
@@ -421,6 +421,10 @@ export class FakePlanGateway implements PlanGateway {
   readonly plans = new Map<string, LivePlan>();
   readonly paid = new Map<string, number>();
   readonly switches: SwitchInput[] = [];
+  readonly retaxes: RetaxInput[] = [];
+  readonly planChanges: Array<SwitchInput & { plan: string }> = [];
+  readonly downgrades: ScheduleDowngradeInput[] = [];
+  readonly released: string[] = [];
   readonly calls: string[] = [];
   amountDue = 27100;
   previewCurrency = 'ILS';
@@ -447,6 +451,8 @@ export class FakePlanGateway implements PlanGateway {
       couponIds: [],
       pause: null,
       automaticTax: true,
+      taxRateIds: [],
+      scheduleId: null,
       managedBySchedule: false,
       ...over,
     });
@@ -560,5 +566,37 @@ export class FakePlanGateway implements PlanGateway {
     this.failing();
     this.switches.push(input);
     return this.outcome;
+  }
+
+  async changePlan(input: SwitchInput & { plan: string }): Promise<SwitchResult> {
+    this.calls.push(`change:${input.subscriptionId}:${input.yearlyPriceId}`);
+    this.failing();
+    this.planChanges.push(input);
+    return this.outcome;
+  }
+
+  async scheduleDowngrade(input: ScheduleDowngradeInput): Promise<{ scheduleId: string }> {
+    this.calls.push(`downgrade:${input.subscriptionId}:${input.targetPriceId}`);
+    this.failing();
+    this.downgrades.push(input);
+    const scheduleId = `sub_sched_${input.subscriptionId}`;
+    const plan = this.plans.get(input.subscriptionId);
+    if (plan) this.plans.set(input.subscriptionId, { ...plan, managedBySchedule: true, scheduleId });
+    return { scheduleId };
+  }
+
+  async releaseSchedule(scheduleId: string): Promise<void> {
+    this.calls.push(`release:${scheduleId}`);
+    this.failing();
+    this.released.push(scheduleId);
+    for (const [id, plan] of this.plans) if (plan.scheduleId === scheduleId) this.plans.set(id, { ...plan, managedBySchedule: false, scheduleId: null });
+  }
+
+  async retax(input: RetaxInput): Promise<void> {
+    this.calls.push(`retax:${input.subscriptionId}:${input.country}`);
+    this.failing();
+    this.retaxes.push(input);
+    const plan = this.plans.get(input.subscriptionId);
+    if (plan) this.plans.set(input.subscriptionId, { ...plan, taxRateIds: [...input.taxRates], automaticTax: input.automaticTax });
   }
 }

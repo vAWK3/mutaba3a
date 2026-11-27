@@ -46,6 +46,18 @@ describe('MUT-461 find an account by email', () => {
   });
 });
 
+describe('MUT-737 the account view shows the sign-up domain class (a signal, never a gate)', () => {
+  it('names the class and reasons from the sign-up audit; null for an account that never signed up itself', async () => {
+    const h = harness();
+    const op = await operator(h);
+    const waiting = await pendingSignup(h);
+    const viewed = await read(await get(h, accountsPath(waiting.userId), op.token));
+    expect(viewed.account.signupDomain).toEqual({ domainClass: 'WEBMAIL', reasons: expect.arrayContaining(['webmail']) });
+    const p = await person(h);
+    expect((await read(await get(h, accountsPath(p.id), op.token))).account.signupDomain).toBeNull();
+  });
+});
+
 describe('MUT-461 the account view', () => {
   it('shows status, last sign-in, passkeys, flags, live devices and agents, and each profile with its billing', async () => {
     const h = harness();

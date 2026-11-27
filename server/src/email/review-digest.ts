@@ -73,3 +73,18 @@ export function msUntilNextSweep(now: Date): number {
   const sinceHour = now.getTime() % HOUR_MS;
   return sinceHour < DIGEST_SWEEP_OFFSET_MS ? DIGEST_SWEEP_OFFSET_MS - sinceHour : HOUR_MS - sinceHour + DIGEST_SWEEP_OFFSET_MS;
 }
+
+/**
+ * MUT-367 (D27): the hourly sweep, aligned a few minutes past each UTC hour. MUT-737 (ADR-289): with OPEN_SIGNUP on
+ * nothing is scheduled (null): no sign-up waits for review, so there is nothing to announce.
+ */
+export function scheduleReviewDigest(digest: Pick<ReviewDigest, 'announce'>, options: { openSignup: boolean; now: () => Date }): { stop(): void } | null {
+  if (options.openSignup) return null;
+  let timer: NodeJS.Timeout = setTimeout(function sweep() {
+    void digest.announce();
+    timer = setTimeout(sweep, msUntilNextSweep(options.now()));
+    timer.unref();
+  }, msUntilNextSweep(options.now()));
+  timer.unref();
+  return { stop: () => clearTimeout(timer) };
+}

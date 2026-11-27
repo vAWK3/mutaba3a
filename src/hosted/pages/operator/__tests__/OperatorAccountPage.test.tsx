@@ -48,6 +48,8 @@ const account = (overrides: Partial<OperatorAccount> = {}): OperatorAccount => (
   activeSessionCount: 2,
   agentGrantCount: 1,
   availableFeatures: ['agent_access'],
+  signupDomain: null,
+  planHistory: [],
   profiles: [
     {
       id: '44444444-aaaa-4aaa-8aaa-444444444444',

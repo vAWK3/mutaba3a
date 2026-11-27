@@ -45,7 +45,7 @@ import { CachedDomainChecker, createDomainScreen } from './email/domains/screen.
 import { createDnsDomainChecker, DOMAIN_CHECK_BUDGET_MS } from './email/domains/dns-checker.js';
 import { createFixtureDomainChecker } from './email/domains/fixture-checker.js';
 import { createRdapClient } from './email/domains/rdap.js';
-import { createReviewDigest, msUntilNextSweep, REVIEW_PAGE_PATH } from './email/review-digest.js';
+import { createReviewDigest, REVIEW_PAGE_PATH, scheduleReviewDigest } from './email/review-digest.js';
 import { webauthnConfigOf } from './auth/webauthn.js';
 
 const config = loadConfig();
@@ -60,7 +60,7 @@ const reporter = createSentryReporter({
   release: apiRelease(serverPackageVersion(), config.SERVICE_VERSION),
 });
 // MUT-731 (ADR-284): STARTER_PLAN is the store's, so every entitlement reader (routes and jobs) resolves the same way.
-const store = PrismaLedgerStore.connect(config.DATABASE_URL, { starterPlan: config.STARTER_PLAN });
+const store = PrismaLedgerStore.connect(config.DATABASE_URL, { starterPlan: config.STARTER_PLAN, paidBusinessCaps: config.PAID_BUSINESS_CAPS });
 const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
@@ -124,6 +124,8 @@ const selfService = {
   signupEnabled: config.SELF_SIGNUP_ENABLED,
   // MUT-731: the doors tell the landing whether the free Starter plan is on.
   starterPlan: config.STARTER_PLAN,
+  // MUT-737 (ADR-289): every verified sign-up opens at once; the review and its digest are retired.
+  openSignup: config.OPEN_SIGNUP,
   // MUT-368 (D1): GET /v1/self-service offers a door only where a link can really be mailed.
   mailsLinks: config.MAILER !== 'noop' && Boolean(config.TURNSTILE_SECRET),
   turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
@@ -392,19 +394,15 @@ const mailPruneTimer = setInterval(() => {
   void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));
 }, MAIL_PRUNE_EVERY_MS);
 mailPruneTimer.unref();
-// MUT-367 (D27): aligned to the UTC hour, so a review waits at most about an hour to be announced.
-let digestTimer: NodeJS.Timeout = setTimeout(function sweep() {
-  void reviewDigest.announce();
-  digestTimer = setTimeout(sweep, msUntilNextSweep(new Date()));
-  digestTimer.unref();
-}, msUntilNextSweep(new Date()));
-digestTimer.unref();
+// MUT-367 (D27): aligned to the UTC hour, so a review waits at most about an hour to be announced. MUT-737 (ADR-289):
+// none with OPEN_SIGNUP on (no sign-up waits for review).
+const digestSweep = scheduleReviewDigest(reviewDigest, { openSignup: config.OPEN_SIGNUP, now: () => new Date() });
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'shutting down');
   clearInterval(pruneTimer);
   clearInterval(mailPruneTimer);
-  clearTimeout(digestTimer);
+  digestSweep?.stop();
   await shutdownAndFlush({
     stopAccepting: () => server.close(),
     // MUT-735: the last minute of route statistics goes in once no request is accepted, before the database goes.

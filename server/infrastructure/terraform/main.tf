@@ -793,6 +793,24 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
+
+        # MUT-734 (ADR-291): the paid plans' business counts enforced; off = Starter's only.
+        dynamic "env" {
+          for_each = var.paid_business_caps ? { PAID_BUSINESS_CAPS = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-737 (ADR-289): open sign-up (every verified sign-up opens on Starter, no review); needs starter_plan.
+        dynamic "env" {
+          for_each = var.open_signup ? { OPEN_SIGNUP = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-702 Part B (ADR-288): Solo, Business and Firm on sale; off = only the legacy Freelancer Checkout.
         dynamic "env" {
           for_each = var.plan_checkout ? { PLAN_CHECKOUT = "true" } : {}

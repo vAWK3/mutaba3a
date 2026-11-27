@@ -24,6 +24,7 @@ import { FEATURES } from '../features.js';
  *   npm run signups:review                                      (MUT-367: self-service signups waiting for review)
  *   npm run signups:review -- --approve rana@gmail.com          (opens the account, starts its trial, mails them)
  *   npm run signups:review -- --decline rana@gmail.com          (deletes the empty account, mails them)
+ *   npm run signups:release [-- --apply]                        (MUT-737: every pending signup opens on Starter; dry run without --apply)
  *   npm run billing:trial-mail [-- --dry-run]                   (MUT-419: today's trial reminders, or who they would mail)
  *   npm run billing:renewal-mail [-- --dry-run]                 (MUT-525: today's launch-offer renewal notices, or who they would mail)
  *   npm run billing:card-failed-mail [-- --dry-run]             (MUT-533: this hour's failed-card mails, or who they would mail)
@@ -58,7 +59,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'two-factor-reset', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'billing-renewal-mail', 'billing-card-failed-mail', 'billing-comeback-mail', 'billing-monthly-summary-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'two-factor-reset', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'billing-renewal-mail', 'billing-card-failed-mail', 'billing-comeback-mail', 'billing-monthly-summary-mail', 'signup-reviews', 'release-pending-signups', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -105,6 +106,9 @@ const USAGE = [
   '          with neither: every self-service signup waiting for review, oldest first, with its domain and why it waits',
   '          --approve: the account opens, its 14-day trial starts now, and the person is mailed',
   '          --decline: the empty account and its personal profile are deleted, and the person is mailed',
+  '  release-pending-signups [--apply]   (MUT-737: npm run signups:release; before OPEN_SIGNUP goes on, with STARTER_PLAN on)',
+  '          with no flag: every signup still waiting for review (dry run, nothing changes)',
+  '          --apply: each opens on Starter (no trial) and gets the \'your account is ready\' mail once; exit 1 if any failed (re-run: only undecided ones are released)',
   '  feature-grant  --email <email> --feature <name>   (MUT-433: turn a per-user flag on; every flag is off until granted)',
   '  feature-revoke --email <email> --feature <name>   (off at once: seen on their very next request)',
   '  feature-list   --feature <name>   (who holds it now, oldest grant first)',
@@ -156,6 +160,7 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         approve: { type: 'string' },
         decline: { type: 'string' },
         'dry-run': { type: 'boolean' },
+        apply: { type: 'boolean' },
         feature: { type: 'string' },
       },
     }).values;
@@ -607,6 +612,7 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   ...FEATURE_HANDLERS,
   ...OPERATOR_HANDLERS,
   'signup-reviews': signupReviews,
+  'release-pending-signups': releasePendingSignups,
 };
 
 
@@ -650,6 +656,48 @@ async function signupReviews({ client, optional, out }: HandlerContext): Promise
     cursor = page.nextCursor;
   } while (cursor);
   out(printed === 0 ? 'no signups waiting for review' : `${printed} waiting. Decide one: npm run signups:review -- --approve <email> | --decline <email>`);
+}
+
+/** Every review still waiting, oldest first, across pages. */
+async function pendingReviews(client: AdminClient): Promise<SignupReviewRow[]> {
+  const rows: SignupReviewRow[] = [];
+  let cursor: string | null = null;
+  do {
+    const query: string = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+    const page: { data: SignupReviewRow[]; nextCursor: string | null } = await client.call('GET', `/admin/v1/signup-reviews?state=pending${query}`);
+    rows.push(...page.data);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return rows;
+}
+
+/**
+ * MUT-737 (ADR-289, AC5): the one-off release before OPEN_SIGNUP goes on. Lists first (so a refusal never loops),
+ * then releases each one through POST /admin/v1/signup-reviews/{userId}/release. Re-runnable: a released review is no
+ * longer pending, and its mail is keyed per review.
+ */
+async function releasePendingSignups({ client, flag, out }: HandlerContext): Promise<void> {
+  const rows = (await pendingReviews(client)).filter((r) => r.userId !== null);
+  for (const r of rows) out(`${r.email ?? '(deleted)'} — ${r.classification} ${r.reasons.join(', ')} — waiting since ${r.createdAt}`);
+  if (!flag('apply')) {
+    out(`${rows.length} waiting; dry run, nothing changed. Release them: --apply`);
+    return;
+  }
+  let released = 0;
+  let failed = 0;
+  for (const r of rows) {
+    try {
+      const { mail } = await client.call<{ mail: string }>('POST', `/admin/v1/signup-reviews/${r.userId}/release`);
+      out(`${r.email} released on Starter (mail: ${mail})`);
+      released++;
+    } catch (e) {
+      if (!(e instanceof CliError)) throw e;
+      out(`${r.email} failed: ${e.message}`);
+      failed++;
+    }
+  }
+  out(`${released} released, ${failed} failed`);
+  if (failed > 0) throw new CliError(`${failed} not released; run again with --apply`);
 }
 
 function isCommand(value: string | undefined): value is Command {

@@ -737,6 +737,21 @@ export const BillingOverviewSchema = z
     plans: z.array(BillingPlanSchema).optional(),
     /** MUT-702 Part B: the address saved on the person's billing account, to prefill the form; null with none. Additive since 1.146.0-mut702b. */
     billingAddress: z.union([BillingAddressSchema, z.null()]).optional(),
+    /**
+     * MUT-750 (ADR-290): the VAT added on top for an Israeli billing address (billing-countries.json `vatRates.IL`), so
+     * the plan picker shows price, VAT and total before Continue with no rate written in a client; Stripe rounds per
+     * line half-up in minor units (3900 → 702). Null when none is configured (Israel is then not sold). Additive since 1.156.0-mut750.
+     */
+    vatRate: z.union([z.object({ country: z.literal('IL'), percent: z.number() }), z.null()]).optional(),
+    /**
+     * MUT-734 (ADR-291): a downgrade or move to Starter waiting for the period end (Undo: DELETE /v1/billing/plan-change),
+     * else null. Additive since 1.157.0-mut734.
+     */
+    scheduledChange: z.union([z.object({ plan: z.string(), at: z.string().datetime(), kind: z.enum(['UPGRADE', 'DOWNGRADE', 'TO_STARTER']) }), z.null()]).optional(),
+    /** MUT-734: an upgrade waiting for the bank's approval (3-D Secure), else null. Additive since 1.157.0-mut734. */
+    pendingChange: z.union([z.object({ plan: z.string(), since: z.string().datetime() }), z.null()]).optional(),
+    /** MUT-734: where the person may move from the plan they pay for (both empty when no change is possible now). Additive since 1.157.0-mut734. */
+    planChange: z.object({ canUpgradeTo: z.array(z.string()), canDowngradeTo: z.array(z.string()) }).optional(),
   })
   .openapi('BillingOverview');
 
@@ -2000,6 +2015,11 @@ export const SelfServiceDoorsSchema = z
     signInCode: z.boolean(),
     /** MUT-731: the free Starter plan is on (STARTER_PLAN), so the landing describes it. Additive since 1.144.0-landing. */
     starterPlan: z.boolean(),
+    /**
+     * MUT-737 (ADR-289): every verified sign-up opens at once on Starter (OPEN_SIGNUP); no operator review, so the
+     * operator's Signups page is history only. Additive since 1.155.0-mut737.
+     */
+    openSignup: z.boolean(),
   })
   .openapi('SelfServiceDoors');
 
@@ -2114,6 +2134,26 @@ export const OperatorAccountSchema = UserSummarySchema.extend({
       firmRequestedAt: z.string().datetime().nullable(),
       /** As /v1/me reports it for this profile. */
       billing: BillingEntitlementSchema,
+    }),
+  ),
+  /**
+   * MUT-737 (ADR-289): the domain screen's class at self-service sign-up (`WEBMAIL`, `BUSINESS`, `BUSINESS_UNVERIFIED`,
+   * or null for a link issued before the screen) and its reasons; a risk signal, never a gate. Null for an account
+   * made another way. Additive since 1.155.0-mut737.
+   */
+  signupDomain: z.object({ domainClass: z.string().nullable(), reasons: z.array(z.string()) }).nullable(),
+  /** MUT-734 (ADR-291): the person's plan changes, newest first. Additive since 1.157.0-mut734. */
+  planHistory: z.array(
+    z.object({
+      id: z.string().uuid(),
+      kind: z.enum(['UPGRADE', 'DOWNGRADE', 'TO_STARTER']),
+      state: z.enum(['APPLIED', 'PENDING', 'SCHEDULED', 'UNDONE', 'FAILED']),
+      fromPlan: z.string(),
+      toPlan: z.string(),
+      effectiveAt: z.string().datetime(),
+      amountMinor: z.number().int().nullable(),
+      currency: z.string().nullable(),
+      createdAt: z.string().datetime(),
     }),
   ),
 }).openapi('OperatorAccount');
@@ -4383,7 +4423,13 @@ export const VendorVatSchema = z.object({ treatment: VatTreatmentSchema, rateBas
  * empty, not read and not edited; `vat` is null unless the profile has firm features.
  */
 export const ReceiptVendorDefaultsSchema = z
-  .object({ vendorId: uuid, currency: CurrencySchema.nullable(), vat: VendorVatSchema.nullable() })
+  .object({
+    vendorId: uuid,
+    currency: CurrencySchema.nullable(),
+    vat: VendorVatSchema.nullable(),
+    /** MUT-775: the vendor's last category, when the receipt's read registration no. names the vendor and the category is live on this profile; else null. A client prefills it only into an empty, untouched category. Since 1.150.0-mut775. */
+    categoryId: uuid.nullable(),
+  })
   .openapi('ReceiptVendorDefaults');
 
 export const VendorSuggestionSchema = z

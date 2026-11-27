@@ -201,7 +201,7 @@ const accountUsage: OperatorAccountUsage = {
 
 describe('the account page’s Usage section (MUT-735)', () => {
   it('shows six months, newest first, against each month’s plan; no cap says so; and each profile this month', async () => {
-    const account = { id: RANA, email: 'rana@studio.example', displayName: 'Rana Saleh', locale: 'en', status: 'ACTIVE', passwordChangedAt: NOW.toISOString(), lastSignInAt: null, createdAt: NOW.toISOString(), closing: false, operator: false, operatorSince: null, passkeyCount: 1, passkeyLastUsedAt: null, features: [], activeSessionCount: 0, agentGrantCount: 0, availableFeatures: [], profiles: [] };
+    const account = { id: RANA, email: 'rana@studio.example', displayName: 'Rana Saleh', locale: 'en', status: 'ACTIVE', passwordChangedAt: NOW.toISOString(), lastSignInAt: null, createdAt: NOW.toISOString(), closing: false, operator: false, operatorSince: null, passkeyCount: 1, passkeyLastUsedAt: null, features: [], activeSessionCount: 0, agentGrantCount: 0, availableFeatures: [], profiles: [], signupDomain: null, planHistory: [] };
     portal({
       path: `/operator/accounts/${RANA}`,
       extra: {

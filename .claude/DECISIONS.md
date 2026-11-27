@@ -6275,6 +6275,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Consequences:** works with server reading switched off, since a typed and picked vendor or a read name is enough. MUT-308's bills can reuse the same defaults.
 
+**Amended by MUT-775 (2026-11-27, built under Basel's go-ahead, not yet reviewed; brief `.claude/designs/mut-775-vendor-fill.md`):** `vendorDefaults` also carries `categoryId`, the vendor's last category, **only for a match by registration no.** (an exact-name match gives null) and only while that category is live (not archived) on the receipt's profile. Like the rest of §2 it is worked out per GET and never written into `suggested`, so a receipt moved to another profile (MUT-503) never points at the old profile's category. The vendor name keeps MUT-254's rule (the reader fills an absent `vendorName` from the vendor, confidence 1). Clients fill the category only into an empty, untouched category field (§4). API 1.150.0-mut775.
+
 **Alternatives considered:**
 - Write vendor defaults into the reader's suggestion with `source: "vendor"` (the brief's plan). Rejected: R1.
 - Learn from every write naming the vendor. Rejected: R8, an edit to an old expense would reset the default.
@@ -7310,6 +7312,7 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 6. **Israel becomes the first pack by a behaviour-preserving move** (MUT-741): no Israeli document, number, PDF, allocation call or uniform-file byte changes; a guard fails when core code imports `jurisdictions/il` directly.
 7. **Clients read the rules from the server** (`GET /v1/issuing/rules`, MUT-743), so a pack's field change needs no portal or phone release.
 8. **Rules are dated data;** a contract test suite and per-pack golden fixtures every pack must pass (MUT-745); a review date per pack.
+   - *Built (MUT-745, 2026-11-27, under Basel's go-ahead; brief `.claude/designs/mut-745-pack-contract.md`):* each pack declares its dated tables (`JurisdictionPack.datedTables`), and the contract fails a table with no step in force today. Each registered pack has a hand-written fixture (`jurisdictions/__tests__/fixtures/<cc>.ts`: its exact rules, golden hashes and route inputs). The pure checker (`pack-contract.ts`) is proven by deliberately broken packs, and the route contract (`routes-pack-contract.test.ts`) issues under every pack. Review dates are in `docs/operations/jurisdiction-packs.md`: documentation only, never a test, so CI never fails on a calendar date. The import guard now covers every pack directory.
 9. **A second pack is not started until Israel is finished.** The paper packs for ZATCA phase 2 and JoFotara (MUT-744) only test the interface, and per-country registration is its own track (MUT-746).
 
 **Consequences:** a schema migration on INSERT-only legal tables, roll-forward only once documents exist (ADR-260's trigger and the MUT-644 bypass must be respected); the Israel rules move out of `server/src/israel/*` and the Israel parts of `server/src/issuing/*`; MUT-667 (foreign currency and export) is built on the pack interface; Israel-only backlog (MUT-651, 654, 655, 656, 696) is re-homed under the IL pack. ADR-260 decision 3 (numbering), decision 6 (the statutory VAT table) and decision 7 (ILS only) become the Israel pack's rules, not the core's.
@@ -7338,3 +7341,52 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** Live needs Basel's catalog run with a live key (`--live`), Barmajiyat's Israeli VAT file before the first Israeli charge (ADR-286, MUT-749), and the Israeli tax document per payment (MUT-749/750). TD-347 (portal-live flows), TD-348 (the unique key).
 
+---
+
+## ADR-289: Sign-ups Open at Once on Starter; the Domain Class Is a Signal, Not a Gate (MUT-737; supersedes ADR-178 decisions 1, 2, 4 and 5)
+
+**Status:** Accepted (2026-11-27; Basel approved the MUT-737 plan with every default answer). Builds on ADR-284 (Starter, no new no-card trials). Resolves TD-213 (no trial to abuse once Starter is on).
+
+**Context:** ADR-178 sent every webmail, relay or young domain to an operator review, with a digest and two mails. With Starter there is no free trial to protect, and the review only delays real people.
+
+**Decision:**
+1. `OPEN_SIGNUP` (default off; Terraform `open_signup`) opens every SIGNUP link the screen let through ACTIVE on Starter at redeem time. Refused without `STARTER_PLAN` (config and Terraform).
+2. The screen's refusals stay (disposable, no-mail), with Turnstile, the budgets and verification by link. The class and reasons go on the `user.signed_up` audit entry; the operator's account view shows them (`signupDomain`).
+3. With the flag on, approve and decline answer 409 `SIGNUP_REVIEW_RETIRED`; the list stays as history; the hourly digest is not scheduled.
+4. Accounts still waiting are released by `POST /admin/v1/signup-reviews/{userId}/release` (`signups:release -- --apply`): Starter, the ready mail keyed per review, audit `user.signup_released`. Order: `STARTER_PLAN` on, release, `OPEN_SIGNUP` on.
+5. Released and pre-release accounts never get the one-time Solo trial offer (Q5); accountant-provisioned customers skip the first-run plan step (Q4); the phone keeps its plain Starter step (Q3).
+
+**Consequences:** `signup_reviews`, `PENDING_REVIEW`, `ACCOUNT_UNDER_REVIEW` and the digest module stay until a cleanup ticket. Turning the flag off restores the review for new sign-ups.
+
+---
+
+## ADR-290: The Israeli VAT Follows the Item Through Every Change and the Address Through Every Move (MUT-750 slice A; amends ADR-288 decision 4)
+
+**Status:** Accepted (2026-11-27; Basel approved the MUT-750 plan with every default answer).
+
+**Context:** ADR-288 puts a fixed Stripe tax rate on an Israeli plan's item at Checkout and says the tax follows a new address. With a fixed rate that is only true if something moves it, and an item update that changes the price must not lose it.
+
+**Decision:**
+1. One rule, `taxRatesFor(country, rateId)`: Israel → the Israeli VAT rate on the item with Stripe Tax off; elsewhere → no rate, Stripe Tax on; Israel with no rate → not sold.
+2. Every item update that sets a price (the yearly switch now, MUT-734's plan change next) sends the item's tax rates explicitly.
+3. `customer.updated` with an address that crossed Israel's border re-taxes each Solo/Business/Firm subscription that still invoices, from the next invoice, before the new country is saved (so a failure is retried).
+4. The legacy Freelancer plan keeps Stripe Tax until MUT-707 moves its payers (Q2). Israel means the billing address's country only (Q3).
+5. `GET /v1/billing` publishes the rate (`vatRate`), so no client writes 18.
+
+**Consequences:** Tax documents per Israeli payment are MUT-776 (slice B).
+
+---
+
+## ADR-291: Plan Changes: Up Now With Stripe's Proration, Down by a Provider Schedule at the Period End, to Starter by Cancel + Starter Chosen (MUT-734; fills ADR-275 d2's `changeTimingOf`; amends ADR-284 row 7)
+
+**Status:** Accepted (2026-11-27; Basel approved the MUT-734 plan with every default answer).
+
+**Decision:**
+1. `changeTimingOf` decides: up a rank is charged now (Stripe's proration at the previewed date, `always_invoice`, `pending_if_incomplete`, the item's tax rates kept); the tier changes when Stripe confirms (the mirror). A failed card changes nothing.
+2. Down to a lower paid plan is a Stripe subscription schedule: the current price to the period end, then the lower price, released after one cycle. No refund.
+3. To Starter is cancel at the period end and `starterChosenAt` now, so the end lands on Starter with no read-only gap (ADR-284 row 7's exception).
+4. Going below the person's business count needs their pick (no default, Basel's MUT-731 Q5), stored at scheduling; with `PAID_BUSINESS_CAPS` the paid plans enforce their counts as Starter does.
+5. Every change is a `billing_plan_changes` row (one SCHEDULED per person); the sync moves PENDING/SCHEDULED to APPLIED; undo releases the schedule or takes the cancel and the Starter choice back.
+6. Interval kept (Q1); legacy Freelancer and founder plans refused until MUT-707 (Q3); the phone shows only (Q4); a launch coupon is dropped on upgrade (Stripe's item change) and kept on a downgrade (Q5).
+
+**Consequences:** The scheduled state lives in our table, not in mirrored subscription columns (build decision 2). Card-declined upgrades answer 409 PAYMENT_FAILED as the yearly switch does.

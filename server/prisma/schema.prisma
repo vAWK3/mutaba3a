@@ -398,6 +398,7 @@ model User {
   /// MUT-358: operator grants covering this person's own profiles.
   entitlementGrants EntitlementGrant[]
   retentionEvents   BillingRetentionEvent[]
+  planChanges       BillingPlanChange[]
   /// MUT-433 (ADR-196): operator-granted feature flags (server/src/features.ts).
   featureGrants     UserFeatureGrant[]
   /// MUT-367: the review a PENDING_REVIEW signup waits on (kept, unlinked, after a decline).
@@ -1840,6 +1841,27 @@ model BillingRetentionEvent {
 
   @@index([userId, kind, startsAt])
   @@map("billing_retention_events")
+}
+
+/// MUT-734 (ADR-291): a plan change a person asked for. kind UPGRADE | DOWNGRADE | TO_STARTER; state APPLIED | PENDING |
+/// SCHEDULED | UNDONE | FAILED (CHECKs in the migration). At most one SCHEDULED per person (a partial unique index).
+model BillingPlanChange {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @db.Uuid
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String
+  fromTier             String   @db.VarChar(16)
+  toTier               String   @db.VarChar(16)
+  kind                 String   @db.VarChar(16)
+  state                String   @db.VarChar(16)
+  effectiveAt          DateTime
+  amountMinor          Int?
+  currency             String?  @db.Char(3)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("billing_plan_changes")
 }
 
 /// MUT-358: an operator grant. Exactly one of userId (the person's own profiles) and organizationId (that profile)
