@@ -10,7 +10,7 @@ import { openYou, youRow } from '../../support/you';
  */
 
 const personal: StubProfile = { ...office(OFFICE_B, 'Personal'), type: 'PERSONAL', personalDefault: true };
-const CHECKOUT = '/v1/billing/checkout-session';
+const CHECKOUT = /^\/v1\/billing\/checkout-session$/;
 
 async function seePlans(page: import('@playwright/test').Page, language: 'en' | 'ar' = 'en') {
   await openYou(page, 'account');
@@ -79,7 +79,7 @@ test('The billing country is typed and must match a country; a misspelling says 
     await api.open(page, `/p/${OFFICE_A}`, 'ar');
     const plans = await seePlans(page, 'ar');
     await plans.getByRole('combobox', { name: 'البلد' }).fill('الأردن');
-    await expect(plans.getByRole('radio', { name: /^مستقل/ })).toContainText('$');
+    await expect(plans.getByRole('radio', { name: /^مستقل.*\$/ })).toBeVisible();
     await expect(plans.getByText('لا يوجد تطابق')).toHaveCount(0);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
@@ -181,7 +181,7 @@ test('On Business with four businesses, Billing lists the read-only one and why;
   await step('Choose Save', async () => {
     await billing.getByRole('button', { name: 'Save' }).click();
     await expect(billing.getByTestId('read-only-businesses')).toContainText('Nour Books');
-    expect(api.calls('PUT', '/v1/billing/active-businesses')[0]!.body).toEqual({ organizationIds: [OFFICE_A, THIRD, FIFTH] });
+    expect(api.calls('PUT', /^\/v1\/billing\/active-businesses$/)[0]!.body).toEqual({ organizationIds: [OFFICE_A, THIRD, FIFTH] });
   });
 });
 
