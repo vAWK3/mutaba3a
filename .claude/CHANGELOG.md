@@ -28,6 +28,14 @@
 
 ---
 
+## 2026-11-28 · MUT-783: two failing style tests found by the release pass
+
+### Fixed
+- `hosted.css` `.hp-vat-unset-chip` used a `2px` literal; it now uses `var(--space-0-5)` (the same 2px), which `brand.test.ts` requires.
+- The VAT period drawer and group's `dir="auto"` sites are classified in `DIR_SITES` (`direction.test.ts`): `VatPeriodGroup.tsx` 1, `VatPeriodDrawer.tsx` 2.
+
+---
+
 ## 2026-11-28 · MUT-780 release wiring: `fcm_project_id` Terraform variable
 
 ### Added
