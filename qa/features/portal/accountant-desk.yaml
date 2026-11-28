@@ -62,3 +62,28 @@ features:
     expect:
       - The refusal is a banner at the top of the drawer, "Claimed"
       - Resend link, New code and Change email are gone; Take card stays while the customer has not paid
+  - id: a11y
+    title: The desk works by keyboard and screen reader, axe-clean, with 44 px targets and no sideways scroll at 375 px (MUT-771, DR-11)
+    tier: secondary
+    tickets: [MUT-771, MUT-770]
+    paths:
+      - src/hosted/components/ActivatingMotion.tsx
+      - src/hosted/components/ActivatingStatus.tsx
+      - src/hosted/components/activatingHop.ts
+      - src/hosted/components/claimCode.ts
+      - src/hosted/data/activatingPoll.ts
+      - src/hosted/data/claimedSeen.ts
+    steps:
+      - Open the desk with an unclaimed customer and one who needs a card
+      - Check each row's one action
+      - Add a customer
+      - Press Escape
+      - Take the card, continue to Stripe and come back
+      - Narrow the window to 375 px
+    expect:
+      - The desk and the code pane pass axe
+      - Each row's action is at least 44 px tall and every state is a word
+      - The code pane's heading takes focus; the code is one image named by its six digits apart, left to right
+      - Escape closes the drawer
+      - '"Activating…" and then "Active" are said in a polite live region with the customer''s name'
+      - No horizontal scroll at 375 px

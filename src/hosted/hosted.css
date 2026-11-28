@@ -1526,8 +1526,10 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-chip-count { color: var(--muted); }
 .hp-desk-next { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); margin: var(--space-3) 0; }
 .hp-desk-next .btn, .hp-desk-next button { min-height: 44px; }
+/* MUT-771 (DR-10): a row's one next action is a 44 px target too */
+.hp-desk-row-action.btn { min-height: 44px; }
+/* MUT-771 (DR-9, DR-11): an ended row is faded by its muted ink alone; an opacity on top dropped its text below 4.5:1 (axe on the desk) */
 .hp-row-ended td { color: var(--muted); }
-.hp-row-ended td:not(.hp-sticky-end) { opacity: 0.6; }
 .hp-ended-note { font-size: var(--text-label); color: var(--muted); }
 .hp-row-open td { background: var(--accent-subtle); }
 .hp-read-only-line { margin: 0; flex-basis: 100%; color: var(--text-secondary); font-size: var(--text-label); }

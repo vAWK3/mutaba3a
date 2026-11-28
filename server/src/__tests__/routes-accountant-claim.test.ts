@@ -92,6 +92,9 @@ describe('the claim step (MUT-765)', () => {
     expect(after.status).toBe(403);
     expect((await read(after)).error.code).toBe('CUSTOMER_CLAIMED');
     expect((await h.store.accountantGrants.findActive(accountant.userId, c.profileId))?.status).toBe('ACTIVE');
+    // MUT-771 (plan T9): his read access still works after the claim: the business is on his desk, shared and active.
+    const desk = await read(await h.app.request('/v1/clients', { headers: accountant.auth }));
+    expect(desk.items.map((row: { profileId: string; status: string }) => [row.profileId, row.status])).toContainEqual([c.profileId, 'active']);
     // The used link is dead.
     expect((await redeem(h, c.token, { claimCode: c.code })).status).toBe(410);
   });

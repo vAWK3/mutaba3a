@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-11-28 — MUT-771 + MUT-772: the accountant channel's tests, release QA and release steps (epic MUT-762)
+
+### Added
+- Release QA `portal.accountant-desk.a11y`: axe on the desk and the code pane, focus on the pane heading, Escape closes, 44 px row actions, states in words, the polite live region saying Activating then Active, no sideways scroll at 375 px. It maps MUT-770's Activating and claim-code modules and the desk's `claimedSeen`, so the portal has no unmapped file.
+- Server: the claim test also proves the accountant's read access after the claim (the business on his desk, active).
+
+### Fixed
+- Found by the new a11y flow: an ended (or needs-plan) client row was faded with `opacity: 0.6` on top of the muted ink, so its text fell below 4.5:1 (axe color-contrast); it is now faded by the muted ink alone. The desk row's one next action (a small ghost button, 32 px) now has a 44 px minimum (`.hp-desk-row-action`, DR-10).
+
+### Changed
+- `.claude/DECISIONS.md`: ADR-292 amendment (MUT-772): the channel ships as one switch; ADR-258 unchanged; the rollout order; rollback is the switch alone, created accounts stay and mailed links still claim.
+- `docs/operations/before-release.md`: Switch rollout stage 5 is no longer waiting for UI (MUT-768/769/770 merged), with the release-QA ids, the claim and Take card checks and the rollback; the server item names MUT-769's API 1.211.0.
+
+### Technical
+- Already in place from the server halves and checked for this ticket: the route pins (`route-security.test.ts`), the provisioning store contract on both stores, mail copy for the four new mails (`templates.test.ts`, ADR-159 §5), IDOR on the activation, no link in any response, the 60-day sweep with an injected clock.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-769: /setup for an accountant's customer: who set it up, the code, the password, the account is theirs, the card (ADR-320, API 1.211.0-mut769)
 
 Plan `docs/designs/accountant-channel.md` (DR-1, DR-7; B7, B9). No new page: the existing `/setup` takes a provisioned branch.
