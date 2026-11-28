@@ -2690,3 +2690,5 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 |---|---|---|
 | `src/hosted/pages/operator/SignupHistory.tsx` | `SignupHistory` | Accounts' Signups filter, `/operator/signups` with open sign-up |
 | `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |
+| `src/hosted/data/billingPlans.ts` | `useOfferLine` (MUT-703) | Subscribe step's `PlanRow` `offerNote` |
+| `src/hosted/data/billingView.ts` | `planLaunchOf`, `planOfferFor`, `planComebackOf` (MUT-703) | Subscribe step, opening interval |

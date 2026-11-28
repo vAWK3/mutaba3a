@@ -28,6 +28,20 @@
 
 ---
 
+## 2026-11-28 · MUT-703 (portal half): offers on Solo, Business and Firm
+
+### Added
+- The Subscribe step with plans on sale reads the per-plan launch: `data/billingView.ts` `planLaunchOf`, `planOfferFor`, `planComebackOf`; `data/billingPlans.ts` `useOfferLine` feeds `PlanRow`'s `offerNote` ("First year ₪195.00 or $60.00", Yearly only). Yearly opens when the chosen plan has a launch and the person is eligible; Continue sends the plan offer's id as `expectedOffer`; the shared OFFER_ENDED banner is unchanged.
+- The plan's come-back price (monthly only; its yearly pair is null) shows on the chosen plan.
+- The change pane says which running offer an upgrade ends (`offerEnds` `stay`/`comeback`): `hosted.billing.change.offerEnds.*` (ar + en).
+- QA: `portal.plans.plan-launch-yearly` (FakeApi `starter.plans.launch`).
+
+### Changed
+- `eligibleOfferOf` counts a plan sold in the currency, not only the legacy catalog; `renewalPriceOf` reads a plan subscription's own plan catalog.
+
+### Files
+`src/hosted/data/billingView.ts`, `billingPlans.ts`, `components/BillingDrawer.tsx`, `ChangePlan.tsx`, `i18n/{ar,en}.json`, tests `BillingDrawer.mut703.test.tsx`, `planOffers.test.ts`, `qa/features/portal/plans.yaml`, `qa/specs/portal/plans.spec.ts`, `qa/support/portalApi.ts`.
+
 ## [Unreleased] - 2026-11-28 — TD-371: the self-service QA API runs Starter and open sign-up
 
 ### Changed

@@ -1,6 +1,6 @@
 # MUT-703: offers on Solo, Business and Firm (launch, stay, come-back, switch to yearly)
 
-Status: **APPROVED with all 12 default answers in §13 (Basel, 2026-11-27). Server half BUILT (API 1.210.0-mut703, ADR-340; see "Build decisions" at the end); UI half with the billing lane (§11).** Epic MUT-701. Blocked by MUT-702 (Part B merged).
+Status: **APPROVED with all 12 default answers in §13 (Basel, 2026-11-27). Server half BUILT (API 1.210.0-mut703, ADR-340; see "Build decisions" at the end); UI half BUILT in the portal billing lane (2026-11-28, §11 seams used).** Epic MUT-701. Blocked by MUT-702 (Part B merged).
 Basel (2026-11-27): the offers must be live before Switch rollout stage 1 (`STARTER_PLAN` + `PLAN_CHECKOUT`).
 
 ```

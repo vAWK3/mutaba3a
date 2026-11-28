@@ -5213,3 +5213,8 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Pure | `src/hosted/lib/__tests__/vendorDefaults.test.ts` | fills an empty untouched category; never a chosen or touched one; none without a category |
 | Portal | `src/hosted/pages/__tests__/Receipts.test.tsx` | the fill, its hint and the autofill scope; a person's change removes both |
 | QA | `qa/specs/portal/receipts.spec.ts` | `portal.receipts.vendor-category` (en, then ar with a hand-picked category) |
+
+## MUT-703 (portal half) — offers on the three plans (2026-11-28)
+- `data/__tests__/planOffers.test.ts`: `planLaunchOf`, `planOfferFor`, `planComebackOf`, `eligibleOfferOf` with plans only, `renewalPriceOf` on a plan.
+- `components/__tests__/BillingDrawer.mut703.test.tsx`: first-year lines on Yearly, none on Monthly or when ineligible, `expectedOffer` sent, the plan's come-back price.
+- QA `portal.plans.plan-launch-yearly` (spec written, not recorded; recording waits for the epics).
