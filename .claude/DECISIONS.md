@@ -7597,3 +7597,20 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 8. The renewal notice covers any plan's list price and names the plan; `renewsAtListPrice` is true on any plan's list price.
 
 **Consequences:** One coupon per kind means one percent for every plan and currency; a per-plan amount would need one coupon per (kind, plan) and one entry each (the plan's §4 reserve). The live key needs Write on Coupons before the first run (before-release stage 1).
+
+## ADR-341: A Guide Is One JSON File With Its Copy Inline, Opened by a URL Key in a Drawer; Done Is the Only "Finished" (MUT-674, epic MUT-672)
+
+**Status**: Accepted (2026-11-28; Basel settled the two flow questions the same day).
+
+**Context**: The portal had nowhere to explain a feature in plain steps, and the phone and the website's help pages (MUT-678) needed the same words. The portal's copy lives in two i18n dictionaries; a guide that needed edits in both plus code could not be read by the phone or the website.
+
+**Decision**:
+1. A guide is `src/content/guides/<id>.json`, copy inline as `{ar, en, he?}`, no code and no i18n keys. `parseGuide` is the only door (it names every problem; it never throws into the UI). CI parses every file and checks that each scene is drawn with its `-rtl` twin.
+2. The registry is a lazy `import.meta.glob`: one small chunk per guide, no registry to edit. The website reads the same files with its own eager glob (MUT-678).
+3. A guide opens by the shell overlay key `?guide=<id>` (ADR-008 pattern), on every page and in both modes; closing keeps the page and its state. An id with no file closes itself; a load failure is Unreachable with Retry.
+4. Done is the footer's one primary button and the only signal of "finished" (`guide_finished`). The cross, Escape and the overlay count nothing. Scrolling to the end was rejected: a four-step guide often fits on screen and would fire on open.
+5. Telemetry (contract 2.15.0): `guide_opened` once per opening (a ref-guarded effect, so React StrictMode's second run is not another opening) and `guide_finished`, one enum property `guide`. The strict guard allows no free text (ADR-090), so the enum lists every portal guide id (dashes as underscores); `guides.test.ts` fails with the exact line to add when a guide file and the enum disagree.
+6. The need-help link is the portal's one `SUPPORT_EMAIL` (`src/hosted/terms.ts`); a guide file carries no address.
+7. 674 ships one draft guide (`tax-authority`) with no button on any screen, because the registry is a build-time glob and the release-QA flow needs a real file. "Copy deck MUT-673 signed off" is a before-release precondition.
+
+**Consequences**: A new portal guide is its file plus one enum value in the contract (a minor bump, a pinned hash, and the Flutter copy of the contract). A guide placed on the phone only (`surfaces` without `portal`) needs no enum value. The mockup's second footer action (a feature action such as Connect) is not built; MUT-679 adds an optional `action` to the same schema.

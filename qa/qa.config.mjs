@@ -64,6 +64,8 @@ export default {
         '!public/.well-known/**',
         // MUT-596: Malafat's mark is the portal's (Sign in with Malafat, Connected apps): portal-selfservice's.
         '!public/brand/malafat-mark*.svg',
+        // MUT-674: the guide files are the portal's until MUT-678 builds the website's help pages from them.
+        '!src/content/guides/**',
         '!src/**/__tests__/**',
         '!src/**/*.test.{ts,tsx}',
       ],
@@ -86,7 +88,7 @@ export default {
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
       // MUT-368: the self-service screens are the portal-selfservice app's (they need a live API and its outbox).
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/lib/observability/**', 'src/lib/telemetry/**',
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/content/guides/**', 'src/lib/observability/**', 'src/lib/telemetry/**',
         // MUT-445: the shared UI only the portal renders now that the free web app is retired
         'src/components/{expenses,filters,icons,ui}/**', 'src/lib/{dom,forms,motion,whatsNew}/**', 'src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts',
         '!src/components/ui/{ErrorBoundary,Input}.*', '!src/hosted/**/__tests__/**', '!src/**/__tests__/**', '!src/**/*.test.{ts,tsx}',

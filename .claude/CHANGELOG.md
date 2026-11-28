@@ -28,6 +28,21 @@
 
 ---
 
+## 2026-11-28 · MUT-674: the portal guide viewer and its one content format (epic MUT-672)
+
+### Added
+- A guide opens in a drawer over any page by the URL key `?guide=<id>` (signed in or out): `GuideDrawer`, `GuideButton`, `openGuide` in `useAccountDrawers`, the `guide` key in `ProfileDrawerSearch`, `SHELL_OVERLAY_KEYS` and `parseProfileDrawer` (a lower-case slug of up to 40 characters). An id with no file closes itself; a guide that cannot load shows Unreachable with Retry.
+- One JSON file per guide in `src/content/guides/<id>.json` (title, lead, hero, steps with scenes, note, official source; copy `{ar, en, he?}`), parsed by the pure `parseGuide`, listed by a lazy `import.meta.glob` registry (`GUIDE_IDS`, `isGuideId`, `loadGuide`). Adding a guide is adding a file.
+- `tax-authority.json`: the first guide, from the draft copy in `.claude/designs/guides-and-help/guides-draft.md` (not signed off, MUT-673). No button on any screen yet (MUT-679).
+- Analytics contract 2.15.0: `guide_opened` and `guide_finished` (portal, one `guide` property: the guide's id with dashes as underscores). `trackGuide` in `portalAnalytics.ts`; opted-in people only.
+- QA: `portal.guides.guide-open-read-close`.
+
+### Changed
+- `qa/qa.config.mjs`: `src/content/guides/**` is the portal's watch, not the website's, until MUT-678 builds the help pages from it.
+
+### Files
+`src/content/guides/*`, `src/hosted/components/{GuideDrawer,GuideButton}.tsx`, `src/hosted/shell/AccountDrawers.tsx`, `src/hosted/data/filters.ts`, `src/hosted/analytics/portalAnalytics.ts`, `docs/analytics/events.json`, `src/hosted/i18n/{ar,en}.json` (`hosted.guide.*`), `src/hosted/hosted.css` (`.hp-guide-*`), `DESIGN.md`, tests `guideSchema`, `guides`, `GuideDrawer`, `GuideButton`, `filters`, `portalAnalytics`, `guard`, `analytics-taxonomy`, `qa/features/portal/guides.yaml`, `qa/specs/portal/guides.spec.ts`.
+
 ## 2026-11-28 · MUT-703 (portal half): offers on Solo, Business and Firm
 
 ### Added

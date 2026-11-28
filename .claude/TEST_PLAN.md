@@ -5218,3 +5218,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 - `data/__tests__/planOffers.test.ts`: `planLaunchOf`, `planOfferFor`, `planComebackOf`, `eligibleOfferOf` with plans only, `renewalPriceOf` on a plan.
 - `components/__tests__/BillingDrawer.mut703.test.tsx`: first-year lines on Yearly, none on Monthly or when ineligible, `expectedOffer` sent, the plan's come-back price.
 - QA `portal.plans.plan-launch-yearly` (spec written, not recorded; recording waits for the epics).
+
+## MUT-674 — the guide viewer (2026-11-28)
+- `src/content/guides/__tests__/guideSchema.test.ts`: a full guide parses; a missing ar or en line, an empty line, no steps, an unknown key at any level, a non-https source, an unknown surface and an id that is not the file name each reject; every problem is reported.
+- `src/content/guides/__tests__/guides.test.ts`: over the real files: each parses, the registry lists exactly the files, every scene is drawn with its `-rtl` twin, the contract's guide enum matches the portal guides (names the line to add), both events are portal-only with one property.
+- `src/hosted/data/__tests__/filters.test.ts`: `?guide=` parses a slug and drops the rest; the key is stripped from a page and carried across a filter change.
+- `src/hosted/components/__tests__/GuideDrawer.test.tsx` (through the real portal): opens over the page, ar right to left with the `-rtl` art, source link attributes, help link, no note or source when absent, ✕ and Escape close and keep the page and count nothing, Done counts finished, an unknown id closes itself, a load failure shows Retry, one opening under StrictMode. `GuideButton.test.tsx`: opens its guide.
+- `src/hosted/analytics/__tests__/portalAnalytics.test.ts`, `src/lib/analytics/__tests__/guard.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts`: `trackGuide` for opted-in people only, the guard keeps a listed guide and drops an unlisted one, contract 2.15.0 pinned.
+- QA `portal.guides.guide-open-read-close` (Arabic then English, the page kept, Done).
