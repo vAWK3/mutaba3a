@@ -20689,7 +20689,7 @@ paths:
       tags:
         - VAT periods
       summary: "Your active clients: how often each files VAT, and where its latest period stands"
-      description: MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended clients are not listed. Additive since 1.215.0-mut782.
+      description: MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.
       security:
         - session: []
         - deviceSession: []
@@ -20735,6 +20735,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SetVatPeriodKindResponse"
+        "402":
+          description: "ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Not one of your clients, or VAT period reminders are off on this server
           content:
@@ -20778,6 +20784,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VatPeriodView"
+        "402":
+          description: "ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Not one of your clients, no such period, or VAT period reminders are off on this server
           content:

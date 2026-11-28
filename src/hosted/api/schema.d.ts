@@ -4267,7 +4267,7 @@ export interface paths {
         };
         /**
          * Your active clients: how often each files VAT, and where its latest period stands
-         * @description MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended clients are not listed. Additive since 1.215.0-mut782.
+         * @description MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.
          */
         get: {
             parameters: {
@@ -4342,6 +4342,15 @@ export interface paths {
                         "application/json": components["schemas"]["SetVatPeriodKindResponse"];
                     };
                 };
+                /** @description ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books */
+                402: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description Not one of your clients, or VAT period reminders are off on this server */
                 404: {
                     headers: {
@@ -4396,6 +4405,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["VatPeriodView"];
+                    };
+                };
+                /** @description ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books */
+                402: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
                 /** @description Not one of your clients, no such period, or VAT period reminders are off on this server */
