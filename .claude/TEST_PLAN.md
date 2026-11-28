@@ -5234,3 +5234,9 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 - `ManualAllocationPanel.test.tsx`: the button only when `automaticOn` is null.
 - `GuideButton.router.test.tsx`: through the real shell, `?guide=` is pushed on the page's search, closing and Back keep it, focus returns to the button.
 - QA `portal.guides.guide-open-read-close` (step 5, Arabic, Escape and focus, English, Done) and `portal.guides.guide-over-issue-drawer`.
+
+## MUT-785 and MUT-786 — the invoice and accountant guides (2026-11-28)
+- `guides.test.ts` over the real files: both parse, scenes drawn with their `-rtl` twin (`guide-invoice-2` declared neutral), both ids in the contract enum, no rate or currency in the copy.
+- `SharingPage.test.tsx`: How to invite in the Accountants column and in the empty page, each opening the accountant guide through the real portal.
+- `analytics-taxonomy.test.ts`: contract 2.16.0 pinned, the three-value `guide` enum.
+- The Issued list and the ready setup are proven by QA `portal.guides.invoice-from-issued-and-setup` (both pages need most of the issuing API stubbed, which the flows already do); `portal.guides.accountant-from-sharing`; `portal.guides.tax-guide-ended-state`.

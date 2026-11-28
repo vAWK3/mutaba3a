@@ -6,6 +6,7 @@ import { useLanguage } from '../../../lib/i18n/core';
 import type { AccountantGrant, HostedProfile } from '../../api/client';
 import { trackPortal } from '../../analytics/portalAnalytics';
 import { AccessScopeList } from '../../components/AccessScopeList';
+import { GuideButton } from '../../components/GuideButton';
 import { Skeleton } from '../../components/QueryView';
 import { Scene } from '../../components/Scene';
 import { useToast } from '../../components/Toast';
@@ -150,6 +151,8 @@ function SharingEmpty({ linksOn, onInvite, onNewLink }: { linksOn: boolean; onIn
             {t('hosted.sharing.empty.createLink')}
           </Button>
         )}
+        {/* MUT-786: the accountant guide, before the first invite */}
+        <GuideButton guide="accountant-access" label={t('hosted.sharing.guide')} />
       </div>
     </section>
   );

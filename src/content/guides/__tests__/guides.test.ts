@@ -15,7 +15,7 @@ const fileIdOf = (path: string) => path.replace(/^\.\.\/(.+)\.json$/, '$1');
 const entries = Object.entries(files).map(([path, raw]) => ({ id: fileIdOf(path), raw }));
 
 /** A scene with no `-rtl` twin is direction-neutral (an object, not a reading direction): it is declared here, with its guide. */
-const NEUTRAL_SCENES: readonly string[] = [];
+const NEUTRAL_SCENES: readonly string[] = ['guide-invoice-2'];
 const hasRtlTwin = (scene: string) => Object.hasOwn(SCENE_ART, `${scene}-rtl`) || NEUTRAL_SCENES.includes(scene);
 
 const contract = JSON.parse(readFileSync(resolve(__dirname, '../../../../docs/analytics/events.json'), 'utf8')) as {

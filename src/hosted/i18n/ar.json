@@ -2954,6 +2954,7 @@
       "title": "مشاركة «{profile}»",
       "back": "الملفات",
       "entryRow": "شارك مع محاسبك",
+      "guide": "كيف أدعو؟",
       "manageRow": "المشاركة",
       "accountants": {
         "heading": "المحاسبون",
@@ -3397,6 +3398,7 @@
       "tabIssued": "الصادرة",
       "tabFiles": "الملفات",
       "empty": "لم يُصدَر أي مستند من هذا الملف بعد.",
+      "guide": "كيف أصدر؟",
       "colDocument": "المستند",
       "colClient": "العميل",
       "colDate": "التاريخ",

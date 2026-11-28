@@ -1,13 +1,14 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
-import { OFFICE_A, office } from '../../support/portal';
-import { FakeApi } from '../../support/portalApi';
+import { OFFICE_A, OFFICE_B, office } from '../../support/portal';
+import { FakeApi, type StubGrant } from '../../support/portalApi';
 
 /**
  * MUT-674 and MUT-679: the Tax Authority guide opens in a drawer over the page from the button beside Connect on the
  * invoicing setup's step 5 (and from the allocation panel on the issue screen), and closing it leaves the page as it
- * was. Arabic first, then English.
+ * was. Arabic first, then English. MUT-785 and MUT-786 add the invoice guide (the empty Issued list, the setup's ready
+ * block) and the accountant guide (the Sharing page), and MUT-679's ended-connection entry.
  */
 
 const SETUP = `/p/${OFFICE_A}/you/invoicing`;
@@ -104,5 +105,116 @@ test('The guide opens over the issue drawer from the allocation panel, and closi
     await expect(issue).toBeVisible();
     await expect(issue.getByLabel('Allocation number (9 digits)')).toHaveValue('123456789');
     await expect(issue.getByLabel('Description')).toHaveValue('Annual retainer');
+  });
+});
+
+test('The invoice guide opens from the empty Issued list and from the ready setup, in Arabic then English', { tag: '@portal.guides.invoice-from-issued-and-setup' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], invoicing: 'ready' });
+
+  await step('Open Documents, Issued, in Arabic: nothing is issued yet', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`, 'ar');
+    await expect(page.getByTestId('issued-empty')).toBeVisible();
+  });
+
+  await step('Press the guide button and read it in Arabic, right to left', async () => {
+    await page.getByRole('button', { name: 'كيف أصدر؟' }).click();
+    const dialog = page.getByRole('dialog', { name: 'إصدار أول فاتورة' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('listitem')).toHaveCount(4);
+    await expect(dialog.getByRole('note')).toBeVisible();
+    await expect(dialog.locator('[data-scene="guide-invoice-1"]')).toHaveAttribute('data-scene-art', 'guide-invoice-1-rtl');
+    await expect(dialog.locator('[data-scene="guide-invoice-2"]')).toHaveAttribute('data-scene-art', 'guide-invoice-2');
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+    await attachScreenshot(page, 'ar-portal-guide-invoice');
+  });
+
+  await step('Close it with the cross: the empty list is as it was', async () => {
+    await page.getByRole('dialog', { name: 'إصدار أول فاتورة' }).getByRole('button', { name: 'إغلاق' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByTestId('issued-empty')).toBeVisible();
+  });
+
+  await step('Open the ready invoicing setup in English and press the guide button there', async () => {
+    await api.open(page, `/p/${OFFICE_A}/you/invoicing`, 'en');
+    await page.getByTestId('setup-ready').getByRole('button', { name: 'How to issue' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Issue your first invoice' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Issue your first document from MTB3A.')).toBeVisible();
+    await expect(dialog.getByText('Press Issue a document.')).toBeVisible();
+    await attachScreenshot(page, 'en-portal-guide-invoice');
+  });
+
+  await step('Press Done: the setup is as it was', async () => {
+    await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByTestId('setup-ready')).toBeVisible();
+  });
+});
+
+const SAMI: StubGrant = { id: 'a1000001-0000-4000-8000-000000000000', email: 'sami@khoury-cpa.com', name: 'Sami Khoury', status: 'active', invitedAt: new Date(Date.now() - 26 * 86_400_000).toISOString(), expiresAt: new Date(Date.now() - 12 * 86_400_000).toISOString(), acceptedAt: new Date(Date.now() - 25 * 86_400_000).toISOString(), lastViewedAt: new Date(Date.now() - 2 * 86_400_000).toISOString() };
+const SHARING = `/p/${OFFICE_B}/you/sharing`;
+
+test('The accountant guide opens from the Sharing page, in Arabic then English', { tag: '@portal.guides.accountant-from-sharing' }, async ({ page, step }) => {
+  const nobody = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Personal'), office(OFFICE_B, 'Studio')], accountants: { [OFFICE_B]: [] } });
+
+  await step('Open Sharing in Arabic on a profile shared with nobody', async () => {
+    await nobody.open(page, SHARING, 'ar');
+    await expect(page.getByRole('heading', { level: 2, name: 'لم تشارك هذا الملف بعد' })).toBeVisible();
+  });
+
+  await step('Press the guide button and read it in Arabic, in the page\'s own words about what an accountant sees', async () => {
+    await page.getByRole('main').getByRole('button', { name: 'كيف أدعو؟' }).click();
+    const dialog = page.getByRole('dialog', { name: 'دعوة المحاسب' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('listitem')).toHaveCount(3);
+    await expect(dialog.getByText('يرى المصاريف والدخل والإيصالات في هذا الملف.')).toBeVisible();
+    await expect(dialog.locator('[data-scene="guide-accountant-1"]')).toHaveAttribute('data-scene-art', 'guide-accountant-1-rtl');
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+    await attachScreenshot(page, 'ar-portal-guide-accountant');
+  });
+
+  await step('Close it with the cross: the empty Sharing page is as it was', async () => {
+    await page.getByRole('dialog', { name: 'دعوة المحاسب' }).getByRole('button', { name: 'إغلاق' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 2, name: 'لم تشارك هذا الملف بعد' })).toBeVisible();
+  });
+
+  await step('Open Sharing in English with an accountant and press the guide button in the Accountants column', async () => {
+    const shared = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Personal'), office(OFFICE_B, 'Studio')], accountants: { [OFFICE_B]: [SAMI] } });
+    await shared.open(page, SHARING, 'en');
+    await page.getByRole('main').getByRole('button', { name: 'How to invite' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Invite your accountant' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("They see this profile's expenses, income and receipts.")).toBeVisible();
+    await expect(dialog.getByText('The invite lasts 14 days. If it expires, invite again.')).toBeVisible();
+    await attachScreenshot(page, 'en-portal-guide-accountant');
+  });
+
+  await step('Press Done: the Sharing page is as it was', async () => {
+    await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByText('Sami Khoury')).toBeVisible();
+  });
+});
+
+test('The Tax Authority guide opens beside Connect again when the connection has ended', { tag: '@portal.guides.tax-guide-ended-state' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], invoicing: 'ready', taxAuthority: { plan: 'solo', ended: true } });
+  const taStep = page.getByTestId('tax-authority-step');
+
+  await step('Open Invoicing and choose step 5 with a connection that has ended', async () => {
+    await api.open(page, SETUP, 'en');
+    await region5(page).click();
+    await expect(taStep.getByText('The connection to the Tax Authority has ended.')).toBeVisible();
+    await expect(taStep.getByTestId('tax-authority-connect')).toBeVisible();
+  });
+
+  await step('Press How to connect beside Connect: the guide opens, and closing it leaves step 5 as it was', async () => {
+    await taStep.getByRole('button', { name: 'How to connect' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Connect to the Tax Authority' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Reconnect every 90 days.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(taStep.getByText('The connection to the Tax Authority has ended.')).toBeVisible();
   });
 });
