@@ -41,7 +41,7 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
       Business and Firm; the dry run after says "nothing to do". (npm passes flags only after `--`:
       `npm run billing:plans -- --apply --live`.)
 - [x] 2026-11-28: the Tax Authority guide's copy signed off by Basel (MUT-674).
-- [ ] The revised Tax Authority guide copy (MUT-679, `copy-deck-first-three.md` §1): sign it, with the Arabic read by a native speaker; the 2026-11-28 sign-off above covered the first draft.
+- [x] 2026-11-28: the revised Tax Authority guide copy (MUT-679) signed off by Basel, after the first sign-off on the MUT-674 draft. The Arabic native read is not recorded.
 - [x] 2026-11-28: the privacy policy's 7-year deletion wording approved by Basel (MUT-644).
 - [x] 2026-11-28: phone 0.2.1+25 (it parses `PLAN_LIMIT`) is the live version (Basel).
 - [x] 2026-11-28: Apple Developer › the MTB3A App ID: Push Notifications on. No SSL certificate: push uses the auth keys below.
@@ -217,8 +217,6 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 - MUT-291's carry-over is merged and `config/hosts.json` is at stage `live`, so the next `make release web` turns on the old app's carry-over screen. **Release the server first**: `/carry-over/receive` ships in the API image. With web first, every carry-over falls back to the file after 10 s (TD-232). Then `DEPLOYMENT.md` §5a step 6 (the day-7 check, then stage `redirect`). The same order holds for any later change to the free app's Dexie version. Keep the `mutaba3a.netlify.app` site name reserved for as long as a build trusts it (TD-231). Delete this item once the day-7 check passes, and record the date on MUT-291.
 - MUT-402 ships the outlined MTB3A logotype (`src/assets/brand/wordmark.svg`). Attach Thmanyah's written OK for the outlined logotype to MUT-401 (Basel reports they confirmed it on 2026-10-22; brand-v2 decision 4 keeps this a guardrail, not a blocker). Delete this item and record the date on MUT-402.
 - MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. `make release web` now waits for the live document and checks it (`npm run release:oauth-client`); it printed ✓ for web-v0.3.4 on 2026-11-13. Left: in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.
-
-- **MUT-679 (epic MUT-672): the Tax Authority guide's copy changed after Basel's 2026-11-28 sign-off (MUT-674).** The signed text was the first draft. MUT-679 revises it: the lead says why you connect, there is an "if it goes wrong" line, and the Tax Authority's own page is linked. The guide now opens from the button beside Connect on the invoicing setup's step 5 and from the allocation panel on the issue screen, so anyone with invoicing on can open it. **Before the next `make release server` (the portal ships in the API image), Basel signs the revised copy** (`.claude/designs/guides-and-help/copy-deck-first-three.md` §1, the Arabic read by a native speaker), or `src/content/guides/tax-authority.json` goes back to the signed first text. No operator step otherwise: no server change, no migration.
 
 ## Switch rollout (Basel, 2026-11-27)
 
