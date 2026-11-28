@@ -141,30 +141,30 @@ test('turning sharing off sends one last note, then nothing, and forgets the ID'
   });
 });
 
-test('signing out forgets the choice and the ID without sending anything', { tag: '@portal.usage-analytics.sign-out-resets' }, async ({ page, step, analytics }) => {
+test('signing out sends nothing and keeps an accepted choice and the ID for the next sign-in (ADR-301)', { tag: '@portal.usage-analytics.sign-out-resets' }, async ({ page, step, analytics }) => {
   await step('Turn sharing on', async () => {
     await openPortal(page, seed());
     await turnOnFromPrompt(page, analytics);
   });
 
   let before = 0;
-  await step('Sign out from You › Account: nothing is sent and no PostHog key is left', async () => {
+  await step('Sign out from You › Account: nothing is sent and the accepted choice stays on the browser', async () => {
     before = analytics.requestCount();
     await openYou(page, 'account');
     await youRow(page, 'Sign out').click();
     await expect(page).toHaveURL(/\/sign-in\?reason=signed_out$/);
     await page.waitForTimeout(1_000);
     expect(analytics.requestCount()).toBe(before);
-    expect(await posthogKeys(page)).toEqual([]);
+    expect((await posthogKeys(page)).some((key) => key.startsWith('__ph_opt_in_out_'))).toBe(true);
   });
 
-  await step('Sign in again: the notice asks again, and nothing is sent until it is answered', async () => {
+  await step('Sign in again: the notice does not ask, and the portal is counted as opened', async () => {
     await page.getByLabel('Email').fill('nour@office.ps');
     await page.getByLabel('Password', { exact: true }).fill('qa-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('region', { name: PROMPT })).toBeVisible();
-    await page.waitForTimeout(2_000);
-    expect(analytics.requestCount()).toBe(before);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('region', { name: PROMPT })).toHaveCount(0);
+    await expect.poll(() => analytics.requestCount()).toBeGreaterThan(before);
   });
 });
 

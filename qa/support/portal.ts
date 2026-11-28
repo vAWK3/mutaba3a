@@ -196,6 +196,8 @@ export async function openSignedInPortal(
       return route.fulfill(json(hostedProfile(created), 201));
     }
     if (method === 'GET' && pathname === '/v1/summaries/organization') return route.fulfill(json({ asOf: '2026-10-15', currencies: [] }));
+    // MUT-774: the clients list's Balance column; an empty list of balances, not a page of items.
+    if (method === 'GET' && pathname === '/v1/customer-balances') return route.fulfill(json({ asOf: '2026-10-15', balances: [] }));
     if (method === 'GET' && pathname === '/v1/customers') {
       return route.fulfill(json({ items: Array.from({ length: clients }, (_, i) => customer(i)), nextCursor: null }));
     }
@@ -228,6 +230,8 @@ export async function openSignedInPortal(
   return stub;
 }
 
+const CLOSED_DOORS = { signup: false, recovery: false, malafatSignIn: false, signInCode: false, starterPlan: false, openSignup: false };
+
 export interface SignedOutServer {
   /** Every /v1 request that reached the "server", as "METHOD /path". */
   requests: string[];
@@ -242,6 +246,12 @@ export async function signedOutServer(page: Page, language: 'en' | 'ar' | null =
   const server: SignedOutServer = { requests: [] };
   await page.context().route('**/v1/**', async (route) => {
     const request = route.request();
+    // MUT-368 D1 / MUT-737: the public doors check (You › Account, the sign-in page) is answered like the real server, which never
+    // answers it 401; a 401 reads as an ended session and bounces to sign-in. It carries no record, so it is not counted.
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/v1/self-service') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(CLOSED_DOORS) });
+      return;
+    }
     server.requests.push(`${request.method()} ${new URL(request.url()).pathname}`);
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });

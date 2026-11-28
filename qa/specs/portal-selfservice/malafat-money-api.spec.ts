@@ -683,7 +683,7 @@ test('Malafat reads a month\'s billed, received and credited, and they add up to
   });
 
   await step('This month: opening ₪600, billed ₪2,680, credited ₪1,050, payments ₪720, reversals ₪300 (the bounce and the corrected original), received ₪420, change ₪1,210, closing ₪1,810', async () => {
-    expect(month).toEqual({ currency: 'ILS', openingBalance: '600.00', billed: '2680.00', credited: '1050.00', received: '420.00', payments: '720.00', reversals: '300.00', change: '1210.00', closingBalance: '1810.00' });
+    expect(month).toEqual({ currency: 'ILS', openingBalance: '600.00', billed: '2680.00', credited: '1050.00', received: '420.00', payments: '720.00', reversals: '300.00', refunds: '0.00', change: '1210.00', closingBalance: '1810.00' });
   });
 
   await step('Last month: billed ₪1,000, received ₪400, credited ₪0, opening ₪0, closing ₪600', async () => {

@@ -34,12 +34,13 @@ export function useReceiptFiles(profileId: string, { onLanded }: { onLanded?: (c
     void navigate({ to: `/p/${profileId}/expenses`, search: { newExpense: '1' } } as never);
   };
 
-  const onFiles = async (files: File[]) => {
+  // `giftTaken`: Continue was just recorded, and the usage this render holds still says the gift is open (the refetch has not landed), so the files go up without asking again.
+  const onFiles = async (files: File[], giftTaken = false) => {
     if (starter.usage && starter.billing && starter.usage.scans.level === 'at_cap') {
       setPlanLimit(limitFromUsage(starter.usage, 'scans', starter.billing));
       return;
     }
-    const gift = giftBeforeTyping(paid.usage, 'scans');
+    const gift = giftTaken ? null : giftBeforeTyping(paid.usage, 'scans');
     if (gift) {
       setHeld(files);
       setPlanLimit(gift);
@@ -76,7 +77,7 @@ export function useReceiptFiles(profileId: string, { onLanded }: { onLanded?: (c
         const again = held;
         setHeld([]);
         setPlanLimit(null);
-        if (again.length > 0) void onFiles(again);
+        if (again.length > 0) void onFiles(again, true);
       },
     });
 
