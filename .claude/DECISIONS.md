@@ -7614,3 +7614,15 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 7. 674 ships one draft guide (`tax-authority`) with no button on any screen, because the registry is a build-time glob and the release-QA flow needs a real file. "Copy deck MUT-673 signed off" is a before-release precondition.
 
 **Consequences**: A new portal guide is its file plus one enum value in the contract (a minor bump, a pinned hash, and the Flutter copy of the contract). A guide placed on the phone only (`surfaces` without `portal`) needs no enum value. The mockup's second footer action (a feature action such as Connect) is not built; MUT-679 adds an optional `action` to the same schema.
+
+## ADR-342: A Guide's Button Sits Only Where the Person Can Do What It Teaches, and a Guide May Open Over a Page Drawer (MUT-679, epic MUT-672; extends ADR-341)
+
+**Status**: Accepted (2026-11-28; the plan was reviewed by the founder, who asked for the build).
+
+**Decision**:
+1. A `GuideButton` is shown only where the guide's action is available: the Tax Authority guide's button is beside Connect (step 5: not connected, ended or ending soon) and in the allocation panel when `automaticOn` is null (Solo and above, not yet connected). Never on a plan without the connection (Starter is offered the upgrade, and a guide about connecting would mislead), and never when the status could not be read.
+2. A guide opens over a page drawer (the issue drawer) the way the two-step prompt does (ADR-274 D10): `?guide=` is a shell key, the page drawer's key stays, closing the guide returns to the invoice as it was.
+3. The guide format gains one optional field, `ifStuck` (`{ar, en, he?}`), for "what to do if it goes wrong" (the MUT-673 standard's fourth part), rendered after the note.
+4. There is no expired-connection banner in the portal; the entry for an ended or ending connection is step 5's own lines, which carry the button.
+
+**Consequences**: Each new guide's story decides its own entry points by the same rule. A guide about a plan-gated action never shows its button to a plan without it. The phone shows the same file with MUT-677.

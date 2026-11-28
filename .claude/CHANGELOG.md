@@ -28,6 +28,18 @@
 
 ---
 
+## 2026-11-28 · MUT-679: the Tax Authority guide, opened from Connect and from the allocation panel (epic MUT-672)
+
+### Added
+- The guide format gains an optional `ifStuck` line (`types.ts`, `guideSchema.ts`), shown by `GuideDrawer` after the note.
+- A "How to connect" `GuideButton` beside Connect on step 5 of the invoicing setup (`TaxAuthorityStep`: not connected, ended, or ending soon; never on a plan without the connection, never when the status fails) and in `ManualAllocationPanel` when `allocation.automaticOn` is null. Label `hosted.invoicing.taxAuthority.guide` (ar + en).
+- `tax-authority.json`: the deck's revised copy (lead, four steps, note, `ifStuck`) and the Tax Authority's page as the source link. The Arabic is not read by a native speaker and the copy is not signed off (MUT-673): before-release.
+- Tests: `GuideButton.router.test.tsx` (the real shell: `?guide=` pushed on the page's search, Back, focus returns), `guides.test.ts` (no rate or currency in a guide, a declared neutral-scene list), the step and panel tests.
+- QA: `portal.guides.guide-open-read-close` repointed at the button (Arabic, Escape and focus, English, Done) and `portal.guides.guide-over-issue-drawer`.
+
+### Files
+`src/content/guides/*`, `src/hosted/components/{GuideDrawer,ManualAllocationPanel}.tsx`, `src/hosted/pages/invoicing/InvoicingSteps.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{ar,en}.json`, `DESIGN.md`, `qa/features/portal/guides.yaml`, `qa/specs/portal/guides.spec.ts`.
+
 ## 2026-11-28 · MUT-674: the portal guide viewer and its one content format (epic MUT-672)
 
 ### Added
