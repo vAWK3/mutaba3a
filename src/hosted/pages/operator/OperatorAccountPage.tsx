@@ -6,7 +6,7 @@ import { Button } from '../../../components/ui/Button';
 import { Switch } from '../../../components/ui/Switch';
 import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
-import { api, ApiError, apiErrorReason, type IssueSetupLinkResponse, type OperatorAccount } from '../../api/client';
+import { api, ApiError, apiErrorReason, type IssueSetupLinkResponse, type OperatorAccount, type SignupReview } from '../../api/client';
 import { CopyField } from '../../components/CopyField';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
@@ -20,6 +20,8 @@ import { ME_KEY, useMe } from '../../session/me';
 import { AccountStatusBadge } from './AccountStatusBadge';
 import { OperatorBillingSection } from './OperatorBillingSection';
 import { OperatorPlanHistory } from './OperatorPlanHistory';
+import { ChipBadge } from './OperatorSignupsPage';
+import { reviewChips } from '../../data/signupReviews';
 import { OperatorFeaturesSection } from './OperatorFeaturesSection';
 import { OperatorUsageSection } from './OperatorUsageSection';
 
@@ -74,6 +76,9 @@ function AccountDetail({ account, stepUpUntil, grantOpen, onGrantOpen }: { accou
         </h2>
         <span className="hp-operator-chips">
           <AccountStatusBadge status={account.status} closing={account.closing} />
+          {/* MUT-737 (AC3): the sign-up's domain class, a risk signal only (never a gate). */}
+          {account.signupDomain?.domainClass &&
+            reviewChips({ classification: account.signupDomain.domainClass as SignupReview['classification'], reasons: account.signupDomain.reasons }).map((chip, i) => <ChipBadge key={i} chip={chip} />)}
           {account.operator && (
             <Badge variant="accent" size="sm">
               {t('hosted.operator.accounts.operatorBadge')}

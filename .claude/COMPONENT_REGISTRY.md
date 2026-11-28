@@ -2683,3 +2683,10 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 |---|---|---|
 | `src/hosted/data/usePlanUsage.ts` | `usePlanUsage`, `giftBeforeTyping`, `useAcceptGift` | Issue drawer, `useReceiptFiles` |
 | `src/hosted/components/PlanLimitNotice.tsx` | `GiftNotice`; `PlanLimitNotice` `onContinue` / `continuing` (the gift), the `gift-used` still on a paid hard cap | Issue drawer, receipts gallery, Home drop zone |
+
+## MUT-737 — open sign-up in the operator console (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/pages/operator/SignupHistory.tsx` | `SignupHistory` | Accounts' Signups filter, `/operator/signups` with open sign-up |
+| `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |

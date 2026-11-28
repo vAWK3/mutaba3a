@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-737 (UI): open sign-up in the operator console, the first-run events, the privacy drafts
+
+### Added
+- `SignupHistory` (wireframe mut-737 A): with `openSignup`, Accounts has an All / Signups filter (`?view=signups`) showing every reviewed sign-up read-only (address, day, domain chips, outcome); the Signups tab is gone; `/operator/signups` shows the same history. API client `operatorSignupHistory` (`state=decided`).
+- The operator account page shows the sign-up's domain class chip (`signupDomain`).
+- `SoloTrialStep` sends `onboarding_plan_shown` and `onboarding_plan_chosen { choice }`.
+- i18n `hosted.operator.history.*` (ar + en).
+
+### Changed
+- `docs/analytics/events.json` 2.14.0 (one bump for the lane's stack: MUT-705/733/734/737), sha256 02120d99df27fd9aef24661a3fdc277528d1b0a32be22cb372c792fe8b831aff, pinned in `analytics-taxonomy.test.ts`. The Flutter copy follows (phone lane).
+- `docs/legal/drafts/privacy-policy-2026-11-25.{ar,en}.json`: no sign-up review or its mails (AC7).
+- `ChipBadge` is exported from `OperatorSignupsPage.tsx` for the history and the account page.
+
+### Technical
+- Tests: `pages/operator/__tests__/OperatorSignupHistory.test.tsx`, an onboarding analytics case in `session/__tests__/AuthGate.soloTrial.test.tsx`, the 2.14.0 shape test in `analytics-taxonomy.test.ts`.
+
 ## [Unreleased] - 2026-11-27 — MUT-733 (UI): paid plans' monthly limits, the gift and the hard cap
 
 ### Added

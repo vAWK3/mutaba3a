@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage, useT } from '../../../lib/i18n/core';
 import { api } from '../../api/client';
+import { trackPortal } from '../../analytics/portalAnalytics';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { BillingAddressFields } from '../../components/BillingPlanPicker';
 import { addressOf, draftOf, EMPTY_ADDRESS, monthlyPriceOf, savedAddressOf, type AddressDraft } from '../../data/billingPlans';
@@ -39,6 +40,8 @@ export function SoloTrialStep() {
     if (recorded.current) return;
     recorded.current = true;
     void api.soloTrialOffered().catch(() => undefined);
+    // MUT-737 (AC6): the first-run plan step was shown (once: the server records it as offered).
+    void trackPortal('onboarding_plan_shown', {});
   }, []);
   // The first charge falls on the trial's end; read once when the step shows.
   const [firstCharge] = useState(() => new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
@@ -119,6 +122,7 @@ export function SoloTrialStep() {
               <Button
                 variant="primary"
                 onClick={() => {
+                  void trackPortal('onboarding_plan_chosen', { choice: 'solo' });
                   // Without a Solo price to buy (plans off on this server), Billing's Subscribe step stays the way in.
                   if (solo) setAsking(true);
                   else {
@@ -129,7 +133,14 @@ export function SoloTrialStep() {
               >
                 {t('hosted.onboarding.trial.start')}
               </Button>
-              <Button variant="secondary" onClick={() => void done()} data-testid="solo-trial-skip">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void trackPortal('onboarding_plan_chosen', { choice: 'starter' });
+                  void done();
+                }}
+                data-testid="solo-trial-skip"
+              >
                 {t('hosted.onboarding.trial.skip')}
               </Button>
             </div>

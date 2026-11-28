@@ -58,6 +58,8 @@ import { useMe, useProfile } from './session/me';
 import { useIsOperator } from './session/features';
 import { OperatorLayout } from './pages/operator/OperatorLayout';
 import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
+import { SignupHistory } from './pages/operator/SignupHistory';
+import { useSelfServiceDoors } from './session/selfServiceDoors';
 import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
 import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
 import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
@@ -529,7 +531,11 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/signups',
-    component: () => <OperatorPage>{(heading) => <OperatorSignupsPage headingRef={heading} />}</OperatorPage>,
+    // MUT-737: with open sign-up there is nothing to review; an old link shows the read-only history.
+    component: function OperatorSignups() {
+      const openSignup = useSelfServiceDoors().openSignup;
+      return <OperatorPage>{(heading) => (openSignup ? <SignupHistory /> : <OperatorSignupsPage headingRef={heading} />)}</OperatorPage>;
+    },
   });
 
   /**
@@ -540,18 +546,19 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/accounts',
-    validateSearch: (search: Record<string, unknown>): { q?: string; pilot?: 1 } => {
+    validateSearch: (search: Record<string, unknown>): { q?: string; pilot?: 1; view?: 'signups' } => {
       const q = typeof search.q === 'string' ? search.q : typeof search.email === 'string' ? search.email : '';
-      // MUT-757: `?pilot=1`, the Pilot filter.
+      // MUT-757: `?pilot=1`, the Pilot filter. MUT-737: `?view=signups`, the sign-up history.
       const pilot = search.pilot === 1 || search.pilot === '1' || search.pilot === true || search.pilot === 'true';
-      return { ...(q.trim() ? { q: q.trim() } : {}), ...(pilot ? { pilot: 1 as const } : {}) };
+      return { ...(q.trim() ? { q: q.trim() } : {}), ...(pilot ? { pilot: 1 as const } : {}), ...(search.view === 'signups' ? { view: 'signups' as const } : {}) };
     },
     component: function OperatorAccounts() {
-      const { q = '', pilot } = operatorAccountsRoute.useSearch();
+      const { q = '', pilot, view } = operatorAccountsRoute.useSearch();
       const navigate = useNavigate();
       const onSearch = useCallback((next: string) => void navigate({ to: '/operator/accounts', search: operatorAccountsSearch(next, pilot === 1), replace: true }), [navigate, pilot]);
       const onPilot = useCallback((next: boolean) => void navigate({ to: '/operator/accounts', search: operatorAccountsSearch(q, next), replace: true }), [navigate, q]);
-      return <OperatorPage>{() => <OperatorAccountsPage q={q} pilot={pilot === 1} onSearch={onSearch} onPilot={onPilot} />}</OperatorPage>;
+      const onView = useCallback((next: 'all' | 'signups') => void navigate({ to: '/operator/accounts', search: next === 'signups' ? { view: 'signups' as const } : {} }), [navigate]);
+      return <OperatorPage>{() => <OperatorAccountsPage q={q} pilot={pilot === 1} onSearch={onSearch} onPilot={onPilot} view={view} onView={onView} />}</OperatorPage>;
     },
   });
 
