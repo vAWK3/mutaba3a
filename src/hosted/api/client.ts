@@ -1165,6 +1165,18 @@ export const api = {
   // MUT-562 (MUT-575, ADR-249): the accountant's client books, with this month's stats; DELETE removes an ended one.
   clientBooks: (signal?: AbortSignal) => request<Schemas['AccountantClientList']>('GET', '/v1/clients', { signal }),
   removeClientBook: (profileId: string) => request<void>('DELETE', `/v1/clients/${encodeURIComponent(profileId)}`),
+  // MUT-783 (MUT-782, ADR-343): VAT periods. The client's read and Done are profile routes; the accountant's period and
+  // review live under /v1/clients (an accountant never writes through a profile). All 404 while the switch is off.
+  currentVatPeriod: (profileId: string, signal?: AbortSignal) =>
+    // The generated type drops `| null` on a nullable component reference (as for `currency` elsewhere); the period is null before the first one.
+    request<{ period: Schemas['VatPeriodView'] | null }>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/vat-periods/current`, { signal }),
+  markVatPeriodDone: (profileId: string, periodKey: string) =>
+    request<Schemas['VatPeriodView']>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/vat-periods/${encodeURIComponent(periodKey)}/done`, { body: {} }),
+  clientVatPeriods: (signal?: AbortSignal) => request<Schemas['ClientVatPeriodsResponse']>('GET', '/v1/clients/vat-periods', { signal }),
+  setClientVatPeriod: (profileId: string, kind: Schemas['VatPeriodKind']) =>
+    request<Schemas['SetVatPeriodKindResponse']>('PUT', `/v1/clients/${encodeURIComponent(profileId)}/vat-period`, { body: { kind } }),
+  reviewVatPeriod: (profileId: string, periodKey: string, body: Schemas['ReviewVatPeriodRequest']) =>
+    request<Schemas['VatPeriodView']>('POST', `/v1/clients/${encodeURIComponent(profileId)}/vat-periods/${encodeURIComponent(periodKey)}/review`, { body }),
   // MUT-768 (accountant channel): the accounts an approved accountant created for customers. No profile header: the
   // routes act on the person. 404 while the feature is off, 403 ACCOUNTANT_NOT_APPROVED until the operator approves.
   accountantCustomers: (signal?: AbortSignal) => request<Schemas['ProvisionedCustomers']>('GET', '/v1/accountant/customers', { query: { limit: 400 }, signal }),

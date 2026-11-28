@@ -1,0 +1,50 @@
+# Motion spec · VAT period
+
+Easing: spring = `--ease-spring` cubic-bezier(.32,.72,0,1); overshoot = `--ease-overshoot` cubic-bezier(.34,1.56,.64,1); out = cubic-bezier(0,0,.2,1). `draw` is stroke-dashoffset with pathLength=1. RTL mirrors every translateX. A part that moves on two curves: split over `translate` and `transform` as DESIGN.md says.
+
+**Reduced motion:** show the end pose (the `*-end.svg`, or `*-reduced-motion-still.png` for reference); the chip swaps with a 150 ms fade.
+
+## 1 · Done (client) — 680 ms
+
+| Part | Property | From | To | Start (ms) | Duration (ms) | Easing | Note |
+|---|---|---|---|---|---|---|---|
+| `trail` | opacity | 1 | 0 | 0 | 200 | out | dotted trail fades as the stack leaves |
+| `stack` | translateX | -38 | 0 | 0 | 350 | spring | receipts slide to the folder mouth (RTL: +38 → 0) |
+| `stack` | translateY | -6 | 0 | 0 | 350 | spring |  |
+| `stack` | translateY | 0 | 26 | 350 | 150 | spring | stack drops into the folder |
+| `stack` | translateX | 0 | 6 | 350 | 150 | spring | …settling square in the pocket (RTL: −6) |
+| `nuqta` | translateX | -38 | 0 | 0 | 350 | spring | rides on the top receipt |
+| `nuqta` | translateY | -6 | 0 | 0 | 350 | spring |  |
+| `nuqta` | translateX | 0 | 8.5 | 350 | 170 | overshoot | hops off onto the lid clasp (RTL: −8.5) |
+| `nuqta` | translateY | 0 | -7.5 | 350 | 170 | overshoot |  |
+| `lid` | translateY | 18 | 0 | 380 | 160 | spring | lid rises from behind the front and closes |
+| `label` | opacity | 1 | 0 | 380 | 100 | out | grey label bar gives way to the check |
+| `check` | opacity | 0 | 1 | 480 | 200 | out | a quiet check settles |
+| `check` | scale | 0.8 | 1 | 480 | 200 | spring | origin: check centre (96,106) |
+| `check` | draw | 1 | 0 | 480 | 200 | spring | stroke-dashoffset as a fraction of path length (≈32) |
+| `chip-old` | opacity | 1 | 0 | 480 | 200 | out | “Waiting” chip |
+| `chip-new` | opacity | 0 | 1 | 480 | 200 | out | “Client sent” chip |
+
+## 2 · Confirm (accountant) — 420 ms
+
+| Part | Property | From | To | Start (ms) | Duration (ms) | Easing | Note |
+|---|---|---|---|---|---|---|---|
+| `chip-old` | opacity | 1 | 0 | 0 | 200 | out | “Client sent” chip (desk row, drawer, client card) |
+| `chip-new` | opacity | 0 | 1 | 0 | 200 | out | “Confirmed” chip |
+| `chip-glyph` | draw | 1 | 0 | 80 | 200 | spring | the check inside state-confirmed draws in |
+| `row` | row-flash | — | — | 0 | 0 | — | existing .row-flash on the desk row; not redrawn |
+| `check` | draw | 1 | 0 | 0 | 240 | spring | client scene period-confirmed: check draws |
+| `nuqta` | translateY | -10 | 0 | 120 | 300 | spring | nuqta settles onto the folder |
+| `nuqta` | opacity | 0 | 1 | 120 | 120 | out |  |
+
+## 3 · More needed — 600 ms
+
+| Part | Property | From | To | Start (ms) | Duration (ms) | Easing | Note |
+|---|---|---|---|---|---|---|---|
+| `chip-old` | opacity | 1 | 0 | 0 | 200 | out | “Client sent” chip |
+| `chip-new` | opacity | 0 | 1 | 0 | 200 | out | “More needed” chip (butter) |
+| `slot` | opacity | 0 | 1 | 0 | 180 | out | the empty slot appears |
+| `slot` | scale | 1 | 1.06 | 180 | 210 | spring | one soft pulse, origin slot centre (109,66) |
+| `slot` | scale | 1.06 | 1 | 390 | 210 | spring | …and back; never repeats |
+| `nuqta` | scale | 0 | 1 | 150 | 270 | spring | nuqta waits in the slot, origin its centre |
+

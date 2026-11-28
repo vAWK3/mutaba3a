@@ -8,6 +8,7 @@ import { ClaimedSpotRtlScene } from './ClaimedSpotRtlScene';
 import { ClaimedSpotScene } from './ClaimedSpotScene';
 import { ClientBooksEmptyScene } from './ClientBooksEmptyScene';
 import { CodeLockedScene } from './CodeLockedScene';
+import { DeskAllClearScene } from './DeskAllClearScene';
 import { DestructiveConfirmationScene } from './DestructiveConfirmationScene';
 import { EmptyStateScene } from './EmptyStateScene';
 import { GetstartedDoneRtlScene } from './GetstartedDoneRtlScene';
@@ -94,7 +95,11 @@ import { MilestoneFirstInvoiceScene } from './MilestoneFirstInvoiceScene';
 import { MilestoneFirstScanRtlScene } from './MilestoneFirstScanRtlScene';
 import { MilestoneFirstScanScene } from './MilestoneFirstScanScene';
 import { MilestonePersonalScene } from './MilestonePersonalScene';
+import { MoreNeededRtlScene } from './MoreNeededRtlScene';
+import { MoreNeededScene } from './MoreNeededScene';
 import { OnboardingScene } from './OnboardingScene';
+import { PeriodConfirmedScene } from './PeriodConfirmedScene';
+import { PeriodUnsetScene } from './PeriodUnsetScene';
 import { PilotEndedScene } from './PilotEndedScene';
 import { PilotWelcome1RtlScene } from './PilotWelcome1RtlScene';
 import { PilotWelcome1Scene } from './PilotWelcome1Scene';
@@ -103,6 +108,8 @@ import { PilotWelcome2Scene } from './PilotWelcome2Scene';
 import { PilotWelcome3RtlScene } from './PilotWelcome3RtlScene';
 import { PilotWelcome3Scene } from './PilotWelcome3Scene';
 import { PlanUpgradedScene } from './PlanUpgradedScene';
+import { ReceiptsSentRtlScene } from './ReceiptsSentRtlScene';
+import { ReceiptsSentScene } from './ReceiptsSentScene';
 import { ShareEndedScene } from './ShareEndedScene';
 import { SharedBooksScene } from './SharedBooksScene';
 
@@ -116,6 +123,7 @@ export const SCENE_ART = {
   'claimed-spot': ClaimedSpotScene,
   'client-books-empty': ClientBooksEmptyScene,
   'code-locked': CodeLockedScene,
+  'desk-all-clear': DeskAllClearScene,
   'destructive-confirmation': DestructiveConfirmationScene,
   'empty-state': EmptyStateScene,
   'getstarted-done-rtl': GetstartedDoneRtlScene,
@@ -202,7 +210,11 @@ export const SCENE_ART = {
   'milestone-first-scan-rtl': MilestoneFirstScanRtlScene,
   'milestone-first-scan': MilestoneFirstScanScene,
   'milestone-personal': MilestonePersonalScene,
+  'more-needed-rtl': MoreNeededRtlScene,
+  'more-needed': MoreNeededScene,
   onboarding: OnboardingScene,
+  'period-confirmed': PeriodConfirmedScene,
+  'period-unset': PeriodUnsetScene,
   'pilot-ended': PilotEndedScene,
   'pilot-welcome-1-rtl': PilotWelcome1RtlScene,
   'pilot-welcome-1': PilotWelcome1Scene,
@@ -211,6 +223,8 @@ export const SCENE_ART = {
   'pilot-welcome-3-rtl': PilotWelcome3RtlScene,
   'pilot-welcome-3': PilotWelcome3Scene,
   'plan-upgraded': PlanUpgradedScene,
+  'receipts-sent-rtl': ReceiptsSentRtlScene,
+  'receipts-sent': ReceiptsSentScene,
   'share-ended': ShareEndedScene,
   'shared-books': SharedBooksScene,
 } as const;

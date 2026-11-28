@@ -1,0 +1,52 @@
+app: portal
+area: vat-period
+title: "VAT period reminders, the client's Done and the accountant's confirm (فترة ضريبة القيمة المضافة)"
+tier: secondary
+# MUT-783 (epic MUT-762; MUT-782's routes, ADR-343): the client sees the VAT period that ended and says all receipts
+# are sent; the accountant sees who has, confirms or asks for more with a note, and chooses how often each client
+# files. The server's routes in the in-memory APIs (qa/support/portalApi.ts for home, qa/support/clientBooksApi.ts for
+# the desk). Release-QA runs one role per flow: the cross-role handover is MUT-782's route tests.
+paths:
+  - src/hosted/pages/client-books/VatPeriodDrawer.tsx
+  - src/hosted/pages/client-books/VatBadge.tsx
+  - src/hosted/pages/client-books/vatPeriodRules.ts
+  - src/hosted/pages/home/VatPeriodGroup.tsx
+  - src/hosted/data/vatPeriodQueries.ts
+  - src/hosted/components/VatIcons.tsx
+features:
+  - id: client-done
+    title: A client sees the VAT period that ended on home and says all receipts are sent, once
+    tier: secondary
+    tickets: [MUT-783]
+    steps:
+      - Open home with a VAT period that ended and nothing else waiting
+      - Tap Done
+      - Open home in Arabic at 375 px
+    expect:
+      - The Waiting lane shows "VAT · Sep – Oct" with its filing day and one Done button, and no money
+      - After Done the button is gone and the line says "Waiting for your accountant"; one POST was sent
+      - The Arabic home is right to left, names the months in Arabic and has no horizontal overflow at 375 px
+  - id: desk-confirm
+    title: An accountant sees who is waiting on the desk and confirms a client's period
+    tier: secondary
+    tickets: [MUT-783]
+    steps:
+      - Open the desk with clients in each state
+      - Filter to the clients who sent
+      - Open the client's VAT drawer and confirm
+    expect:
+      - Every client row shows its period, filing day and a state word; the chips count each state
+      - Filtering to "Client sent" leaves only that client
+      - Confirm posts the decision, and the row now reads Confirmed with no further review offered
+  - id: desk-ask-more
+    title: An accountant asks a client for more receipts with a note, and chooses how often the client files
+    tier: secondary
+    tickets: [MUT-783]
+    steps:
+      - Open a client's VAT drawer and choose Ask for more
+      - Write a note and send it
+      - Choose "Monthly" for the client
+    expect:
+      - Ask for more has its own pane with a 200-character note; the footer sends or cancels
+      - The review posts MORE_NEEDED with the note, and the row reads More needed
+      - The period select posts the chosen kind

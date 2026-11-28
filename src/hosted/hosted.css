@@ -2343,3 +2343,22 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 @media (prefers-reduced-motion: reduce) {
   .hp-autofill-scope[data-autofill="category"] #expense-category { animation: hp-autofill-ink 1640ms linear both; }
 }
+
+/* MUT-783: VAT period (Claude Design, 2026-11-28). Logical properties only, so Arabic mirrors itself. */
+.hp-vat-row { display: flex; align-items: center; gap: var(--space-3); padding-block: var(--space-2); }
+.hp-vat-art { display: inline-flex; flex: none; align-items: center; justify-content: center; inline-size: 56px; block-size: 56px; color: var(--accent-text); }
+.hp-vat-text { flex: 1 1 auto; min-inline-size: 0; }
+.hp-vat-line { margin: 0; }
+.hp-vat-badge { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.hp-vat-cell { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-block-size: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.hp-vat-cell:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-xs); }
+.hp-vat-cell-period { font-size: var(--text-label); }
+.hp-vat-unset-chip { padding: 2px var(--space-3); border: 1px dashed var(--border); border-radius: var(--radius-pill); color: var(--muted); font-size: var(--text-label); }
+.hp-vat-chips { align-items: center; }
+.hp-vat-clear { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--text-label); }
+.hp-vat-drawer-period { display: flex; align-items: center; gap: var(--space-3); }
+.hp-vat-drawer-period > div { flex: 1 1 auto; min-inline-size: 0; }
+.hp-vat-unset { display: flex; justify-content: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-vat-row, .hp-vat-badge { transition: opacity 200ms cubic-bezier(0, 0, 0.2, 1); }
+}

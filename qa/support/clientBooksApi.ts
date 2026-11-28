@@ -29,6 +29,25 @@ const thisMonthDay = (day: number) => {
 /** A one-pixel PNG, the receipt's bytes. */
 const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
+/** MUT-783 (MUT-782): a client's VAT state as GET /v1/clients/vat-periods lists it. */
+export interface StubVat {
+  chosenKind: 'MONTHLY' | 'BIMONTHLY' | 'YEARLY' | 'NONE' | null;
+  period: {
+    periodKey: string;
+    kind: 'MONTHLY' | 'BIMONTHLY' | 'YEARLY';
+    year: number;
+    firstMonth: number;
+    lastMonth: number;
+    startDate: string;
+    endDate: string;
+    due: string | null;
+    state: 'OPEN' | 'CLIENT_DONE' | 'CONFIRMED' | 'MORE_NEEDED';
+    note: string | null;
+    announcedAt: string;
+    doneAt: string | null;
+  } | null;
+}
+
 export interface StubClient {
   profileId: string;
   name: string;
@@ -78,6 +97,8 @@ type UnlockAnswer = 'ok' | 'wrong' | 'locked' | 'limit' | 'gone';
 export interface ClientBooksOptions {
   signedIn?: boolean;
   clients?: StubClient[];
+  /** MUT-783: each client's VAT state by profile id, which turns the feature on (absent: vat-periods answers 404). */
+  vat?: Record<string, StubVat>;
   /** The accept-invite page: what accept answers. */
   invite?: InviteAnswer;
   /** The share link: what unlock answers; `expireView` makes the first view read answer 401 (the 8 hours ended). */
@@ -103,6 +124,8 @@ export class ClientBooksApi {
   /** MUT-768: null while the feature is off. A spec changes a state to play "the customer claimed meanwhile". */
   customers: StubCustomer[] | null;
   attemptsLeft = 4;
+  /** MUT-783: the desk's VAT state per client profile; null while the feature is off. */
+  vat: Record<string, StubVat> | null;
   /** expireView: every view read after the first unlock answers 401 (the 8 hours ended) until the PIN is entered again. */
   private viewExpired: boolean;
   /** MUT-565: set by the Checkout stub; /v1/me reports the plan ACTIVE from the next read. */
@@ -118,6 +141,7 @@ export class ClientBooksApi {
     this.revoked = options.revoked ?? false;
     this.viewExpired = options.expireView ?? false;
     this.customers = options.customers ? options.customers.map((c) => ({ ...c })) : null;
+    this.vat = options.vat ? Object.fromEntries(Object.entries(options.vat).map(([id, v]) => [id, { ...v, period: v.period ? { ...v.period } : null }])) : null;
     // A customer's profile is a client book the accountant reads.
     for (const c of this.customers ?? []) if (!this.clients.some((k) => k.profileId === c.profileId)) this.clients.push({ profileId: c.profileId, name: c.name, ownerName: c.displayName, status: 'active', entriesThisMonth: 0, lastActivityAt: null });
   }
@@ -201,6 +225,8 @@ export class ClientBooksApi {
     }
     // MUT-768: the accountant's customers
     if (path.startsWith('/v1/accountant/customers')) return this.customerRoute(method, path, body);
+    // MUT-783: the desk's VAT periods
+    if (path.startsWith('/v1/clients/') && path.includes('vat-period')) return this.vatRoute(method, path, body);
     // The desk
     if (key === 'GET /v1/clients') return json({ items: this.clients.map((c) => ({ ...this.clientRow(c), entriesThisMonth: c.entriesThisMonth, lastActivityAt: c.lastActivityAt })) });
     if (method === 'DELETE' && path.startsWith('/v1/clients/')) {
@@ -213,6 +239,30 @@ export class ClientBooksApi {
     // A share link's visitor
     if (path.startsWith('/v1/share-links/')) return this.visitor(key, body);
     return null;
+  }
+
+  /** MUT-783: list, choose the kind, confirm or ask for more. Off (404) when the spec gave no VAT state. */
+  private vatRoute(method: string, path: string, body: Record<string, unknown> | null) {
+    if (!this.vat) return error(404, 'NOT_FOUND');
+    const vat = this.vat;
+    const kindOf = (v: StubVat | undefined) => v?.chosenKind ?? v?.period?.kind ?? 'NONE';
+    if (method === 'GET' && path === '/v1/clients/vat-periods') {
+      return json({ items: this.clients.filter((c) => c.status === 'active').map((c) => ({ profileId: c.profileId, kind: kindOf(vat[c.profileId]), chosenKind: vat[c.profileId]?.chosenKind ?? null, period: vat[c.profileId]?.period ?? null })) });
+    }
+    const [, , , profileId, resource, periodKey] = path.split('/');
+    const entry = profileId ? vat[profileId] : undefined;
+    if (!profileId || !entry) return error(404, 'NOT_FOUND');
+    if (method === 'PUT' && resource === 'vat-period') {
+      entry.chosenKind = body?.kind as StubVat['chosenKind'];
+      return json({ kind: entry.chosenKind });
+    }
+    if (method === 'POST' && resource === 'vat-periods' && periodKey && entry.period?.periodKey === periodKey) {
+      if (entry.period.state === 'CONFIRMED') return error(409, 'VAT_PERIOD_STATE');
+      const confirmed = body?.decision === 'CONFIRMED';
+      entry.period = { ...entry.period, state: confirmed ? 'CONFIRMED' : 'MORE_NEEDED', note: confirmed ? null : ((body?.note as string | undefined) ?? null) };
+      return json(entry.period);
+    }
+    return error(404, 'NOT_FOUND');
   }
 
   /**

@@ -30807,6 +30807,28 @@ export interface components {
     schemas: {
         /** @enum {string} */
         CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share";
+        VatPeriodView: {
+            /** @example 2026-B5 */
+            periodKey: string;
+            /** @enum {string} */
+            kind: "MONTHLY" | "BIMONTHLY" | "YEARLY";
+            year: number;
+            firstMonth: number;
+            lastMonth: number;
+            /** @example 2026-09-01 */
+            startDate: string;
+            /** @example 2026-10-31 */
+            endDate: string;
+            due: string | null;
+            state: components["schemas"]["VatPeriodState"];
+            note: string | null;
+            /** Format: date-time */
+            announcedAt: string;
+            /** Format: date-time */
+            doneAt: string | null;
+        };
+        /** @enum {string} */
+        VatPeriodState: "OPEN" | "CLIENT_DONE" | "CONFIRMED" | "MORE_NEEDED";
         TermsStatus: {
             version: components["schemas"]["TermsVersion"];
             accepted: boolean;
@@ -31565,37 +31587,15 @@ export interface components {
             email: string;
         };
         CurrentVatPeriodResponse: {
-            period: components["schemas"]["VatPeriodView"];
+            period: components["schemas"]["VatPeriodView"] & unknown;
         };
-        VatPeriodView: {
-            /** @example 2026-B5 */
-            periodKey: string;
-            /** @enum {string} */
-            kind: "MONTHLY" | "BIMONTHLY" | "YEARLY";
-            year: number;
-            firstMonth: number;
-            lastMonth: number;
-            /** @example 2026-09-01 */
-            startDate: string;
-            /** @example 2026-10-31 */
-            endDate: string;
-            due: string | null;
-            state: components["schemas"]["VatPeriodState"];
-            note: string | null;
-            /** Format: date-time */
-            announcedAt: string;
-            /** Format: date-time */
-            doneAt: string | null;
-        } | null;
-        /** @enum {string} */
-        VatPeriodState: "OPEN" | "CLIENT_DONE" | "CONFIRMED" | "MORE_NEEDED";
         ClientVatPeriodsResponse: {
             items: {
                 /** Format: uuid */
                 profileId: string;
                 kind: components["schemas"]["VatPeriodKind"];
                 chosenKind: components["schemas"]["VatPeriodKind"] & unknown;
-                period: components["schemas"]["VatPeriodView"];
+                period: components["schemas"]["VatPeriodView"] & unknown;
             }[];
         };
         /** @enum {string} */

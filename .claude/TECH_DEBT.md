@@ -18,6 +18,10 @@
 
 ## Open Debt
 
+### TD-377: The VAT period motions are not built (MUT-783, 2026-11-28)
+
+Claude Design delivered three motions (Done 680 ms, Confirm 420 ms, More needed 600 ms; `docs/design/vat-period/SPEC.md`). The portal swaps the state chip and the scene without the choreography (the end poses, the chip fades), which is also what reduced motion shows. Build them in CSS from the spec, with its numbers pinned in a test, as MUT-770's motion was.
+
 ### TD-376: The VAT period sweep ignores the Accountant plan lock (MUT-782, 2026-11-28)
 
 The routes honour ADR-251 (a client past the free books of a lapsed accountant is 402, and left off the desk list), but `vatPeriods.sweepTargets` still mails that client's owners and counts it in the lapsed accountant's digest. Dark while `VAT_PERIOD_REMINDERS` and `ACCOUNTANT_PLAN` are off (the plan is off until MUT-747). Before the plan goes on, give the sweep the same rule (`readableClientIds` per accountant) or drop locked grants from `accountants`.

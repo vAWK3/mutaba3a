@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<path id="tab" d="M36 58V48a5 5 0 0 1 5-5h15l9 15z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect id="back" x="34" y="56" width="92" height="66" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect id="lid" x="34" y="70" width="92" height="52" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="check" d="M66 96l9 9 19-19" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="nuqta" cx="112" cy="47.5" r="7" fill="#E89960"/>
+</svg>

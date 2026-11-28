@@ -457,8 +457,26 @@ interface ProfileState {
   version: number;
 }
 
+/** MUT-783: a client's VAT period as GET /v1/profiles/{id}/vat-periods/current answers it. */
+export interface StubVatPeriod {
+  periodKey: string;
+  kind: 'MONTHLY' | 'BIMONTHLY' | 'YEARLY';
+  year: number;
+  firstMonth: number;
+  lastMonth: number;
+  startDate: string;
+  endDate: string;
+  due: string | null;
+  state: 'OPEN' | 'CLIENT_DONE' | 'CONFIRMED' | 'MORE_NEEDED';
+  note: string | null;
+  announcedAt: string;
+  doneAt: string | null;
+}
+
 export interface FakeApiSeed {
   profiles: StubProfile[];
+  /** MUT-783 (MUT-782): the owner's VAT period on home, which turns the feature on. Absent: every vat-periods call answers 404, as with VAT_PERIOD_REMINDERS off. */
+  vatPeriod?: StubVatPeriod;
   /** How many customer(i) clients (Client 1, Client 2, …). */
   clients?: number;
   /** MUT-661: every seeded client already has this documents preference (none: the ask-once question is asked). */
@@ -969,7 +987,11 @@ export class FakeApi {
   private readonly due: { items: DueSeed[]; marked: DueSeed[] };
   private readonly invoiceSplit: FakeApiSeed['invoiceSplit'] | null;
 
+  /** MUT-783: the owner's VAT period; "Done" moves it to CLIENT_DONE. */
+  vatPeriod: StubVatPeriod | null;
+
   constructor(seed: FakeApiSeed) {
+    this.vatPeriod = seed.vatPeriod ? { ...seed.vatPeriod } : null;
     this.reports = { ...(seed.reports ?? {}) };
     this.verdicts = { ...(seed.verdicts ?? {}) };
     this.signedIn = seed.signedIn ?? true;
@@ -1448,6 +1470,15 @@ export class FakeApi {
       }
     }
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
+    // MUT-783: the owner's VAT period and Done.
+    if (resource === 'profiles' && sub === 'vat-periods') {
+      if (!this.vatPeriod) return notFound();
+      if (method === 'GET' && subId === 'current') return json({ period: this.vatPeriod });
+      if (method === 'POST' && action === 'done' && subId === this.vatPeriod.periodKey) {
+        this.vatPeriod = { ...this.vatPeriod, state: 'CLIENT_DONE', doneAt: new Date().toISOString() };
+        return json(this.vatPeriod);
+      }
+    }
     // MUT-333: Close my account and Keep my account; while closing, nothing else answers (the server's D3).
     if (resource === 'me' && id === 'closure' && method === 'DELETE') {
       this.closure = null;

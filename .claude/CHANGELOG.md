@@ -43,6 +43,19 @@
 
 ### Files
 `server/prisma/{schema.prisma,migrations/20261128150000_mut780_push_devices}`, `server/src/push/*`, `server/src/routes/{push-devices,accountant-sweep,device-sessions}.ts`, `server/src/accountants/unclaimed-sweep.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/{app,index,config,schemas}.ts`, `server/openapi/openapi.yaml`, tests under `server/src/push/__tests__`, `server/src/__tests__/routes-push-devices.test.ts`, `server/src/repositories/__tests__/store-*-push-devices*`.
+## 2026-11-28 · MUT-783: VAT period on the accountant desk and the client's home (portal)
+
+### Added
+- **Desk:** a VAT column (period, filing day, state chip with its glyph) opening a drawer on `?vat=<profileId>`: Confirm, Ask for more (own pane, 200-character note) and how often the client files; filter chips with a count per state; "All confirmed" with its scene.
+- **Home:** one group in the Waiting lane: "VAT · Sep – Oct", the filing day and one Done (once), then waiting, confirmed (a month) or more needed with the accountant's note. Never read on this device; nothing while the server's switch is off.
+- **Art:** Claude Design's five scenes (generated into `src/components/illustrations/generated/`) and the icon set (`VatIcons.tsx`, the pointing ones mirrored for Arabic); copy in Arabic and English (`hosted.vat.*`).
+- **Release-QA:** `qa/features/portal/vat-period.yaml` and `qa/specs/portal/vat-period.spec.ts` (client-done, desk-confirm, desk-ask-more) over the in-memory APIs.
+
+### Technical
+- `VatPeriodView` is registered as its own OpenAPI component (a nullable use had made the generated type nullable); portal types regenerated.
+- Files: `src/hosted/{pages/client-books,pages/home,components/VatIcons.tsx,data/vatPeriodQueries.ts,api/client.ts,i18n,hosted.css}`, `server/src/app.ts`, `qa/`, `DESIGN.md`, `docs/design/vat-period/`.
+- Not built: the Done, Confirm and More needed motions (TD-377). The phone is MUT-784.
+
 ## 2026-11-28 · MUT-782: VAT period per client, period-end reminders, "all receipts sent" (server, dark)
 
 ### Added

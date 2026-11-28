@@ -88,6 +88,14 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## VAT period in the portal (MUT-783, 2026-11-28)
+
+- **Rules** (`client-books/__tests__/vatPeriodRules.test.ts`): period words (Levantine months in Arabic, the year for a yearly period), the filing day, when home shows a period (a confirmed one for a month), who may say Done and who may review, the filter counts.
+- **Home** (`pages/__tests__/HomeVatPeriod.test.tsx`): the open period with its day and Done inside the Waiting lane; Done once (one POST, the button gone); yearly names no day; confirmed shows quietly then goes after a month; more needed shows the note and Done again; a failed Done keeps the button; no period, switch off (404) and not-an-owner (403) draw nothing; Arabic; no money.
+- **Desk** (`client-books/__tests__/DeskVatPeriod.test.tsx`): the column with period, day and state word; "VAT period" when none and nothing for an ended client; chip counts and filtering; All confirmed; no column while the switch is off; Arabic; the drawer opens on `?vat=`; Confirm posts and the row moves; Ask for more has its own pane and note (200) and Cancel sends nothing; a confirmed period offers no review; the period select posts the kind and a failed save shows a banner.
+- **Release-QA:** `portal.vat-period.client-done`, `.desk-confirm`, `.desk-ask-more` (recorded).
+- Not covered: the motions (TD-377), the phone (MUT-784).
+
 ## VAT period reminders (MUT-782, 2026-11-28)
 
 - **Pack** (`jurisdictions/il/__tests__/vat-periods.test.ts`): defaults by business type; the latest ended period across month, year and leap edges for each kind; keys round-trip and malformed keys are refused; the filing day (none for yearly).

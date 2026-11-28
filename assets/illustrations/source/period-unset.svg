@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+<rect id="page" x="38" y="42" width="84" height="84" rx="12" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="header" d="M38 64h84" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="binding" d="M60 34v16M100 34v16" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="days"><circle cx="56" cy="82" r="3" fill="#795DBA"/><circle cx="72" cy="82" r="3" fill="#795DBA"/><circle cx="88" cy="82" r="3" fill="#795DBA"/><circle cx="104" cy="82" r="3" fill="#795DBA"/><circle cx="56" cy="98" r="3" fill="#795DBA"/><circle cx="72" cy="98" r="3" fill="#795DBA"/><circle cx="104" cy="98" r="3" fill="#795DBA"/><circle cx="56" cy="114" r="3" fill="#795DBA"/><circle cx="72" cy="114" r="3" fill="#795DBA"/><circle cx="88" cy="114" r="3" fill="#795DBA"/><circle cx="104" cy="114" r="3" fill="#795DBA"/></g>
+<circle id="choice" cx="88" cy="98" r="11" fill="none" stroke="#795DBA" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round"/>
+<circle id="nuqta" cx="88" cy="98" r="6" fill="#E89960"/>
+</svg>

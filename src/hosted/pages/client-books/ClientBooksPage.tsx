@@ -22,6 +22,11 @@ import { AddCustomerDrawer } from './AddCustomerDrawer';
 import { CustomerDrawer } from './CustomerDrawer';
 import { DeskActivating } from './DeskActivating';
 import { DeskBadge } from './DeskBadge';
+import { useClientVatPeriods } from '../../data/vatPeriodQueries';
+import { Scene as VatScene } from '../../components/Scene';
+import { VatPeriodDrawer } from './VatPeriodDrawer';
+import { VatBadge } from './VatBadge';
+import { allVatConfirmed, matchesVatFilter, vatDueWords, vatFilterCounts, vatPeriodWords, VAT_FILTERS, type ClientVat, type VatFilter } from './vatPeriodRules';
 import { buildDeskRows, filterCounts, matchesDeskFilter, matchesDeskRow, nextActionOf, type DeskFilter, type DeskRow } from './deskRules';
 import { addMonths, dayLabel, monthOfDate, periodLabel } from './clientBooksRules';
 
@@ -49,6 +54,7 @@ export function ClientBooksPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<DeskFilter>('all');
+  const [vatFilter, setVatFilter] = useState<VatFilter>('all');
   const summary = clientBooksOf(useMe());
   const [subscribing, setSubscribing] = useState(false);
 
@@ -66,6 +72,9 @@ export function ClientBooksPage() {
   const customersQuery = useAccountantCustomers();
   const customers = customersQuery.data;
   const approved = customers?.approved === true;
+  // MUT-783: each client's VAT period; null while the switch is off, and then the desk has no VAT column.
+  const vatItems = useClientVatPeriods().data?.items;
+  const vatBy = useMemo(() => (vatItems ? new Map(vatItems.map((item) => [item.profileId, item])) : null), [vatItems]);
 
   const activatingKey = [...activating].sort().join(',');
   const rows = useMemo(
@@ -75,6 +84,7 @@ export function ClientBooksPage() {
   const goTo = (next: DeskSearch, replace = false) => void navigate({ to: '/client-books', search: next, replace });
   const closeDrawers = () => goTo({}, true);
   const customerRow = search.customer ? rows.find((row) => row.customer?.userId === search.customer) : undefined;
+  const vatRow = search.vat ? rows.find((row) => row.client?.profileId === search.vat) : undefined;
   const addButton = approved ? (
     <Button type="button" onClick={() => goTo({ newCustomer: true })}>
       {t('hosted.desk.add')}
@@ -110,6 +120,7 @@ export function ClientBooksPage() {
         }}
       />
       {approved && rows.length > 0 && <DeskChips rows={rows} filter={filter} onFilter={setFilter} />}
+      {vatItems && vatItems.some((item) => item.period) && <VatChips items={vatItems} filter={vatFilter} onFilter={setVatFilter} />}
       <QueryView
         queries={[books]}
         data={books.data ? rows : undefined}
@@ -135,12 +146,16 @@ export function ClientBooksPage() {
             items={items}
             query={query}
             filter={approved ? filter : 'all'}
+            vatBy={vatBy}
+            vatFilter={vatFilter}
+            onVat={(row) => goTo({ vat: row.client!.profileId })}
             onSubscribe={() => setSubscribing(true)}
             onOpen={(row, pane) => goTo({ customer: row.customer!.userId, ...(pane ? { pane } : {}) })}
           />
         )}
       </QueryView>
       {search.newCustomer && approved && <AddCustomerDrawer onClose={closeDrawers} />}
+      {vatRow?.client && <VatPeriodDrawer profileId={vatRow.client.profileId} name={vatRow.name} item={vatBy?.get(vatRow.client.profileId)} onClose={closeDrawers} />}
       {customerRow?.customer && <CustomerDrawer key={customerRow.key} row={customerRow} pane={search.pane} onClose={closeDrawers} onPane={(pane) => goTo({ customer: search.customer!, ...(pane ? { pane } : {}) }, true)} />}
     </div>
   );
@@ -161,19 +176,46 @@ function DeskChips({ rows, filter, onFilter }: { rows: DeskRow[]; filter: DeskFi
   );
 }
 
+/** MUT-783: the VAT state filter, one chip per state with its count (the layout's legend row). All confirmed shows its scene. */
+function VatChips({ items, filter, onFilter }: { items: readonly ClientVat[]; filter: VatFilter; onFilter: (filter: VatFilter) => void }) {
+  const { t } = useLanguage();
+  const counts = vatFilterCounts(items);
+  return (
+    <div className="hp-desk-chips hp-vat-chips" role="group" aria-label={t('hosted.vat.filters.label')}>
+      {VAT_FILTERS.map((key) => (
+        <button key={key} type="button" className="hp-chip" aria-pressed={filter === key} onClick={() => onFilter(key)}>
+          {key === 'all' ? t('hosted.vat.filters.all') : t(`hosted.vat.states.${key}`)} <span className="hp-chip-count">{counts[key]}</span>
+        </button>
+      ))}
+      {allVatConfirmed(items) && (
+        <span className="hp-vat-clear">
+          <VatScene name="desk-all-clear" size={48} />
+          {t('hosted.vat.allConfirmed')}
+        </span>
+      )}
+    </div>
+  );
+}
+
 const needsPlan = (row: AccountantClientWithStats | null) => (row as ClientRowWithPlan | null)?.needsPlan === true;
 
 interface TableProps {
   items: DeskRow[];
   query: string;
   filter: DeskFilter;
+  vatBy: ReadonlyMap<string, ClientVat> | null;
+  vatFilter: VatFilter;
+  onVat: (row: DeskRow) => void;
   onSubscribe: () => void;
   onOpen: (row: DeskRow, pane?: 'card') => void;
 }
 
-function ClientBooksTable({ items, query, filter, onSubscribe, onOpen }: TableProps) {
+function ClientBooksTable({ items, query, filter, vatBy, vatFilter, onVat, onSubscribe, onOpen }: TableProps) {
   const { t, language } = useLanguage();
-  const rows = useMemo(() => items.filter((row) => matchesDeskFilter(row, filter) && matchesDeskRow(row, query)), [items, query, filter]);
+  const rows = useMemo(
+    () => items.filter((row) => matchesDeskFilter(row, filter) && matchesDeskRow(row, query) && (vatFilter === 'all' || matchesVatFilter(row.client ? vatBy?.get(row.client.profileId) : undefined, vatFilter))),
+    [items, query, filter, vatBy, vatFilter],
+  );
   const columns = useMemo<Column<DeskRow>[]>(
     () => [
       {
@@ -194,6 +236,34 @@ function ClientBooksTable({ items, query, filter, onSubscribe, onOpen }: TablePr
           </>
         ),
       },
+      ...(vatBy
+        ? [
+            {
+              key: 'vat',
+              header: t('hosted.vat.col'),
+              cell: (row: DeskRow) => {
+                if (!row.client || row.state === 'ended' || needsPlan(row.client)) return '—';
+                const item = vatBy.get(row.client.profileId);
+                const period = item?.period ?? null;
+                return (
+                  <button type="button" className="hp-vat-cell" onClick={() => onVat(row)} aria-label={t('hosted.vat.openAria', { profile: row.name })}>
+                    {period ? (
+                      <>
+                        <span className="hp-vat-cell-period">
+                          {vatPeriodWords(period, language)}
+                          {vatDueWords(period.due, language) && <span className="hp-muted"> · {vatDueWords(period.due, language)}</span>}
+                        </span>
+                        <VatBadge state={period.state} />
+                      </>
+                    ) : (
+                      <span className="hp-vat-unset-chip">{t('hosted.vat.unset')}</span>
+                    )}
+                  </button>
+                );
+              },
+            } satisfies Column<DeskRow>,
+          ]
+        : []),
       {
         key: 'state',
         header: t('hosted.desk.cols.state'),
@@ -235,7 +305,7 @@ function ClientBooksTable({ items, query, filter, onSubscribe, onOpen }: TablePr
         },
       },
     ],
-    [t, language, onSubscribe, onOpen],
+    [t, language, onSubscribe, onOpen, vatBy, onVat],
   );
   if (rows.length === 0) return <p className="hp-muted">{t('hosted.clientBooks.searchEmpty', { query: query.trim() })}</p>;
   return (

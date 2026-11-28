@@ -144,6 +144,69 @@ components:
         - widget
         - quick_action
         - share
+    VatPeriodView:
+      type: object
+      properties:
+        periodKey:
+          type: string
+          example: 2026-B5
+        kind:
+          type: string
+          enum:
+            - MONTHLY
+            - BIMONTHLY
+            - YEARLY
+        year:
+          type: integer
+        firstMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        lastMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        startDate:
+          type: string
+          example: 2026-09-01
+        endDate:
+          type: string
+          example: 2026-10-31
+        due:
+          type: string
+          nullable: true
+        state:
+          $ref: "#/components/schemas/VatPeriodState"
+        note:
+          type: string
+          nullable: true
+        announcedAt:
+          type: string
+          format: date-time
+        doneAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - periodKey
+        - kind
+        - year
+        - firstMonth
+        - lastMonth
+        - startDate
+        - endDate
+        - due
+        - state
+        - note
+        - announcedAt
+        - doneAt
+    VatPeriodState:
+      type: string
+      enum:
+        - OPEN
+        - CLIENT_DONE
+        - CONFIRMED
+        - MORE_NEEDED
     TermsStatus:
       type: object
       properties:
@@ -2204,73 +2267,11 @@ components:
       type: object
       properties:
         period:
-          $ref: "#/components/schemas/VatPeriodView"
+          allOf:
+            - $ref: "#/components/schemas/VatPeriodView"
+            - nullable: true
       required:
         - period
-    VatPeriodView:
-      type: object
-      nullable: true
-      properties:
-        periodKey:
-          type: string
-          example: 2026-B5
-        kind:
-          type: string
-          enum:
-            - MONTHLY
-            - BIMONTHLY
-            - YEARLY
-        year:
-          type: integer
-        firstMonth:
-          type: integer
-          minimum: 1
-          maximum: 12
-        lastMonth:
-          type: integer
-          minimum: 1
-          maximum: 12
-        startDate:
-          type: string
-          example: 2026-09-01
-        endDate:
-          type: string
-          example: 2026-10-31
-        due:
-          type: string
-          nullable: true
-        state:
-          $ref: "#/components/schemas/VatPeriodState"
-        note:
-          type: string
-          nullable: true
-        announcedAt:
-          type: string
-          format: date-time
-        doneAt:
-          type: string
-          nullable: true
-          format: date-time
-      required:
-        - periodKey
-        - kind
-        - year
-        - firstMonth
-        - lastMonth
-        - startDate
-        - endDate
-        - due
-        - state
-        - note
-        - announcedAt
-        - doneAt
-    VatPeriodState:
-      type: string
-      enum:
-        - OPEN
-        - CLIENT_DONE
-        - CONFIRMED
-        - MORE_NEEDED
     ClientVatPeriodsResponse:
       type: object
       properties:
@@ -2289,7 +2290,9 @@ components:
                   - $ref: "#/components/schemas/VatPeriodKind"
                   - nullable: true
               period:
-                $ref: "#/components/schemas/VatPeriodView"
+                allOf:
+                  - $ref: "#/components/schemas/VatPeriodView"
+                  - nullable: true
             required:
               - profileId
               - kind

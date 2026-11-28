@@ -168,3 +168,11 @@ Every `Button` presses already. Add `press` to any other control that acts (a ro
 ## Copy
 
 Use utility language: orientation, status, action. Arabic mirrors the English and is checked in RTL. Every string goes through an i18n key in `src/lib/i18n/translations/{en,ar}/`. "Malafat" stays in Latin script inside Arabic text.
+
+### VAT period (MUT-783)
+
+- **State chips** use `Badge` with the state's glyph beside the word (`VatBadge`): waiting for client = neutral, client sent = info, confirmed = success, more needed = warning (a notice, never the error colour). The word is the meaning; colour and glyph only help.
+- **Where:** a VAT column on the desk's table (a button that opens the drawer, `?vat=<profileId>`), filter chips with a count per state, and one group in home's Waiting lane. The drawer swaps panes (Ask for more with its note) instead of opening a drawer on a drawer; Confirm and Ask for more are the footer's actions.
+- **Art:** the scenes and icons are Claude Design's (2026-11-28, `docs/design/vat-period/`); the ones that point (`receipts-sent`, `more-needed`, the client-sent and ask-more icons) ship a mirrored drawing for Arabic.
+- **No money, no explainer line:** the group says the period, the filing day (none for a yearly period) and one action.
+
