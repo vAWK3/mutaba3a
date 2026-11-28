@@ -4,7 +4,7 @@ import { hardCapOf } from '../usage/caps.js';
 import { UsageCapReached } from '../usage/cap-reached.js';
 import { usageEvent } from '../usage/event.js';
 import { MemoryUsage } from './memory-usage.js';
-import type { VatPeriodKind } from '../jurisdictions/il/vat-periods.js';
+import type { VatPeriodKind } from '../vat-periods/types.js';
 import { randomUUID } from 'node:crypto';
 import { CLAIM_CODE_MAX_ATTEMPTS } from '../auth/claim-code.js';
 import { KeyedQueue } from './keyed-queue.js';
@@ -1041,7 +1041,7 @@ export class MemoryLedgerStore implements LedgerStore {
           .flatMap((g) => this.vatPerson(g.accountantUserId!) ?? []);
         if (owners.length === 0 || accountants.length === 0) continue;
         const org = this.orgs.get(organizationId)!;
-        out.push({ organizationId, name: org.name, timezone: org.timezone, dealerType: this.issuerMap.get(organizationId)?.dealerType ?? null, chosenKind: this.vatKinds.get(organizationId) ?? null, owners, accountants });
+        out.push({ organizationId, name: org.name, timezone: org.timezone, country: this.issuerMap.get(organizationId)?.country ?? null, dealerType: this.issuerMap.get(organizationId)?.dealerType ?? null, chosenKind: this.vatKinds.get(organizationId) ?? null, owners, accountants });
       }
       return out;
     },
@@ -1084,12 +1084,6 @@ export class MemoryLedgerStore implements LedgerStore {
       this.pushEvents(audit ?? [], at);
       return 'ok';
     },
-    followUpsDue: async ({ at, limit }) =>
-      [...this.vatRecords.values()]
-        .filter((r) => (r.state === 'OPEN' || r.state === 'MORE_NEEDED') && r.followUpDueAt !== null && r.followUpDueAt.getTime() <= at.getTime() && r.followUpSentAt === null)
-        .sort((a, b) => a.followUpDueAt!.getTime() - b.followUpDueAt!.getTime() || a.organizationId.localeCompare(b.organizationId))
-        .slice(0, limit)
-        .map((r) => ({ ...r })),
     markFollowUpSent: async (organizationId, periodKey, at) => {
       const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
       if (r) r.followUpSentAt = at;

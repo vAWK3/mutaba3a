@@ -34,7 +34,7 @@ import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type { DealerType } from '../issuing/types.js';
-import type { VatPeriodKind } from '../jurisdictions/il/vat-periods.js';
+import type { VatPeriodKind } from '../vat-periods/types.js';
 import type {
   VatPeriodRecord,
   VatPeriodRepository,
@@ -903,13 +903,13 @@ export class PrismaLedgerStore implements LedgerStore {
           },
         });
         if (orgs.length === 0) break;
-        const issuers = await this.prisma.issuerDetails.findMany({ where: { organizationId: { in: orgs.map((o) => o.id) } }, select: { organizationId: true, dealerType: true } });
-        const dealerOf = new Map(issuers.map((i) => [i.organizationId, i.dealerType as DealerType]));
+        const issuers = await this.prisma.issuerDetails.findMany({ where: { organizationId: { in: orgs.map((o) => o.id) } }, select: { organizationId: true, dealerType: true, country: true } });
+        const issuerOf = new Map(issuers.map((i) => [i.organizationId, i]));
         for (const o of orgs) {
           cursor = o.id;
           const accountants = o.accountantGrants.flatMap((g) => (g.accountant ? [person(g.accountant)] : []));
           if (o.memberships.length === 0 || accountants.length === 0) continue;
-          out.push({ organizationId: o.id, name: o.name, timezone: o.timezone, dealerType: dealerOf.get(o.id) ?? null, chosenKind: (o.vatPeriodSetting?.kind as VatPeriodKind | undefined) ?? null, owners: o.memberships.map((m) => person(m.user)), accountants });
+          out.push({ organizationId: o.id, name: o.name, timezone: o.timezone, country: issuerOf.get(o.id)?.country ?? null, dealerType: (issuerOf.get(o.id)?.dealerType as DealerType | undefined) ?? null, chosenKind: (o.vatPeriodSetting?.kind as VatPeriodKind | undefined) ?? null, owners: o.memberships.map((m) => person(m.user)), accountants });
           if (out.length >= limit) break;
         }
         if (orgs.length < batch) break;
@@ -958,14 +958,6 @@ export class PrismaLedgerStore implements LedgerStore {
         const row = await tx.vatPeriodRecord.findUnique({ where: { organizationId_periodKey: { organizationId, periodKey } }, select: { state: true } });
         return row ? 'state' : 'not_found';
       }),
-    followUpsDue: async ({ at, limit }) =>
-      (
-        await this.prisma.vatPeriodRecord.findMany({
-          where: { state: { in: ['OPEN', 'MORE_NEEDED'] }, followUpDueAt: { lte: at }, followUpSentAt: null },
-          orderBy: [{ followUpDueAt: 'asc' }, { organizationId: 'asc' }],
-          take: limit,
-        })
-      ).map(toVatPeriodRecord),
     markFollowUpSent: async (organizationId, periodKey, at) => {
       await this.prisma.vatPeriodRecord.updateMany({ where: { organizationId, periodKey }, data: { followUpSentAt: at } });
     },

@@ -25,6 +25,7 @@ export const DEFAULT_PACK_USERS: Readonly<Record<string, string>> = {
   'expenses/compose.ts': 'allocation-number input on an expense: expenses carry no jurisdiction',
   'receipts/extract/merge.ts': 'allocation threshold hint on a scanned receipt',
   'serializers.ts': 'the expense list\'s allocation-number-missing flag',
+  'vat-periods/pack.ts': 'a profile with no issuer details carries no country yet, yet an accountant may still choose its VAT period (MUT-782); the country on its issuer details is read first',
   'routes/business-lookup.ts': 'tax-ID check on a lookup: no issuer in the request',
   'routes/customers.ts': 'tax-ID check on a customer: customers carry no country yet',
   'routes/issuing.ts': 'the setup read before any issuer exists, and the uniform-file route\'s documented media type',

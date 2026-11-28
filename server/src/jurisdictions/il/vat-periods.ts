@@ -1,5 +1,6 @@
 import { addDays, daysInMonth, type IsoDate } from '../../dates.js';
 import type { DealerType } from '../../issuing/types.js';
+import { VAT_PERIOD_KINDS, type FilingPeriodKind, type VatPeriod, type VatPeriodKind } from '../../vat-periods/types.js';
 
 /**
  * MUT-782 (ADR-341): the periods an Israeli client files VAT for, as pure functions of a day. No clock, no store.
@@ -7,19 +8,8 @@ import type { DealerType } from '../../issuing/types.js';
  * written for it never moves when the client's period kind changes later.
  */
 
-export const VAT_PERIOD_KINDS = ['MONTHLY', 'BIMONTHLY', 'YEARLY', 'NONE'] as const;
-export type VatPeriodKind = (typeof VAT_PERIOD_KINDS)[number];
-export type FilingPeriodKind = Exclude<VatPeriodKind, 'NONE'>;
-
-export interface VatPeriod {
-  readonly key: string;
-  readonly kind: FilingPeriodKind;
-  readonly year: number;
-  readonly firstMonth: number;
-  readonly lastMonth: number;
-  readonly startDate: IsoDate;
-  readonly endDate: IsoDate;
-}
+export { VAT_PERIOD_KINDS };
+export type { FilingPeriodKind, VatPeriod, VatPeriodKind };
 
 /** What each business type files, until the accountant says otherwise (Basel, 2026-11-28). */
 const DEFAULT_KIND: Readonly<Record<DealerType, VatPeriodKind>> = {

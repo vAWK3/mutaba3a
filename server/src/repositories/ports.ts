@@ -10,7 +10,7 @@ import type { CreditReasonCode } from '../payments/credit.js';
 import type { ShareLinkPeriod } from '../share-links/period.js';
 import type { ComposedDocument } from '../issuing/compose.js';
 import type { DealerType, IssuedDocType } from '../issuing/types.js';
-import type { VatPeriodKind } from '../jurisdictions/il/vat-periods.js';
+import type { VatPeriodKind } from '../vat-periods/types.js';
 import type { DocumentsDueInput, DocumentsPreference } from '../issuing/documents-due.js';
 import type { PaymentRequestFacts } from '../issuing/payment-request.js';
 import type { UsageDoor, UsageKind, UsageMeter, UsagePlan } from '../usage/kinds.js';
@@ -5642,6 +5642,8 @@ export interface VatSweepTarget {
   organizationId: string;
   name: string;
   timezone: string;
+  /** From the profile's issuer details (the pack that reads its VAT periods); null when it has none. */
+  country: string | null;
   /** From the profile's issuer details; null when it has none. */
   dealerType: DealerType | null;
   /** The accountant's choice; null follows the dealer type. */
@@ -5669,7 +5671,5 @@ export interface VatPeriodRepository {
   markDone(input: { organizationId: string; periodKey: string; userId: string; at: Date; audit?: AuditEventInput[] }): Promise<VatDoneResult>;
   /** The accountant confirms or asks for more from any state but CONFIRMED. MORE_NEEDED sets the follow-up due and clears its sent mark; CONFIRMED clears the due. */
   review(input: { organizationId: string; periodKey: string; userId: string; decision: 'CONFIRMED' | 'MORE_NEEDED'; note: string | null; at: Date; followUpDueAt: Date | null; audit?: AuditEventInput[] }): Promise<VatReviewResult>;
-  /** OPEN or MORE_NEEDED periods whose follow-up is due at `at` and not yet sent, oldest first. */
-  followUpsDue(input: { at: Date; limit: number }): Promise<VatPeriodRecord[]>;
   markFollowUpSent(organizationId: string, periodKey: string, at: Date): Promise<void>;
 }

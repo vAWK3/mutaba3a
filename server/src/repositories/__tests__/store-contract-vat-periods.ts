@@ -128,24 +128,17 @@ export function describeLedgerStoreVatPeriodContract(name: string, makeStore: ()
     });
 
     describe('follow-ups', () => {
-      it('lists OPEN and MORE_NEEDED periods whose follow-up is due and unsent, and stops once sent or done', async () => {
+      it('markFollowUpSent stamps the period; Ask for more re-arms it; Done and Confirm leave nothing due', async () => {
         const store = await makeStore();
-        const open = await client(store);
-        const done = await client(store);
-        const asked = await client(store);
+        const c = await client(store);
         const key = '2026-M10';
-        for (const c of [open, done, asked]) await store.vatPeriods.announce({ organizationId: c.organizationId, periodKey: key, at: at(5), followUpDueAt: at(100) });
-        await store.vatPeriods.markDone({ organizationId: done.organizationId, periodKey: key, userId: done.ownerId, at: at(10) });
-        await store.vatPeriods.review({ organizationId: asked.organizationId, periodKey: key, userId: asked.ownerId, decision: 'MORE_NEEDED', note: null, at: at(11), followUpDueAt: at(120) });
-
-        expect(await store.vatPeriods.followUpsDue({ at: at(99), limit: 50 })).not.toContainEqual(expect.objectContaining({ organizationId: open.organizationId }));
-        const due = (await store.vatPeriods.followUpsDue({ at: at(130), limit: 50 })).map((r) => r.organizationId);
-        expect(due).toContain(open.organizationId);
-        expect(due).toContain(asked.organizationId);
-        expect(due).not.toContain(done.organizationId);
-
-        await store.vatPeriods.markFollowUpSent(open.organizationId, key, at(131));
-        expect((await store.vatPeriods.followUpsDue({ at: at(132), limit: 50 })).map((r) => r.organizationId)).not.toContain(open.organizationId);
+        await store.vatPeriods.announce({ organizationId: c.organizationId, periodKey: key, at: at(5), followUpDueAt: at(100) });
+        await store.vatPeriods.markFollowUpSent(c.organizationId, key, at(101));
+        expect(await store.vatPeriods.recordOf(c.organizationId, key)).toMatchObject({ followUpDueAt: at(100), followUpSentAt: at(101) });
+        await store.vatPeriods.review({ organizationId: c.organizationId, periodKey: key, userId: c.ownerId, decision: 'MORE_NEEDED', note: null, at: at(110), followUpDueAt: at(200) });
+        expect(await store.vatPeriods.recordOf(c.organizationId, key)).toMatchObject({ followUpDueAt: at(200), followUpSentAt: null });
+        await store.vatPeriods.review({ organizationId: c.organizationId, periodKey: key, userId: c.ownerId, decision: 'CONFIRMED', note: null, at: at(120), followUpDueAt: null });
+        expect((await store.vatPeriods.recordOf(c.organizationId, key))?.followUpDueAt).toBeNull();
       });
     });
 
@@ -167,6 +160,7 @@ export function describeLedgerStoreVatPeriodContract(name: string, makeStore: ()
           if (row.organizationId === shared.organizationId) {
             expect(row.chosenKind).toBe('MONTHLY');
             expect(row.dealerType).toBeNull();
+            expect(row.country).toBeNull();
             expect(row.timezone).toBe('Asia/Jerusalem');
             expect(row.owners.map((o) => o.userId)).toEqual([shared.ownerId]);
             expect(row.accountants.map((a) => a.userId)).toEqual([accountantId]);

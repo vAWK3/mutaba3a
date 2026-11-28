@@ -262,7 +262,6 @@ describe('STORE_ACCESS', () => {
       'users.setStatus',
       // MUT-782 (ADR-341): the daily VAT period sweep and its follow-ups, on the unguarded store.
       'vatPeriods.announce',
-      'vatPeriods.followUpsDue',
       'vatPeriods.markFollowUpSent',
       'vatPeriods.sweepTargets',
     ]);

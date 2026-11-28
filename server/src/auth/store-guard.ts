@@ -565,7 +565,6 @@ export const STORE_ACCESS: StoreAccess = {
     latestOf: 'sessionOnly',
     markDone: 'sessionOnly',
     review: 'sessionOnly',
-    followUpsDue: 'operator',
     markFollowUpSent: 'operator',
   },
   /**
