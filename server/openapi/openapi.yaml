@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.215.0-mut780
+  version: 1.216.0-mut780
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -36234,7 +36234,7 @@ paths:
       tags:
         - Push
       summary: Register this phone’s push token (MUT-780)
-      description: Stores the FCM token for the signed-in session, replacing the session’s earlier token and any other row holding the same token (a phone handed to another person). Idempotent. A session signed out or revoked never receives a push. Additive since 1.215.0-mut780.
+      description: Stores the FCM token for the signed-in session, replacing the session’s earlier token and any other row holding the same token (a phone handed to another person). Idempotent. A session signed out or revoked never receives a push. Additive since 1.216.0-mut780.
       security:
         - session: []
         - deviceSession: []
