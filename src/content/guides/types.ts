@@ -34,5 +34,7 @@ export interface Guide {
   hero: string;
   steps: GuideStep[];
   note?: LocalizedText;
+  /** What to do when it goes wrong: one or two lines, shown after the note. */
+  ifStuck?: LocalizedText;
   source?: GuideSource;
 }

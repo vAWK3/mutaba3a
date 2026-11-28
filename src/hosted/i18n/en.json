@@ -3188,6 +3188,7 @@
         "returnedRefused": "The connection wasn't approved. Try again.",
         "endingSoon": "The connection to the Tax Authority ends on {until}. Connect again now.",
         "reconnect": "Connect again",
+        "guide": "How to connect",
         "upgrade": "Upgrade to {plan}",
         "returnedPlan": "Nothing was connected."
       },

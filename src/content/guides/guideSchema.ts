@@ -14,7 +14,7 @@ export type ParseResult = { ok: true; guide: Guide } | { ok: false; problems: st
 export const GUIDE_ID_SHAPE = /^[a-z0-9-]{1,40}$/;
 
 const SURFACES: readonly GuideSurface[] = ['portal', 'phone', 'web'];
-const GUIDE_KEYS = ['id', 'surfaces', 'title', 'lead', 'hero', 'steps', 'note', 'source'];
+const GUIDE_KEYS = ['id', 'surfaces', 'title', 'lead', 'hero', 'steps', 'note', 'ifStuck', 'source'];
 const STEP_KEYS = ['text', 'scene'];
 const SOURCE_KEYS = ['url', 'label'];
 const TEXT_KEYS = ['ar', 'en', 'he'];
@@ -77,6 +77,7 @@ function problemsOf(raw: unknown, fileId: string): string[] {
   if (!Array.isArray(raw.steps) || raw.steps.length === 0) problems.push('steps: needs at least one step');
   else raw.steps.forEach((step, i) => problems.push(...stepProblems(`steps[${i}]`, step)));
   if (raw.note !== undefined) problems.push(...textProblems('note', raw.note));
+  if (raw.ifStuck !== undefined) problems.push(...textProblems('ifStuck', raw.ifStuck));
   if (raw.source !== undefined) problems.push(...sourceProblems(raw.source));
   return problems;
 }

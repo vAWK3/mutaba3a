@@ -10,7 +10,7 @@ import { Letterhead } from '../Letterhead';
 import { endsSoon, wholeNumber, type PaperModel } from '../setupSteps';
 
 const api = vi.hoisted(() => ({ lookup: vi.fn(), saveIssuer: vi.fn(), saveDefaults: vi.fn(), numbering: vi.fn(), saveLogo: vi.fn(), removeLogo: vi.fn(), taxStatus: vi.fn(), taxConnect: vi.fn(), taxDisconnect: vi.fn() }));
-const drawers = vi.hoisted(() => ({ openBilling: vi.fn(), openTwoFactor: vi.fn() }));
+const drawers = vi.hoisted(() => ({ openBilling: vi.fn(), openTwoFactor: vi.fn(), openGuide: vi.fn() }));
 vi.mock('../../../shell/AccountDrawers', () => ({ useAccountDrawers: () => drawers }));
 vi.mock('../../../api/client', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../api/client')>();
@@ -285,5 +285,61 @@ describe('the Tax Authority step on a plan without the connection (MUT-736)', ()
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
     expect(await screen.findByTestId('tax-authority-connect')).toBeVisible();
     expect(screen.queryByTestId('tax-authority-upgrade')).toBeNull();
+  });
+});
+
+/** MUT-679: the guide's button sits beside Connect, exactly where Connect is offered, and nowhere else on the step. */
+describe('the Tax Authority step opens its guide (MUT-679)', () => {
+  const DAY = 86_400_000;
+  const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
+  const NONE = { state: 'none', connectedAt: null, until: null, environment: null } as const;
+  const ALLOWED = { allowed: true, nextPlan: null } as const;
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('shows "How to connect" when not connected, and it opens the Tax Authority guide', async () => {
+    api.taxStatus.mockResolvedValue({ ...NONE, plan: ALLOWED });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    const button = await screen.findByRole('button', { name: 'How to connect' });
+    await userEvent.setup().click(button);
+    expect(drawers.openGuide).toHaveBeenCalledWith('tax-authority');
+  });
+
+  it('shows it when the connection has ended, beside Connect again', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'expired', connectedAt: inDays(-100), until: inDays(-10), environment: 'sandbox', plan: ALLOWED });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    expect(await screen.findByRole('button', { name: 'How to connect' })).toBeVisible();
+  });
+
+  it('shows it ten days before the end', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'connected', connectedAt: inDays(-80), until: inDays(6), environment: 'sandbox', plan: ALLOWED });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    expect(await screen.findByRole('button', { name: 'How to connect' })).toBeVisible();
+  });
+
+  it('is not there while connected with time left', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'connected', connectedAt: inDays(-10), until: inDays(80), environment: 'sandbox', plan: ALLOWED });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    await screen.findByTestId('tax-authority-connected');
+    expect(screen.queryByRole('button', { name: 'How to connect' })).toBeNull();
+  });
+
+  it('is not offered on a plan without the connection', async () => {
+    api.taxStatus.mockResolvedValue({ ...NONE, plan: { allowed: false, nextPlan: 'solo' } });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    await screen.findByRole('button', { name: 'Upgrade to Solo' });
+    expect(screen.queryByRole('button', { name: 'How to connect' })).toBeNull();
+  });
+
+  it('is not offered when the status fails to load', async () => {
+    api.taxStatus.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'not configured'));
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    await waitFor(() => expect(api.taxStatus).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'How to connect' })).toBeNull();
+  });
+
+  it('is named in Arabic', async () => {
+    api.taxStatus.mockResolvedValue({ ...NONE, plan: ALLOWED });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />, 'ar');
+    expect(await screen.findByRole('button', { name: 'كيف أربط؟' })).toBeVisible();
   });
 });
