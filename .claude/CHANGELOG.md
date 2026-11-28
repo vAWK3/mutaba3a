@@ -40,6 +40,15 @@
 ### Files
 `src/content/guides/*`, `src/hosted/components/{GuideDrawer,ManualAllocationPanel}.tsx`, `src/hosted/pages/invoicing/InvoicingSteps.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{ar,en}.json`, `DESIGN.md`, `qa/features/portal/guides.yaml`, `qa/specs/portal/guides.spec.ts`.
 
+## 2026-11-28 · Operator: Basel's checklist first in before-release.md, and one command for the production secrets
+
+### Added
+- `scripts/prod-env.sh` (`source` it from `mini-crm/`): exports the project, the gcloud account from `deploy.env`, the API's `URL`, and `MUTABA3A_ADMIN_TOKEN`, `STRIPE_SECRET_KEY` and `MUTABA3A_JOB_TOKEN` from Secret Manager, printing ✓/✗ per name, never a value. Why: the operator scripts kept stopping on "not set".
+- `docs/operations/before-release.md` › "Basel's checklist", at the top: what's done (with dates), what's left before the next release, what waits on others, and every secret's name. `make release` still prints only `## server` and `## web`.
+
+### Files
+`scripts/prod-env.sh`, `docs/operations/before-release.md`.
+
 ## 2026-11-28 · MUT-674: the portal guide viewer and its one content format (epic MUT-672)
 
 ### Added

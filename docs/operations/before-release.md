@@ -4,6 +4,75 @@
 before they ask to deploy. One item per line, starting with `- `. Delete an item once it's done, and
 record the date where the item says.
 
+## Basel's checklist
+
+What only Basel can do, in order. Tick a line with its date when it's done. Each line points to the item below
+that has the detail. `make release` doesn't print this section.
+
+### Every shell
+
+From `mini-crm/`: `source scripts/prod-env.sh`. It exports `GCP_PROJECT_ID`, `CLOUDSDK_CORE_ACCOUNT`, `URL`,
+`MUTABA3A_ADMIN_TOKEN`, `STRIPE_SECRET_KEY` and `MUTABA3A_JOB_TOKEN` from Secret Manager (`mtb3a-production`)
+and prints ✓ or ✗ per name, never a value. Then run the scripts from `server/`. The `users` scripts
+(`billing:*`, `signups:*`, `users`) talk to localhost unless you pass `--url "$URL"`.
+
+Any other secret: `gcloud secrets versions access latest --secret=<name> --project=mtb3a-production`.
+The names are `mutaba3a-api-` + `admin-token`, `database-url`, `forwarder-token`, `front-door-token`, `job-token`,
+`oauth-derive-key`, `resend-api-key`, `resend-webhook-secret`, `sentry-dsn`, `session-pepper`, `stripe-secret-key`,
+`stripe-webhook-secret`, `turnstile-secret`, `two-factor-seal-key`. A `gcloud` "permission denied" means sign in
+again: `gcloud auth login barmajiyatltd@gmail.com`.
+
+### Done
+
+- [x] 2026-11-26: the auth-events sink checked (MUT-710).
+- [x] 2026-11-26: `software_house_vat_id` and `software_house_name` in `production.tfvars` (MUT-569).
+- [x] 2026-11-27: the live catalog, `billing:plans -- --apply --live`: nothing to change (Stage 1, step 3).
+- [x] 2026-11-28: `billing:product-tiers`: 4 live products, each with its tier (business, solo, firm, freelancer), 0 subscriptions.
+
+### Before the next release (Stage 1)
+
+- [x] 2026-11-28: **Stripe › Developers › API keys › the API's restricted live key, in one edit.** Write on Products, Prices,
+      Tax Rates, Coupons, Subscription Schedules, Invoices and Invoice items; Write on Subscriptions, Customers (with
+      search), Checkout Sessions and Customer portal kept. (MUT-702 B, 703, 734, 532, 531, 764.)
+- [x] 2026-11-28: Stripe Tax head office: Barmajiyat's UK address (Stage 1, step 2).
+- [x] 2026-11-28: Stripe › Customer Portal: customers can edit their billing address (Stage 1, step 5).
+- [x] 2026-11-28: the plans' offer coupons (MUT-703): `mtb3a_launch_yearly_plans_2026` (50% once, until 2027-02-21),
+      `mtb3a_stay_monthly_plans_50` (50% for 2 months), `mtb3a_comeback_first_month_plans_67` (67% once), on Solo,
+      Business and Firm; the dry run after says "nothing to do". (npm passes flags only after `--`:
+      `npm run billing:plans -- --apply --live`.)
+- [x] 2026-11-28: the Tax Authority guide's copy signed off by Basel (MUT-674).
+- [x] 2026-11-28: the privacy policy's 7-year deletion wording approved by Basel (MUT-644).
+- [x] 2026-11-28: phone 0.2.1+25 (it parses `PLAN_LIMIT`) is the live version (Basel).
+- [ ] Apple Developer › the MTB3A App ID: turn on Push Notifications before the phone build that carries MUT-780.
+
+### Then: release, and one switch stage per release
+
+- [ ] `make release server` and `make release web`, with every switch off.
+- [ ] After that API is live (they read MUT-731's fields), from `server/`: `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6),
+      then `npm run billing:uncovered -- --url "$URL"` and Operator › Usage: who moves to Starter and who must pick a business (step 7).
+- [ ] Stage 1 → 6 in "Switch rollout" at the end of this file, each with its own tfvars lines and checks.
+
+### Waiting on someone else
+
+- [ ] Barmajiyat's Israeli VAT file open, before the first Israeli charge (MUT-749).
+- [ ] The Tax Authority's registration number → `uniform_file_registration_number` (MUT-567, the MUT-569 item).
+- [ ] The signing certificate, three releases (the MUT-641 item).
+- [ ] Malafat's MAL-1539 and MAL-1541, then Stage 6.
+- [ ] MUT-780's push keys: the APNs auth key and the Firebase project files. The exact list comes with MUT-780's merge.
+
+### Later, by date
+
+- [ ] From 2026-12-26 (a month of checked logs): `auth_log_bucket_locked = true`. This can't be undone (MUT-710).
+- [ ] The move's C5: record the IAM policy, the copy output, the downtime and the cost, then revoke the old Stripe,
+      Resend, webhook and Turnstile keys (MUT-487).
+
+### Not confirmed done (tick or keep)
+
+- [ ] The Stripe dashboard steps from older releases: the come-back coupons (MUT-534), the retry window and Stripe's
+      failed-payment email off (MUT-533), the stay coupon (MUT-532), the launch coupon and its end date (MUT-525).
+- [ ] The hand checks: the MCP connectors in Claude.ai and Claude Code (MUT-434/436), the mail preview across clients
+      (MUT-484/468), the attachments-bucket CORS (portal receipt uploads), and a real-iPhone accountant invite (MUT-558).
+
 ## server
 
 - **Switch rollout (Basel, 2026-11-27):** the feature switches go on one stage per release, in the order of the "Switch rollout" section at the end of this file. Before each server release, check which stage is next and whether everything it needs is live. Delete this item when stage 6 is done.
@@ -136,8 +205,6 @@ record the date where the item says.
 
 - **The legal pages rewrite (privacy policy + terms 2026-11-25) is HELD BACK from this release (Basel, 2026-11-25): no terms re-acceptance, no wording approval step.** The live terms stay 2026-10-26 (`CURRENT_TERMS`), the live privacy page is the one from before the rewrite plus one factual addition (the come-back offer is labelled «פרסומת», names the sender and carries an Unsubscribe link that also works with the email app's own button). The rewritten texts sit unpublished, with their remaining `[TODO(...)]` lawyer notes (terms: VAT file / payment provider / consumer VAT / price-change notice, IP assignment to Narabnd; privacy: data outside Israel and a copy in Israel), in `docs/legal/drafts/` (`terms-2026-11-25.{en,ar}.json`, `privacy-policy-2026-11-25.{en,ar}.json`); neither the site nor the server loads them and the web preflight's `[TODO` guard does not scan them. Publishing them is tracked in **the legal publication ticket** (also: the Tax Authority registration number from MUT-567 goes into the terms' Tax Authority section, and the sha256 rows in `server/src/legal.ts` and `scripts/__tests__/legal-terms.test.ts` are recomputed from the published files). Nothing to do for this release; `make release web` still refuses any published legal text that carries a `[TODO`.
 
-- **MUT-644: the privacy policy's deletion section now says each issued invoice and receipt is kept 7 years from its date, the business details until the last goes, and that a former owner who has their copy can ask for earlier deletion** (en + ar, "Last updated November 25, 2026"; Basel's decisions of 2026-11-25). Legal wording is Basel's: approve it before this web release, or revert the sentence in `src/lib/i18n/translations/{en,ar}/landing.json`. The phone's Close my account line still says "after the end of the year of the last one" until the Flutter follow-up.
-
 - **MUT-535 (ADR-259): the privacy policy names the monthly summary; You › Account gets its switch and `/mail-off` its page.** Release after the server's MUT-535 step 1 (the switch reads `GET /v1/me/monthly-summary-mail`; on an older API the row stays hidden). Nothing to set. Check: You › Account shows "Monthly summary email" for a paying or trialling account, and `https://mtb3a.com/privacy` says "Last updated November 21, 2026" (adjust the date in `landing.json` en + ar if the policy ships later). Delete this item and record the date on MUT-535.
 
 - **MUT-532 (ADR-240): Billing's own cancel flow.** Release the server first (its MUT-532 item above, steps 1–3). **After `make release web`:** in the live Stripe Customer Portal settings turn **off** "Cancel subscriptions" (pilot runbook §1.7 step 3a); keep the payment method, invoice history and business details, and still no plan switching or pausing. Doing it before the release would leave nobody able to cancel in between. Check: a portal session from Billing shows no cancel, and Billing › Cancel plan opens the Why? step. Delete this item and record the date on MUT-532.
@@ -145,7 +212,7 @@ record the date where the item says.
 - MUT-402 ships the outlined MTB3A logotype (`src/assets/brand/wordmark.svg`). Attach Thmanyah's written OK for the outlined logotype to MUT-401 (Basel reports they confirmed it on 2026-10-22; brand-v2 decision 4 keeps this a guardrail, not a blocker). Delete this item and record the date on MUT-402.
 - MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. `make release web` now waits for the live document and checks it (`npm run release:oauth-client`); it printed ✓ for web-v0.3.4 on 2026-11-13. Left: in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.
 
-- **MUT-674 (epic MUT-672): the portal guide viewer ships with one draft guide, `tax-authority`, reachable by typing `?guide=tax-authority` and, since MUT-679, from the button beside Connect on the invoicing setup's step 5 and from the allocation panel on the issue screen, so any person with invoicing on can open it.** Its Arabic and English copy comes from the draft in `.claude/designs/guides-and-help/guides-draft.md` and is not signed off. **Before the next `make release server` (the portal ships in the API image), have MUT-673's copy deck sign the Tax Authority guide**, or drop `src/content/guides/tax-authority.json` (and its value in the `guide` enum of `docs/analytics/events.json`) from the release. No operator step otherwise: no server change, no migration.
+- **MUT-679 (epic MUT-672): the Tax Authority guide's copy changed after Basel's 2026-11-28 sign-off (MUT-674).** The signed text was the first draft. MUT-679 revises it: the lead says why you connect, there is an "if it goes wrong" line, and the Tax Authority's own page is linked. The guide now opens from the button beside Connect on the invoicing setup's step 5 and from the allocation panel on the issue screen, so anyone with invoicing on can open it. **Before the next `make release server` (the portal ships in the API image), Basel signs the revised copy** (`.claude/designs/guides-and-help/copy-deck-first-three.md` §1, the Arabic read by a native speaker), or `src/content/guides/tax-authority.json` goes back to the signed first text. No operator step otherwise: no server change, no migration.
 
 ## Switch rollout (Basel, 2026-11-27)
 
@@ -160,10 +227,10 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
 - **Live first:**
   - The API with MUT-731 (1.145.0), MUT-702 Part B (1.146.0) and MUT-750 slice A (1.156.0), released with both switches off. Their migrations: `20261126120000_mut731_starter` and `20261127120000_mut702b_provider`.
   - The web release with the portal's Starter notices, business pick and plan Subscribe step. These are built on main but not in `web-v0.4.0`.
-  - The phone build that parses `PLAN_LIMIT`, live in both stores. Released phones treat an unknown 409 as terminal. The Flutter checkout (0.2.1+25) handles it; confirm that build is live.
+  - The phone build that parses `PLAN_LIMIT`, live in both stores. Released phones treat an unknown 409 as terminal. 0.2.1+25 handles it: **live, confirmed by Basel 2026-11-28.**
   - **MUT-703 (API `1.210.0-mut703`, ADR-340): offers on Solo, Business and Firm.** No migration, no new env. `offers.json` names three new coupons on the plans' products: launch 50% off the first year until 21 Feb 2027, stay 50% for 2 months, come-back 67% off the first month (monthly only). The legacy Freelancer coupons stay as they are. Until the coupons exist the plans simply have no offer (warned), so the API can go out before step 1–2 below, but all of it comes before `plan_checkout = true`.
-    1. The live restricted key adds **Write on Coupons** (it has Read only, ADR-237).
-    2. `STRIPE_SECRET_KEY=<rk_live_…> npm --prefix server run billing:plans` (dry run: it lists the three coupons to create), then `-- --apply --live`, then the dry run again must say "nothing to do". A coupon of another shape already under one of the ids stops the run (exit 2, "give the spec a new id"); nothing is written.
+    1. ~~The live restricted key adds **Write on Coupons**~~ **Done 2026-11-28.**
+    2. ~~`billing:plans -- --apply --live`~~ **Done 2026-11-28:** the three coupons created; the dry run after says "nothing to do". A coupon of another shape already under one of the ids stops the run (exit 2, "give the spec a new id"); nothing is written.
     3. Release the web with the picker's offer lines (MUT-705 + MUT-703's UI half).
     4. Check: `GET /v1/billing` for a never-subscribed account lists `plans[].launch` with the first-year amounts (Solo ₪195 / $60, Business ₪445 / $135, Firm ₪1,245 / $375); a yearly Business Checkout in the sandbox reaches Stripe's page with the launch line; `npm --prefix server run billing:renewal-mail -- --dry-run` counts plan subscriptions.
     5. Before 21 Feb 2027 nothing to do: the coupon stops on its own. To end it early, list it in `RETIRED_COUPON_IDS` (`server/src/scripts/stripe-plans.ts`) and run the script.
@@ -172,7 +239,7 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   1. The live restricted key adds Write on Products, Prices and Tax Rates, and keeps Customers, Checkout Sessions and Customer portal.
   2. Stripe Tax's head office in the live account is Barmajiyat's UK address. Barmajiyat's Israeli VAT file must be open before the first Israeli charge (ADR-286, MUT-749; Backlog).
   3. ~~The catalog: `npm --prefix server run billing:plans -- --apply --live`~~ **Done 2026-11-27, nothing to change.** The run found the Israeli VAT rate, the 3 products and all 12 prices already right.
-  4. `npm --prefix server run billing:product-tiers`.
+  4. ~~`npm --prefix server run billing:product-tiers`~~ **Done 2026-11-28:** 4 live products, each with its tier, 0 subscriptions.
   5. In the Customer Portal settings, let customers edit their billing address.
   6. `npm --prefix server run billing:reconcile`, so every lapsed subscription has `endedReason` and `trialEnd`. A null reason reads as a deliberate cancel, which stays read-only.
   7. A dry look: run `npm run billing:uncovered` and open Operator › Usage to see who moves to Starter and who will be asked to pick a business. Check `monthly_summary_daily_sends` against the Starter people the summary now reaches.
