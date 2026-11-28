@@ -7,7 +7,7 @@ info:
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, CLAIM_CODE_WRONG, CLAIM_CODE_LOCKED, CUSTOMER_CLAIMED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, SIGNUP_REVIEW_RETIRED, GIFT_USED, GIFT_NOT_AVAILABLE, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_CHALLENGE_EXPIRED, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_SETUP_REQUIRED, TWO_FACTOR_USE_PASSWORD, TWO_FACTOR_LINK_UNAVAILABLE, TWO_FACTOR_REQUIRED_FOR_ISSUING, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, ACCOUNTANT_NOT_APPROVED, CLAIM_CODE_WRONG, CLAIM_CODE_LOCKED, CUSTOMER_CLAIMED, VAT_PERIOD_STATE, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, PLAN_LIMIT, OPERATION_IN_PROGRESS, SIGNUP_REVIEW_RETIRED, GIFT_USED, GIFT_NOT_AVAILABLE, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -799,6 +799,7 @@ components:
                 - CLAIM_CODE_WRONG
                 - CLAIM_CODE_LOCKED
                 - CUSTOMER_CLAIMED
+                - VAT_PERIOD_STATE
                 - INVITE_EMAIL_MISMATCH
                 - SHARE_LINK_REFUSED
                 - FEATURE_NOT_ENABLED
@@ -2197,6 +2198,137 @@ components:
       required:
         - email
       additionalProperties: false
+    CurrentVatPeriodResponse:
+      type: object
+      properties:
+        period:
+          $ref: "#/components/schemas/VatPeriodView"
+      required:
+        - period
+    VatPeriodView:
+      type: object
+      nullable: true
+      properties:
+        periodKey:
+          type: string
+          example: 2026-B5
+        kind:
+          type: string
+          enum:
+            - MONTHLY
+            - BIMONTHLY
+            - YEARLY
+        year:
+          type: integer
+        firstMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        lastMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        startDate:
+          type: string
+          example: 2026-09-01
+        endDate:
+          type: string
+          example: 2026-10-31
+        due:
+          type: string
+          nullable: true
+        state:
+          $ref: "#/components/schemas/VatPeriodState"
+        note:
+          type: string
+          nullable: true
+        announcedAt:
+          type: string
+          format: date-time
+        doneAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - periodKey
+        - kind
+        - year
+        - firstMonth
+        - lastMonth
+        - startDate
+        - endDate
+        - due
+        - state
+        - note
+        - announcedAt
+        - doneAt
+    VatPeriodState:
+      type: string
+      enum:
+        - OPEN
+        - CLIENT_DONE
+        - CONFIRMED
+        - MORE_NEEDED
+    ClientVatPeriodsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              profileId:
+                type: string
+                format: uuid
+              kind:
+                $ref: "#/components/schemas/VatPeriodKind"
+              chosenKind:
+                allOf:
+                  - $ref: "#/components/schemas/VatPeriodKind"
+                  - nullable: true
+              period:
+                $ref: "#/components/schemas/VatPeriodView"
+            required:
+              - profileId
+              - kind
+              - chosenKind
+              - period
+      required:
+        - items
+    VatPeriodKind:
+      type: string
+      enum:
+        - MONTHLY
+        - BIMONTHLY
+        - YEARLY
+        - NONE
+    SetVatPeriodKindResponse:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/VatPeriodKind"
+      required:
+        - kind
+    SetVatPeriodKindRequest:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/VatPeriodKind"
+      required:
+        - kind
+    ReviewVatPeriodRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+            - CONFIRMED
+            - MORE_NEEDED
+        note:
+          type: string
+          maxLength: 200
+      required:
+        - decision
     IntegrationStatusResponse:
       type: object
       properties:
@@ -15803,6 +15935,28 @@ components:
         - digests
         - failed
         - incomplete
+    VatPeriodSweepSummary:
+      type: object
+      properties:
+        looked:
+          type: integer
+        announced:
+          type: integer
+        followUps:
+          type: integer
+        digests:
+          type: integer
+        failed:
+          type: integer
+        incomplete:
+          type: boolean
+      required:
+        - looked
+        - announced
+        - followUps
+        - digests
+        - failed
+        - incomplete
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -20442,6 +20596,196 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: "RATE_LIMITED details.limit REISSUE_PER_DAY: 5 fresh links a day per customer, with Retry-After"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/vat-periods/current:
+    get:
+      tags:
+        - VAT periods
+      summary: The latest VAT period announced for this profile, and where it stands
+      description: MUT-782 (ADR-341). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.172.0-mut782.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      responses:
+        "200":
+          description: The period, or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentVatPeriodResponse"
+        "403":
+          description: READ_ONLY_PROFILE, details.reason NOT_OWNER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile for you, or VAT period reminders are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/vat-periods/{periodKey}/done:
+    post:
+      tags:
+        - VAT periods
+      summary: All receipts for this period are sent
+      description: MUT-782 (ADR-341). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.172.0-mut782.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 16
+            example: 2026-B5
+          required: true
+          name: periodKey
+          in: path
+      responses:
+        "200":
+          description: The period now
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VatPeriodView"
+        "403":
+          description: READ_ONLY_PROFILE, details.reason NOT_OWNER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile or period for you, or VAT period reminders are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "VAT_PERIOD_STATE: the period is confirmed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/clients/vat-periods:
+    get:
+      tags:
+        - VAT periods
+      summary: "Your active clients: how often each files VAT, and where its latest period stands"
+      description: MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended clients are not listed. Additive since 1.172.0-mut782.
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: One item per active client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientVatPeriodsResponse"
+        "404":
+          description: VAT period reminders are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/clients/{profileId}/vat-period:
+    put:
+      tags:
+        - VAT periods
+      summary: Choose how often this client files VAT
+      description: MUT-782 (ADR-341). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.172.0-mut782.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetVatPeriodKindRequest"
+      responses:
+        "200":
+          description: The kind now chosen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetVatPeriodKindResponse"
+        "404":
+          description: Not one of your clients, or VAT period reminders are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/clients/{profileId}/vat-periods/{periodKey}/review:
+    post:
+      tags:
+        - VAT periods
+      summary: Confirm that the receipts are all in, or ask the client for more
+      description: MUT-782 (ADR-341). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client's reminder five days out, and lets the client say Done again. Additive since 1.172.0-mut782.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 16
+            example: 2026-B5
+          required: true
+          name: periodKey
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewVatPeriodRequest"
+      responses:
+        "200":
+          description: The period now
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VatPeriodView"
+        "404":
+          description: Not one of your clients, no such period, or VAT period reminders are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "VAT_PERIOD_STATE: the period is already confirmed"
           content:
             application/json:
               schema:
@@ -36185,6 +36529,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UnclaimedSweepSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The feature is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/vat-periods/sweep:
+    post:
+      tags:
+        - VAT periods
+      summary: "Daily: announce the VAT periods that ended, follow up, and mail each accountant one digest (Cloud Scheduler)"
+      description: On the first day after a client's VAT period ends (in the profile's own zone), every owner is asked whether all receipts are sent and each accountant gets one digest; a period that ended more than 10 days ago is never announced. The client is reminded once, 5 days later, while the period is still open (and 5 days after each Ask for more). A second run the same day does nothing more. Additive since 1.172.0-mut782.
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VatPeriodSweepSummary"
         "401":
           description: JOB_UNAUTHORIZED
           content:
