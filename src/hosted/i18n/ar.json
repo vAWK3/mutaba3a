@@ -1339,7 +1339,8 @@
         "help": "يحتاج مساعدتنا",
         "pending": "الدفع معلّق",
         "paused": "متوقف مؤقتًا",
-        "pausing": "إيقاف مجدول"
+        "pausing": "إيقاف مجدول",
+        "pilot": "تجريبي"
       },
       "headline": {
         "trialDaysLeft": {
@@ -1660,6 +1661,34 @@
         "city": "المدينة",
         "postalCode": "الرمز البريدي",
         "noMatch": "لا يوجد تطابق"
+      },
+      "pilot": {
+        "daysLeft": {
+          "zero": "لم يبقَ أيام",
+          "one": "بقي يوم واحد",
+          "two": "بقي يومان",
+          "few": "بقيت {count} أيام",
+          "many": "بقي {count} يومًا",
+          "other": "بقي {count} يوم"
+        },
+        "freeUntil": "مجاني حتى {date}",
+        "endsOn": "تنتهي في {date}",
+        "offLine": "{plan} · خصم 100%",
+        "thenFree": "ثم {plan} مجانًا",
+        "ended": "انتهت التجربة",
+        "plansTitle": "الخطط",
+        "expected": "متوقّع",
+        "businesses": "{used} من {cap} ملفات تجارية",
+        "partners": {
+          "zero": "{count} شريك لكل ملف تجاري",
+          "one": "شريك واحد لكل ملف تجاري",
+          "two": "شريكان لكل ملف تجاري",
+          "few": "{count} شركاء لكل ملف تجاري",
+          "many": "{count} شريكًا لكل ملف تجاري",
+          "other": "{count} شريك لكل ملف تجاري"
+        },
+        "writeToUs": "راسلنا",
+        "mailSubject": "تجربة متابعة"
       }
     },
     "selfService": {

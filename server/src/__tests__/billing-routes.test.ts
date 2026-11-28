@@ -114,6 +114,7 @@ describe('GET /v1/billing (MUT-362)', () => {
       scheduledChange: null,
       pendingChange: null,
       pilot: null,
+      pilotEnded: null,
       planChange: { canUpgradeTo: [], canDowngradeTo: [] },
       comeback: null,
       // MUT-565: accountant access is off in this harness.

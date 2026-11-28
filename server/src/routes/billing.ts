@@ -32,7 +32,7 @@ import {
 } from '../billing/checkout.js';
 import type { BillingProvider } from '../billing/provider.js';
 import { planChangeView } from '../billing/plan-change.js';
-import { PILOT_PRICES, PILOT_PRICES_EXPECTED, pilotOf, pilotPlansOf } from '../billing/pilot.js';
+import { PILOT_PRICES, PILOT_PRICES_EXPECTED, pilotEndedOf, pilotOf, pilotPlansOf } from '../billing/pilot.js';
 import { giftAvailable, giftCovers, giftUntil, NO_GIFT } from '../usage/gift.js';
 import { stripeProvider } from '../billing/stripe/provider.js';
 import { catalogFor, comebackIdsOf, firstAmountsOf, firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferCatalogs, type OfferEntry } from '../billing/offer.js';
@@ -148,7 +148,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         '`currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, ' +
         'a subscription, or the running trial, which is business); null when nothing covers them. ' +
         '`pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, ' +
-        'and the plans with their Expected prices and limits; null otherwise.',
+        'and the plans with their Expected prices and limits; null otherwise. ' +
+        '`pilotEnded` (MUT-753): the pilot that ended (expired or revoked) in the last 30 days, while no pilot runs, no other grant covers the person ' +
+        'and they don’t pay; null otherwise.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'Billing', content: { 'application/json': { schema: BillingOverviewSchema } } }, 401: refusedResponses[401], 403: refusedResponses[403] },
     }),
@@ -198,6 +200,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           vatRate: vatRateView(options.countries),
           // MUT-752 (ADR-296): the free pilot, from the same facts and `now` as the entitlements.
           pilot: await pilotView(store, user.id, owned, now),
+          // MUT-753 (ADR-330): the pilot's end state, from the same facts.
+          pilotEnded: pilotEndedView(user.id, owned, now),
           // MUT-734 (ADR-291): the scheduled change and where the person may move (only while plans are on sale).
           ...(provider ? planChangeView(shown, await store.billing.planChangesOf(user.id)) : { scheduledChange: null, pendingChange: null, planChange: { canUpgradeTo: [], canDowngradeTo: [] } }),
         },
@@ -533,10 +537,7 @@ async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Da
  * covers their profiles and they don't pay. The Welcome flag is read only for a pilot (one primary-key read).
  */
 async function pilotView(store: LedgerStore, userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>, now: Date) {
-  const pilot = pilotOf(
-    { userId, grants: owned.facts.grants, subscriptions: owned.facts.subscriptions.filter((s) => s.userId === userId), sources: owned.entitlements.map((e) => e.source) },
-    now,
-  );
+  const pilot = pilotOf(pilotFactsOf(userId, owned), now);
   if (!pilot) return null;
   // MUT-758 (ADR-298): the start and the first scan and invoice, so web and phone send "first" events once, with timing.
   const [welcomeSeenAt, firsts] = await Promise.all([store.billing.pilotWelcomeSeenOf(userId), store.usage.firstEventsOf([userSubjectKey(userId)], ['SCAN', 'DOCUMENT_ISSUED'])]);
@@ -551,6 +552,16 @@ async function pilotView(store: LedgerStore, userId: string, owned: Awaited<Retu
     pricesExpected: PILOT_PRICES_EXPECTED,
     plans: pilotPlansOf(PILOT_PRICES),
   };
+}
+
+function pilotFactsOf(userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>) {
+  return { userId, grants: owned.facts.grants, subscriptions: owned.facts.subscriptions.filter((s) => s.userId === userId), sources: owned.entitlements.map((e) => e.source) };
+}
+
+/** MUT-753 (ADR-330): GET /v1/billing's `pilotEnded`. */
+function pilotEndedView(userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>, now: Date) {
+  const ended = pilotEndedOf(pilotFactsOf(userId, owned), now);
+  return ended ? { cohort: ended.cohort, endedAt: ended.endedAt.toISOString() } : null;
 }
 
 /**

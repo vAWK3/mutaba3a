@@ -1287,7 +1287,8 @@
         "help": "Needs a hand",
         "pending": "Payment pending",
         "paused": "Paused",
-        "pausing": "Pause booked"
+        "pausing": "Pause booked",
+        "pilot": "Pilot"
       },
       "headline": {
         "trialDaysLeft": {
@@ -1572,6 +1573,26 @@
         "city": "City",
         "postalCode": "Postal code",
         "noMatch": "No match"
+      },
+      "pilot": {
+        "daysLeft": {
+          "one": "{count} day left",
+          "other": "{count} days left"
+        },
+        "freeUntil": "Free until {date}",
+        "endsOn": "Ends {date}",
+        "offLine": "{plan} · 100% off",
+        "thenFree": "Then free {plan}",
+        "ended": "Pilot ended",
+        "plansTitle": "Plans",
+        "expected": "Expected",
+        "businesses": "{used} of {cap} businesses",
+        "partners": {
+          "one": "{count} partner per business",
+          "other": "{count} partners per business"
+        },
+        "writeToUs": "Write to us",
+        "mailSubject": "MTB3A pilot"
       }
     },
     "selfService": {

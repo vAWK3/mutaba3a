@@ -46,6 +46,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.213.0-mut753, ADR-330)
+
+### Added
+- Portal: Billing's `pilot` and `pilotEnded` panels (`src/hosted/data/billingView.ts`, `BillingDrawer.tsx`): status, this month's lines, the plans with Expected prices from `pilot.plans`, one Write to us link; the last 14 days; Pilot ended with the `pilot-ended` scene. `src/hosted/data/pilot.ts`, `src/hosted/components/PilotBilling.tsx`.
+- Shared usage lines: `usageLinesOf` (`src/hosted/data/usageLines.ts`) and `PlanUsageLines` (butter from 90%, design review 2B), for MUT-754 and MUT-733 to reuse.
+- `formatLongDay` in `src/hosted/format/dates.ts` ("27 January 2027", Levantine months in Arabic).
+- Server: `pilotEndedOf` (`server/src/billing/pilot.ts`) and `pilotEnded` on `GET /v1/billing` (`BillingPilotEnded`), no migration.
+
+### Technical
+- Tests: `server/src/billing/__tests__/pilot.test.ts`, `server/src/__tests__/billing-pilot.test.ts`, `src/hosted/data/__tests__/pilot.test.ts`, `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx`. OpenAPI and `src/hosted/api/schema.d.ts` regenerated.
+
 ## [Unreleased] - 2026-11-27 — MUT-769: /setup for an accountant's customer: who set it up, the code, the password, the account is theirs, the card (ADR-320, API 1.211.0-mut769)
 
 Plan `docs/designs/accountant-channel.md` (DR-1, DR-7; B7, B9). No new page: the existing `/setup` takes a provisioned branch.

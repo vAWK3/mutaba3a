@@ -727,6 +727,12 @@ export const BillingPilotSchema = z
   })
   .openapi('BillingPilot');
 
+/**
+ * MUT-753 (ADR-330): the pilot that ended (expired or revoked) within the last 30 days, while no pilot runs, no other
+ * operator grant covers the person and they don't pay; else null. Billing's end state. Additive since 1.213.0-mut753.
+ */
+export const BillingPilotEndedSchema = z.object({ cohort: z.string(), endedAt: z.string().datetime() }).openapi('BillingPilotEnded');
+
 export const PilotWelcomeSeenSchema = z.object({ welcomeSeenAt: z.string().datetime() }).openapi('PilotWelcomeSeen');
 
 export const BillingOverviewSchema = z
@@ -826,6 +832,8 @@ export const BillingOverviewSchema = z
     planChange: z.object({ canUpgradeTo: z.array(z.string()), canDowngradeTo: z.array(z.string()) }).optional(),
     /** MUT-752 (ADR-296): the free pilot, else null. Additive since 1.162.0-mut752. */
     pilot: z.union([BillingPilotSchema, z.null()]).optional(),
+    /** MUT-753 (ADR-330): the pilot that ended lately, else null. Additive since 1.213.0-mut753. */
+    pilotEnded: z.union([BillingPilotEndedSchema, z.null()]).optional(),
   })
   .openapi('BillingOverview');
 

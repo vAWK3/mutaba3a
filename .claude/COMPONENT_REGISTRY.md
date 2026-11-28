@@ -2619,6 +2619,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `server/src/jurisdictions/il/documents.ts` | `IL_DOCUMENT_TYPES`, `IL_DOC_TYPE_CODES` | the uniform file, tests |
 | `server/src/issuing/issuer-pack.ts` | `issuerPackOf(store, organizationId)` | documents-due and customers routes, cancel |
 
+## MUT-753 — the Pilot panel (ADR-330)
+
+- `PlanUsageLines` (`src/hosted/components/PilotBilling.tsx`): a paid plan's usage lines from `usageLinesOf(billing)` (`src/hosted/data/usageLines.ts`): "12 of 250 documents" with a bar, the number and bar butter from 90% (`data-attention`), partners per business, the reset day. Shared: use it for any paid plan's meters (MUT-754, MUT-733) instead of a second meter row. Starter keeps `UsageMeter` (its "left" line and 80% rule).
+- `PilotBilling`: the Pilot panel's body (lines, plans with Expected prices, Write to us). Usage: `<PilotBilling billing={billing} pilot={billingPilotOf(billing)!} usage={usageLinesOf(billing)} />`.
+- `billingPilotOf`, `billingPilotEndedOf`, `pilotCurrencyOf`, `PILOT_LAST_DAYS` (`src/hosted/data/pilot.ts`).
+
 ## MUT-768 — the accountant's desk (ADR-325)
 
 | Where | Exports | Used by |

@@ -69,6 +69,38 @@ export function pilotOf(facts: PilotFacts, now: Date): Pilot | null {
   return { cohort: latest.cohort, startedAt: new Date(Math.min(...starts)), endsAt: latest.expiresAt, referredByUserId: latest.referredByUserId };
 }
 
+/**
+ * MUT-753 (ADR-330): how long Billing says "Pilot ended" after the end; after that the person is simply on their plan.
+ */
+export const PILOT_ENDED_SHOWN_DAYS = 30;
+
+export interface PilotEnded {
+  cohort: string;
+  endedAt: Date;
+}
+
+/**
+ * The pilot that ended, or null (MUT-753, ADR-330): Billing's end state ("Pilot ended", then Starter or read-only). Only
+ * when no pilot runs, no other operator grant covers the person and they don't pay, and their latest pilot grant ended
+ * (expired, or revoked: a revoke is an end) at most PILOT_ENDED_SHOWN_DAYS ago.
+ */
+export function pilotEndedOf(facts: PilotFacts, now: Date): PilotEnded | null {
+  if (facts.sources.includes('OPERATOR') || payingNow(facts.subscriptions, now)) return null;
+  const ends = facts.grants
+    .filter((g): g is PilotGrantFact & { cohort: string } => g.userId === facts.userId && g.tier !== 'ACCOUNTANT' && g.cohort !== null)
+    .map((g) => ({ cohort: g.cohort, endedAt: endOf(g) }));
+  if (ends.some((e) => e.endedAt === null || e.endedAt > now)) return null;
+  const latest = [...ends].sort((a, b) => b.endedAt!.getTime() - a.endedAt!.getTime())[0];
+  if (!latest || now.getTime() - latest.endedAt!.getTime() > PILOT_ENDED_SHOWN_DAYS * DAY_MS) return null;
+  return { cohort: latest.cohort, endedAt: latest.endedAt! };
+}
+
+/** A grant's end: the revoke, else the expiry, whichever came first; null when it never ends. */
+function endOf(g: Pick<GrantFact, 'expiresAt' | 'revokedAt'>): Date | null {
+  if (g.revokedAt && (!g.expiresAt || g.revokedAt < g.expiresAt)) return g.revokedAt;
+  return g.expiresAt;
+}
+
 /** A profile-plan subscription that covers now (active, trialing or past due, not stale, not paused). */
 function payingNow(subscriptions: readonly SubscriptionFact[], now: Date): boolean {
   return profilePlanSubscriptions(subscriptions).some((s) => coveringState(s) !== undefined && !periodOver(s, now) && !pausedNow(s, now));
