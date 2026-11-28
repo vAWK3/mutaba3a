@@ -18,7 +18,8 @@ export function useCurrentVatPeriod(profileId: string, enabled: boolean) {
     staleTime: STALE_MS,
     queryFn: async ({ signal }): Promise<Schemas['VatPeriodView'] | null> => {
       try {
-        return (await api.currentVatPeriod(profileId, signal)).period;
+        // `?? null`: a query may not answer undefined, and a server that predates the route (or a stub) sends no `period`.
+        return (await api.currentVatPeriod(profileId, signal)).period ?? null;
       } catch (error) {
         if (error instanceof ApiError && (error.status === 404 || error.status === 403)) return null;
         throw error;
