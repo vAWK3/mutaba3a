@@ -4,6 +4,73 @@
 before they ask to deploy. One item per line, starting with `- `. Delete an item once it's done, and
 record the date where the item says.
 
+## Basel's checklist
+
+What only Basel can do, in order. Tick a line with its date when it's done. Each line points to the item below
+that has the detail. `make release` doesn't print this section.
+
+### Every shell
+
+From `mini-crm/`: `source scripts/prod-env.sh`. It exports `GCP_PROJECT_ID`, `CLOUDSDK_CORE_ACCOUNT`, `URL`,
+`MUTABA3A_ADMIN_TOKEN`, `STRIPE_SECRET_KEY` and `MUTABA3A_JOB_TOKEN` from Secret Manager (`mtb3a-production`)
+and prints ✓ or ✗ per name, never a value. Then run the scripts from `server/`. The `users` scripts
+(`billing:*`, `signups:*`, `users`) talk to localhost unless you pass `--url "$URL"`.
+
+Any other secret: `gcloud secrets versions access latest --secret=<name> --project=mtb3a-production`.
+The names are `mutaba3a-api-` + `admin-token`, `database-url`, `forwarder-token`, `front-door-token`, `job-token`,
+`oauth-derive-key`, `resend-api-key`, `resend-webhook-secret`, `sentry-dsn`, `session-pepper`, `stripe-secret-key`,
+`stripe-webhook-secret`, `turnstile-secret`, `two-factor-seal-key`. A `gcloud` "permission denied" means sign in
+again: `gcloud auth login barmajiyatltd@gmail.com`.
+
+### Done
+
+- [x] 2026-11-26: the auth-events sink checked (MUT-710).
+- [x] 2026-11-26: `software_house_vat_id` and `software_house_name` in `production.tfvars` (MUT-569).
+- [x] 2026-11-27: the live catalog, `billing:plans -- --apply --live`: nothing to change (Stage 1, step 3).
+- [x] 2026-11-28: `billing:product-tiers`: 4 live products, each with its tier (business, solo, firm, freelancer), 0 subscriptions.
+
+### Before the next release (Stage 1)
+
+- [ ] **Stripe › Developers › API keys › the API's restricted live key, in one edit.** Add Write on Products, Prices,
+      Tax Rates, Coupons, Subscription Schedules, Invoices and Invoice items. Keep Write on Subscriptions, and keep
+      Customers (with search), Checkout Sessions and Customer portal. (MUT-702 B, 703, 734, 532, 531, 764.)
+- [ ] Stripe Tax head office: Barmajiyat's UK address (Stage 1, step 2).
+- [ ] Stripe › Customer Portal: customers can edit their billing address (Stage 1, step 5).
+- [ ] The plans' offer coupons: `npm run billing:plans` (dry run), then `-- --apply --live`, then the dry run says
+      "nothing to do". Needs Write on Coupons first (MUT-703).
+- [ ] `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6).
+- [ ] `npm run billing:uncovered -- --url "$URL"`, then Operator › Usage: who moves to Starter and who must pick a business (Stage 1, step 7).
+- [ ] The Tax Authority guide's copy signed, or the guide dropped from the release (the MUT-674 item under `## web`).
+- [ ] The privacy policy's 7-year deletion wording approved, or reverted (the MUT-644 item under `## web`).
+- [ ] The phone build 0.2.1+25 (it parses `PLAN_LIMIT`) is live in both stores.
+- [ ] Apple Developer › the MTB3A App ID: turn on Push Notifications before the phone build that carries MUT-780.
+
+### Then: release, and one switch stage per release
+
+- [ ] `make release server` and `make release web`, with every switch off.
+- [ ] Stage 1 → 6 in "Switch rollout" at the end of this file, each with its own tfvars lines and checks.
+
+### Waiting on someone else
+
+- [ ] Barmajiyat's Israeli VAT file open, before the first Israeli charge (MUT-749).
+- [ ] The Tax Authority's registration number → `uniform_file_registration_number` (MUT-567, the MUT-569 item).
+- [ ] The signing certificate, three releases (the MUT-641 item).
+- [ ] Malafat's MAL-1539 and MAL-1541, then Stage 6.
+- [ ] MUT-780's push keys: the APNs auth key and the Firebase project files. The exact list comes with MUT-780's merge.
+
+### Later, by date
+
+- [ ] From 2026-12-26 (a month of checked logs): `auth_log_bucket_locked = true`. This can't be undone (MUT-710).
+- [ ] The move's C5: record the IAM policy, the copy output, the downtime and the cost, then revoke the old Stripe,
+      Resend, webhook and Turnstile keys (MUT-487).
+
+### Not confirmed done (tick or keep)
+
+- [ ] The Stripe dashboard steps from older releases: the come-back coupons (MUT-534), the retry window and Stripe's
+      failed-payment email off (MUT-533), the stay coupon (MUT-532), the launch coupon and its end date (MUT-525).
+- [ ] The hand checks: the MCP connectors in Claude.ai and Claude Code (MUT-434/436), the mail preview across clients
+      (MUT-484/468), the attachments-bucket CORS (portal receipt uploads), and a real-iPhone accountant invite (MUT-558).
+
 ## server
 
 - **Switch rollout (Basel, 2026-11-27):** the feature switches go on one stage per release, in the order of the "Switch rollout" section at the end of this file. Before each server release, check which stage is next and whether everything it needs is live. Delete this item when stage 6 is done.
@@ -172,7 +239,7 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   1. The live restricted key adds Write on Products, Prices and Tax Rates, and keeps Customers, Checkout Sessions and Customer portal.
   2. Stripe Tax's head office in the live account is Barmajiyat's UK address. Barmajiyat's Israeli VAT file must be open before the first Israeli charge (ADR-286, MUT-749; Backlog).
   3. ~~The catalog: `npm --prefix server run billing:plans -- --apply --live`~~ **Done 2026-11-27, nothing to change.** The run found the Israeli VAT rate, the 3 products and all 12 prices already right.
-  4. `npm --prefix server run billing:product-tiers`.
+  4. ~~`npm --prefix server run billing:product-tiers`~~ **Done 2026-11-28:** 4 live products, each with its tier, 0 subscriptions.
   5. In the Customer Portal settings, let customers edit their billing address.
   6. `npm --prefix server run billing:reconcile`, so every lapsed subscription has `endedReason` and `trialEnd`. A null reason reads as a deliberate cancel, which stays read-only.
   7. A dry look: run `npm run billing:uncovered` and open Operator › Usage to see who moves to Starter and who will be asked to pick a business. Check `monthly_summary_daily_sends` against the Starter people the summary now reaches.
