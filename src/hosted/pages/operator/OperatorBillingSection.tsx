@@ -13,6 +13,7 @@ import { ME_KEY } from '../../session/me';
 import { refreshOperatorBilling, useOperatorBillingGrants } from '../../data/operatorQueries';
 import { GRANT_PRESET_DAYS, grantExpiryOf, grantStateOf, isFutureDay, presetDay } from '../../operator/grants';
 import { OperatorConfirm, StepUpFailureBanner, useOperatorRun } from '../../operator/OperatorStepUp';
+import { isCohort } from '../../operator/pilot';
 import { isolated } from '../../operator/text';
 import { dayText } from '../../operator/time';
 
@@ -144,7 +145,10 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
   const [tier, setTier] = useState<Tier>('SOLO');
   const [reason, setReason] = useState('');
   const [day, setDay] = useState(() => presetDay(GRANT_PRESET_DAYS[0], new Date()));
-  const [errors, setErrors] = useState<{ reason?: string; day?: string }>({});
+  const [cohort, setCohort] = useState('');
+  const [accountant, setAccountant] = useState('');
+  const [watchConsent, setWatchConsent] = useState(false);
+  const [errors, setErrors] = useState<{ reason?: string; day?: string; cohort?: string; accountant?: string }>({});
   const [refusal, setRefusal] = useState<string | null>(null);
 
   function validate(): { expiresAt: string | undefined } | null {
@@ -152,6 +156,9 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
     if (reason.trim() === '') next.reason = t('hosted.operator.billing.reasonRequired');
     const expiresAt = grantExpiryOf(day);
     if (expiresAt === null || (day !== '' && !isFutureDay(day, new Date()))) next.day = t('hosted.operator.billing.dayInvalid');
+    // MUT-757: a pilot is a cohort slug; an accountant is named only on a pilot (the server's 422s, said before sending).
+    if (cohort.trim() !== '' && !isCohort(cohort.trim())) next.cohort = t('hosted.operator.pilot.cohortInvalid');
+    if (accountant.trim() !== '' && cohort.trim() === '') next.accountant = t('hosted.operator.pilot.accountantNeedsCohort');
     setErrors(next);
     return Object.keys(next).length > 0 || expiresAt === null ? null : { expiresAt };
   }
@@ -163,7 +170,13 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
     const valid = validate();
     if (!valid) return;
     try {
-      const grant = await run.run(() => api.createOperatorBillingGrant(account.id, { tier, reason: reason.trim(), ...(valid.expiresAt ? { expiresAt: valid.expiresAt } : {}) }));
+      const referredByUserId = await accountantIdOf(accountant.trim());
+      if (referredByUserId === null) {
+        setErrors({ accountant: t('hosted.operator.pilot.accountantUnknown') });
+        return;
+      }
+      const pilot = cohort.trim() ? { cohort: cohort.trim(), ...(referredByUserId ? { referredByUserId } : {}), ...(watchConsent ? { watchConsent: true } : {}) } : {};
+      const grant = await run.run(() => api.createOperatorBillingGrant(account.id, { tier, reason: reason.trim(), ...(valid.expiresAt ? { expiresAt: valid.expiresAt } : {}), ...pilot }));
       if (!grant) return;
       refreshOperatorBilling(queryClient, account.id);
       showToast(t('hosted.operator.billing.granted', { email: isolated(account.email) }), { tone: 'info' });
@@ -171,6 +184,9 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
     } catch (error) {
       const reasonCode = error instanceof ApiError ? apiErrorReason(error) : undefined;
       if (reasonCode === 'OWN_ACCOUNT') setRefusal(t('hosted.operator.accounts.ownRefused'));
+      else if (error instanceof ApiError && error.status === 404 && accountant.trim() !== '') setErrors({ accountant: t('hosted.operator.pilot.accountantUnknown') });
+      else if (error instanceof ApiError && error.code === 'VALIDATION_FAILED' && error.details && (error.details as { field?: string }).field === 'referredByUserId') setErrors({ accountant: t('hosted.operator.pilot.accountantRefused') });
+      else if (error instanceof ApiError && error.code === 'VALIDATION_FAILED' && error.details && (error.details as { field?: string }).field === 'cohort') setErrors({ cohort: t('hosted.operator.pilot.cohortInvalid') });
       else if (error instanceof ApiError && error.code === 'VALIDATION_FAILED') setErrors({ day: t('hosted.operator.billing.dayInvalid') });
       else run.setFailure('failed');
     }
@@ -258,6 +274,56 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
           />
           {errors.day && <p className="form-error">{errors.day}</p>}
         </div>
+        {/* MUT-757: the pilot's cohort and the accountant who referred the tester (both optional). */}
+        <div className="form-group">
+          <label className="form-label" htmlFor={`${formId}-cohort`}>
+            {t('hosted.operator.pilot.cohort')}
+          </label>
+          <input
+            id={`${formId}-cohort`}
+            className="input"
+            dir="ltr"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={64}
+            placeholder="dec-2026"
+            value={cohort}
+            aria-invalid={Boolean(errors.cohort)}
+            onChange={(event) => {
+              setCohort(event.target.value);
+              setErrors((e) => ({ ...e, cohort: undefined, accountant: undefined }));
+            }}
+          />
+          {cohort.trim() !== '' && day === '' && <p className="form-hint">{t('hosted.operator.pilot.defaultEnd')}</p>}
+          {errors.cohort && <p className="form-error">{errors.cohort}</p>}
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor={`${formId}-accountant`}>
+            {t('hosted.operator.pilot.accountantEmail')}
+          </label>
+          <input
+            id={`${formId}-accountant`}
+            className="input"
+            type="email"
+            dir="ltr"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={accountant}
+            aria-invalid={Boolean(errors.accountant)}
+            onChange={(event) => {
+              setAccountant(event.target.value);
+              setErrors((e) => ({ ...e, accountant: undefined }));
+            }}
+          />
+          {errors.accountant && <p className="form-error">{errors.accountant}</p>}
+        </div>
+        {/* MUT-777 (ADR-333): the tester's yes to watched sessions, given when they joined; only on a pilot. */}
+        {cohort.trim() !== '' && (
+          <label className="hp-operator-consent">
+            <input type="checkbox" checked={watchConsent} onChange={(event) => setWatchConsent(event.target.checked)} />
+            <span>{t('hosted.operator.pilot.consentLabel')}</span>
+          </label>
+        )}
         {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
         {refusal && (
           <div className="hp-banner hp-banner-error" role="alert">
@@ -270,3 +336,9 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
   );
 }
 
+/** MUT-757: the accountant's id by exact email; undefined when none was typed, null when no account has it. */
+async function accountantIdOf(email: string): Promise<string | null | undefined> {
+  if (email === '') return undefined;
+  const found = await api.operatorAccountByEmail(email);
+  return found.account?.id ?? null;
+}

@@ -12,6 +12,7 @@ import { HostedYourDataDrawer } from '../components/HostedYourDataDrawer';
 import { YourDataDrawer } from '../components/YourDataDrawer';
 import { useIsLocalMode } from '../session/mode';
 import { TwoFactorDrawer } from '../twoFactor/TwoFactorDrawer';
+import { PilotWelcomeDrawer } from '../components/PilotWelcomeDrawer';
 
 /**
  * The shell's account-menu drawers (MUT-237), on every page, beside `ProfileDrawers`.
@@ -49,6 +50,8 @@ export function useAccountDrawers() {
     openConnectedApps: () => go({ connectedApps: true }, false),
     /** MUT-710: Two-step sign-in (`?twoFactor=true`); over the issue drawer, closing it returns to the invoice. */
     openTwoFactor: () => go({ twoFactor: true }, false),
+    /** MUT-755: the pilot Welcome; it takes the page's entry, so Back never reopens it. */
+    openPilotWelcome: () => go({ pilotWelcome: true }, true),
     /** MUT-415: the review after a password change, in Change password's place (Back doesn't reopen the form). */
     reviewPasskeys: () => go({ passkeys: true, review: 'password' }, true),
     close: () => go({}, true),
@@ -71,6 +74,8 @@ export function AccountDrawers() {
   if (drawers.state.connectedApps && !local) return <ConnectedAppsDrawer onClose={drawers.close} />;
   // MUT-710: an account's.
   if (drawers.state.twoFactor && !local) return <TwoFactorDrawer onClose={drawers.close} />;
+  // MUT-755: an account's, on a pilot (the drawer closes itself otherwise).
+  if (drawers.state.pilotWelcome && !local) return <PilotWelcomeDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
     return <BillingDrawer step={drawers.state.step} wantedPlan={drawers.state.billingPlan} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }

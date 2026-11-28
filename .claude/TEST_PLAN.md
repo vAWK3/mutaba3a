@@ -5059,6 +5059,72 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Pure | `src/hosted/data/__tests__/planUsage.test.ts` | `nextPlanOf` along the ladder and off it; `sellablePlanOf`; `recommendedPlanOf` 0/1/2/4/9 businesses and none on offer; `planUsageOf` on a paid plan (gift, `graceUntil`) and null on Freelancer/Malafat |
 | Portal | `src/hosted/components/__tests__/BillingDrawer.mut705.test.tsx` | Subscribe opens on Business for two businesses and on `?billingPlan=firm` (Staff: coming soon); headline "Business, renews"; meters butter at 90% with Upgrade to Firm, none on scans; Firm with the gift (no upgrade, "No limit until"); read-only businesses, checklist 3 of 3 → 2 of 3, disabled past the cap, Save sends the pick; New profile on Solo names Business and its price; Home's line on Solo at 46/50 |
 | QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.plan-recommended`, `paid-billing` (en + ar at 375 px), `paid-read-only`, `paid-cap-prompts` |
+## MUT-753 — the Pilot panel and its end state (2026-11-27, ADR-330)
+
+| Level | File | What |
+|---|---|---|
+| Rule | `server/src/billing/__tests__/pilot.test.ts` | `pilotEndedOf`: expired, revoked (ends at the revoke), latest end of several, null while running / plain / ACCOUNTANT / another's / covered by another grant / paying, the 30-day window edge |
+| Route | `server/src/__tests__/billing-pilot.test.ts` | `pilotEnded` null while the pilot runs, set after expiry and after a revoke |
+| Unit | `src/hosted/data/__tests__/pilot.test.ts` | `pilot` and `pilotEnded` panels (day 1–46, last 14 days, Starter on/off, subscription first, ended onto Starter or read-only, never over a new grant, older server); plans' currency; usage lines butter at 90% and not at 89%, over cap, no caps |
+| Drawer | `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx` | order (status, lines, plans, Write to us), Expected prices from `pilot.plans`, no Subscribe, butter at 90%, last 14 days, Pilot ended with its scene and Starter's lines, Arabic Levantine month |
+
+## MUT-755 — the pilot Welcome (2026-11-27, ADR-331)
+
+| Level | File | What |
+|---|---|---|
+| Portal | `src/hosted/components/__tests__/PilotWelcome.test.tsx` | opens once on a pilot (URL replaced), the lead with the end, three steps on their scenes; Later, ✕ and Start each call the server once; Start goes to Receipts; closed or no pilot never opens; Arabic -rtl art and Levantine month; `mayBeOnPilot` / `pilotWelcomeDue` |
+
+## Pilot milestones (2026-11-27, ADR-332)
+
+| Level | File | What |
+|---|---|---|
+| Unit + portal | `src/hosted/shell/__tests__/PilotMilestones.test.tsx` | a first is reached only after a null read, once; not when made before the browser looked; hours since start; per-person memory and a broken store; the card shows on the next read with its scene, closes, never again; Arabic -rtl art |
+
+## MUT-757 (console half) — the Pilot filter, chip, accountant, ticks and the grant form's pilot (2026-11-27)
+
+| Level | File | What |
+|---|---|---|
+| Unit | `src/hosted/operator/__tests__/pilot.test.ts` | chip: ends / N days left (14) / Ended; no pilot; cohort slug rule |
+| Console | `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` | the filter in the address and the request; chip, accountant, ticks only with the filter; grant with cohort and accountant by email (unknown email refused before sending); slug and accountant-without-cohort errors |
+
+## MUT-777 — the pilot tester's yes to watched sessions (2026-11-27, ADR-333)
+
+| Level | File | What |
+|---|---|---|
+| Route | `server/src/__tests__/billing-pilot-consent.test.ts` | null until a yes; the tester's yes kept at its first instant; 401 signed out; the operator's grant records and audits it and the Accounts row shows it; 422 without a cohort and nothing granted; `false` records nothing |
+| Store contract | `store-contract-billing.ts` (memory and Postgres) | once per person, first instant kept, unknown null, carried on `listForOperator` |
+| Migration | `migration-mut777.test.ts` (Postgres) | after the pilot migration; old people null; schema matches |
+| Portal | `PilotWelcome.test.tsx`, `OperatorAccountPage.test.tsx` | the tick is off by default and sends nothing unticked; ticked sends once; not asked again once recorded; the Accounts line; the grant drawer sends `watchConsent` |
+
+## MUT-758 (web half) — the pilot events (2026-11-27, ADR-298)
+
+| Level | File | What |
+|---|---|---|
+| Portal | `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx` | Billing opened once with `days_left` rounded down, plans viewed, a 90% line's `limit`, Write to us; never the cohort; nothing for a non-pilot |
+| Portal | `src/hosted/shell/__tests__/PilotMilestones.test.tsx` | the first scan counted once with `hours_since_start` |
+| Gate | existing `portalAnalytics` tests | release-only and opt-in (`trackPortal`), unchanged |
+
+## MUT-759 — pilot release-QA (2026-11-27)
+
+| App | Feature ids | What |
+|---|---|---|
+| portal-selfservice | `pilot.pilot-panel`, `pilot.pilot-ended`, `pilot.pilot-extension`, `pilot.pilot-first-scan` | the plan's four QA scenarios on the live API, plus the Welcome, the yes to watched sessions and the first-scan milestone |
+| portal-selfservice | `operator.pilot-grant` | the console's pilot grant (cohort, accountant, yes) and the Pilot filter |
+
+## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
+
+| Layer | File | Covers |
+|---|---|---|
+| Rule | `billing/__tests__/offer.test.ts` | `parseOffers` plans/tier alias, mixed/unknown/repeated/empty plans refused, the percent come-back shape; lookup by (kind, plan, interval) for every plan and legacy; coupon inside the entry's products and covering the plan sold; `resolveOffer` per plan; Q6 eligibility (incomplete, unpaid trial, running trial); 67% rounding |
+| Rule | `billing/__tests__/retention.test.ts` | `listPriceOf` for every key family; switch savings per plan; pause and stay on each plan from its own catalog; coupon outside or not covering; one stay per person; `SCHEDULED` |
+| Rule | `billing/__tests__/comeback.test.ts` | Firm lapses count; already-had across legacy and plan ids; the percent come-back per plan and currency, monthly only, shapes refused; the plan a come-back names |
+| Script | `scripts/__tests__/stripe-plans.test.ts` | `COUPON_SPEC` values (Jerusalem `redeem_by`); offers.json ↔ spec tie; create (with products made in the same run), nothing to do, each differing field refused with the new-id message, missing products, name/metadata update, retired delete, legacy coupons untouched |
+| Gateway | `billing/stripe/__tests__/plan-gateway.test.ts` | `discounts: ''` on an upgrade's preview and update; a downgrade's phases carry `di_…`; `discountIds` read |
+| Mail | `billing/__tests__/renewal-mail.test.ts`, `comeback-mail.test.ts` | a plan launch subscription is due and the mail names the plan (en, ar); the come-back mail per lapsed plan (Firm; legacy → Solo), no yearly line, one offer read per plan; plans off = legacy |
+| Route | `__tests__/billing-plan-offers.test.ts` | GET `plans[].launch`/`.comeback`, `offer` and `comeback` under PLAN_CHECKOUT, `yearlySwitch.plan`, `renewsAtListPrice`; yearly plan Checkout carries the coupon, metadata, pay-page line, audit; monthly none; OFFER_ENDED; Stripe-held paid sub; unpaid trial; come-back monthly on the plan picked, yearly none; already had; stay/pause per plan, legacy stay for ₪29; `SCHEDULED`; plan change `offerEnds`, drop on upgrade, carry on downgrade |
+| Route | `__tests__/routes-accountant-activation.test.ts` | an activation carries no offer (no coupon read); the customer's own Checkout later does |
+| QA | with the UI half | §10's `portal.billing.plan-launch-yearly`, `plan-launch-monthly-none`, `plan-offer-ended`, `stay-offer-plan`, `switch-yearly-plan`, `comeback-plan`, `change-plan-offer-ends`; live flows after TD-347 |
+
 ## The accountant's desk (MUT-768, epic MUT-762, ADR-325)
 
 | Level | Test | Covers |
@@ -5077,3 +5143,32 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/components/__tests__/CodeReveal.test.tsx` | 3+3 groups, spaced aria-label, LTR in ar and en, stagger order, Copy → Copied → Copy after 2 s, a failed copy, the claim-code spec values and the reduced-motion still in CSS |
 | Unit | `src/hosted/components/__tests__/Activating.test.tsx` | `activatingPhase`; the poll every 4 s, late at 2 min, active when paid, late on a late reload; `hopEnd`; loop → finish the hop → resolve; -rtl key frames; reduced motion shows the scene; the activating spec values; the polite live region in ar and en |
 | Guard | `src/styles/__tests__/direction.test.ts`, `brand.test.ts` | the two `dir` sites; the Copy pill's contrast |
+
+## MUT-774 (portal half) — client balances (2026-11-27)
+
+| Level | File | What |
+|---|---|---|
+| Portal | `src/hosted/pages/__tests__/clientBalances.test.tsx` | currencies stacked and never summed, in credit without a minus, settled, "—" without movement, one request; Arabic |
+| Component | `src/hosted/components/ledger/__tests__/LedgerCard.test.tsx` | no movements and no currency show the `ledger-empty` scene |
+
+## MUT-769 — /setup for an accountant's customer (2026-11-27, ADR-320)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/pages/auth/__tests__/claimStep.test.ts` | the context line's four forms, code failures, `claimNext` (card when due, never blocked), motion-handover-claimed's spec values and reduced-motion still in CSS |
+| Component | `src/hosted/pages/auth/__tests__/SetupClaim.test.tsx` | context line, step count, six LTR boxes named "Digit n of 6", focus, paste, wrong/required/locked, Arabic RTL; the code sent with the password; the moment then Billing › Subscribe or the business; the moment on the passkey nudge; lock and replaced code at the redeem; dead accountant's link vs operator link |
+| Route | `server/src/__tests__/routes-accountant-claim.test.ts` | `provisioned: true` on superseded and expired accountant links, nothing on unknown or operator links |
+| Release QA | `qa/specs/portal/setup.spec.ts` | `portal.setup.claim-code` (en + ar, 375 px, axe), `portal.setup.claim-refused` |
+
+## MUT-771 — the accountant channel end to end (2026-11-28)
+
+| Path (plan T9 / test plan) | Where |
+|---|---|
+| Route pins for every new route | `server/src/__tests__/route-security.test.ts` (accountant, operator, claim-code) |
+| Provision store contract, memory and Postgres | `server/src/repositories/__tests__/store-contract-accountant-provision.ts` |
+| Mail copy (ADR-159 §5) for customer-setup, its reminder, cancelled, the digest | `server/src/email/__tests__/templates.test.ts` |
+| Add → mail → code → claim → password, read access after claim | `routes-accountant-customers.test.ts`, `routes-accountant-claim.test.ts` |
+| No link in any response; A can't activate B's customer | `routes-accountant-customers.test.ts`, `routes-accountant-activation.test.ts` |
+| Unclaimed unpaid removed at day 60, reminders, clock injected | `routes-accountant-sweep.test.ts` |
+| Portal: add, spoken code, change email, take card, claimed meanwhile, a11y | `qa/specs/portal/accountant-desk.spec.ts` (`portal.accountant-desk.*`) |
+| Portal: claim with the code, wrong and locked code, dead accountant's link | `qa/specs/portal/setup.spec.ts` (`portal.setup.claim-*`) |

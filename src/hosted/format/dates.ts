@@ -37,6 +37,14 @@ export function formatInstant(value: string | null | undefined, language: Langua
   return new Intl.DateTimeFormat(getLocale(language), { dateStyle: 'medium', timeZone }).format(date);
 }
 
+/** MUT-753: an instant as "27 January 2027" (Levantine month names in Arabic, ADR-253), in `timeZone`. */
+export function formatLongDay(value: string | null | undefined, language: Language, timeZone: string): string {
+  if (!value) return MISSING;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return MISSING;
+  return new Intl.DateTimeFormat(getLocale(language), { day: 'numeric', month: 'long', year: 'numeric', timeZone }).format(date);
+}
+
 const KIB = 1024;
 const MIB = KIB * KIB;
 

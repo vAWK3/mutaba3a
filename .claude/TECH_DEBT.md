@@ -18,6 +18,10 @@
 
 ## Open Debt
 
+### TD-372: Pilot watched-session consent has no withdrawal in the product (MUT-777, 2026-11-27)
+
+The yes is stored once (`users.pilotWatchConsentAt`); there is no "take it back" control. A tester who withdraws tells us and the operator stops watching; clearing the column needs a script. Add a You › Account switch if a tester asks. Recording retention is a [TODO] in the privacy draft.
+
 ### TD-371: The portal-selfservice QA API keeps STARTER_PLAN and OPEN_SIGNUP off (Switch rollout, 2026-11-27)
 **Status**: Open (2026-11-27)
 - **What:** dev (`server/.env.example`) runs the production target with every switch on. `qa/support/selfservice-live.mjs` turns on all of them except `STARTER_PLAN` and `OPEN_SIGNUP`. Several recorded flows still expect the 14-day trial step or a waiting sign-up: `signup.create`, `signup.review-declined`, `operator.signups-approve` and `-decline`, `mail.mail-directional-art`, and the two `malafat-delegation` sign-ins (`passTrialWelcome`).
@@ -3470,3 +3474,8 @@ When resolving debt:
 **Decision (Basel, 2026-11-27):** wait for the second country pack; the server pack-contract suite covers Israel until then.
 **Where**: `qa/features/portal/invoicing.yaml` holds every invoicing flow, Israel's own included (uniform file, allocation numbers); there is no `qa/features/portal/invoicing-il.yaml`.
 **Why deferred**: the portal specs run on a stubbed API (`FakeApi`), so no flow exercises a server pack, and moving the Israel-only features means re-tagging their specs, which forces re-recordings. **Fix**: before a second pack goes live, split the Israel-only features into `invoicing-il.yaml` (with `server/src/jurisdictions/il/**` in its paths) and give the new country its own file.
+
+### TD-372: The plans' offers have no QA coupon override, and the come-back summary keeps a dead `firm` count (MUT-703)
+**Where**: `server/src/billing/offer.ts` `offersFor` (BILLING_OFFER_COUPON_ID and BILLING_STAY_COUPON_ID replace every entry of their kind, legacy and plans alike; BILLING_COMEBACK_COUPON_ID_ILS/_USD replace only the legacy per-currency pair, so a QA server has no way to name its own percent come-back coupon); `billing/comeback-mail.ts` `skipped.firm` is always 0 since Firm lapses are mailed (kept so older operator tools and `ComebackMailSummarySchema` don't break).
+**Why deferred**: the live QA flows for the offers (`portal-live` launch/stay/come-back per plan) wait on the UI half and on TD-347's sandbox seeding, which will run `billing:plans` and so make the real coupon ids in the sandbox; an override is only needed if a QA run must own its coupons. **Fix**: with those flows, add `BILLING_COMEBACK_PLANS_COUPON_ID` (refused on a live key, like the others) if the sandbox can't share the real ids; drop `skipped.firm` at the next breaking change of the job's summary.
+**Not debt (spike S1, 2026-11-27):** an upgrade after a spent launch coupon does not over-credit: Stripe's unused-time credit is the discounted amount paid ("Unused time on Solo (with 50.0% off)": ₪178.98 of ₪195 after 30 days), so no cap is needed.

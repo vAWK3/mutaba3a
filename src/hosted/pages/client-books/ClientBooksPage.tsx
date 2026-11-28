@@ -226,7 +226,7 @@ function ClientBooksTable({ items, query, filter, onSubscribe, onOpen }: TablePr
           }
           if (next && row.customer) {
             return (
-              <Button variant="ghost" size="sm" onClick={() => onOpen(row, next === 'takeCard' ? 'card' : undefined)} aria-label={t('hosted.desk.nextAria', { action: t(`hosted.desk.next.${next}`), profile: row.name })}>
+              <Button variant="ghost" size="sm" className="hp-desk-row-action" onClick={() => onOpen(row, next === 'takeCard' ? 'card' : undefined)} aria-label={t('hosted.desk.nextAria', { action: t(`hosted.desk.next.${next}`), profile: row.name })}>
                 {t(`hosted.desk.next.${next}`)}
               </Button>
             );

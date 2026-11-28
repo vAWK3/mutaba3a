@@ -49,6 +49,171 @@ Why: Billing named one plan ("Freelancer") and only Starter had meters or cap pr
 ### Technical
 - Tests: `components/__tests__/BillingDrawer.mut705.test.tsx`, `data/__tests__/planUsage.test.ts`; `StarterPlan.test.tsx`'s no-plan case is now legacy Freelancer. QA: `portal.plans.plan-recommended`, `paid-billing`, `paid-read-only`, `paid-cap-prompts`.
 - Files: `src/hosted/components/{BillingDrawer,BillingPlanPicker,PlanLimitNotice,PlanMeters,BusinessChecklist,UsageNotice,ProfileCreateDrawer}.tsx`, `src/hosted/data/{planUsage,filters}.ts`, `src/hosted/shell/AccountDrawers.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{ar,en}.json`, `docs/analytics/events.json`, `qa/support/portalApi.ts`.
+## [Unreleased] - 2026-11-28 — MUT-771 + MUT-772: the accountant channel's tests, release QA and release steps (epic MUT-762)
+
+### Added
+- Release QA `portal.accountant-desk.a11y`: axe on the desk and the code pane, focus on the pane heading, Escape closes, 44 px row actions, states in words, the polite live region saying Activating then Active, no sideways scroll at 375 px. It maps MUT-770's Activating and claim-code modules and the desk's `claimedSeen`, so the portal has no unmapped file.
+- Server: the claim test also proves the accountant's read access after the claim (the business on his desk, active).
+
+### Fixed
+- Found by the new a11y flow: an ended (or needs-plan) client row was faded with `opacity: 0.6` on top of the muted ink, so its text fell below 4.5:1 (axe color-contrast); it is now faded by the muted ink alone. The desk row's one next action (a small ghost button, 32 px) now has a 44 px minimum (`.hp-desk-row-action`, DR-10).
+
+### Changed
+- `.claude/DECISIONS.md`: ADR-292 amendment (MUT-772): the channel ships as one switch; ADR-258 unchanged; the rollout order; rollback is the switch alone, created accounts stay and mailed links still claim.
+- `docs/operations/before-release.md`: Switch rollout stage 5 is no longer waiting for UI (MUT-768/769/770 merged), with the release-QA ids, the claim and Take card checks and the rollback; the server item names MUT-769's API 1.211.0.
+
+### Technical
+- Already in place from the server halves and checked for this ticket: the route pins (`route-security.test.ts`), the provisioning store contract on both stores, mail copy for the four new mails (`templates.test.ts`, ADR-159 §5), IDOR on the activation, no link in any response, the 60-day sweep with an injected clock.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-759: the pilot's release-QA flows on web
+
+### Added
+- `qa/features/portal-selfservice/pilot.yaml` + `qa/specs/portal-selfservice/pilot.spec.ts` (live API): `pilot-panel` (Welcome once with the yes, the Pilot panel with Expected prices, Arabic at 375 px), `pilot-ended`, `pilot-extension`, `pilot-first-scan`. `operator.pilot-grant` (the console's pilot grant with cohort, accountant and the yes; the Pilot filter's chip, accountant, consent and ticks).
+- `grantPilot` and `revokeGrant` in `qa/support/selfService.ts`. The pilot's portal files move from the stubbed `portal` app's watch to `portal-selfservice`'s (they need a real pilot grant).
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-758 web half: the six pilot events (contract 2.13.0, ADR-298)
+
+### Added
+- `trackPilotEvent` and `PilotEvent` (`src/hosted/analytics/portalAnalytics.ts`, through `trackPortal`: release-only via the telemetry gate, opt-in, contract-guarded). The Pilot panel sends `pilot_billing_opened` (`days_left`, rounded down, `pilotDaysLeftFloor`), `pilot_plans_viewed` (first time the plans come into view), `pilot_usage_near_cap` (`limit`, a line at 90%), once per opening, and `pilot_contact_tapped`; the milestones send `pilot_first_scan_saved` / `pilot_first_invoice_issued` (`hours_since_start`) at the same moment as the card. No cohort is ever sent.
+
+### Technical
+- Tests: `BillingDrawer.pilot.test.tsx` (the pilot events), `PilotMilestones.test.tsx`.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.214.0-mut777, ADR-333, migration)
+
+### Added
+- Server: `users.pilotWatchConsentAt` (migration `20261127230000_mut777_pilot_watch_consent`), `pilotWatchConsentOf` / `markPilotWatchConsent` in both stores, `POST /v1/billing/pilot-watch-consent`, `pilot.watchConsentAt` on `GET /v1/billing` and on the operator's Accounts rows, `watchConsent` on both grant create requests (pilot only) and `billing:grant --watch-consent`.
+- Portal: the Welcome's consent tick (off by default); the grant drawer's "The tester agreed…" tick; the Accounts row says whether and when.
+- Docs: runbook §1.13 checks the yes before a watched session; privacy draft `pilotSessions` (en, ar).
+
+### Technical
+- Tests: `server/src/__tests__/billing-pilot-consent.test.ts`, `store-contract-billing.ts` (MUT-777), `migration-mut777.test.ts` (Postgres), `route-security.test.ts`; `PilotWelcome.test.tsx`, `OperatorAccountPage.test.tsx`. OpenAPI and portal types regenerated.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-757 console half: the Pilot filter, chip, accountant and ticks; the grant form's pilot
+
+### Added
+- Operator › Accounts: the Pilot filter (`?pilot=1`, `api.operatorAccounts({ pilot })`), the row chip ("Pilot · ends <date>", "N days left", "Ended", from `pilotChipOf`), the referring accountant, and with the filter the first-scan / first-invoice ticks (`src/hosted/operator/pilot.ts`, `OperatorAccountsPage.tsx`, `router.tsx`).
+- The grant drawer takes a pilot cohort (slug, checked before sending) and the referring accountant by email (`api.operatorAccountByEmail`, MUT-461's exact search); a pilot with no day says "Ends in 60 days".
+
+### Technical
+- Tests: `src/hosted/operator/__tests__/pilot.test.ts`, `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` (the pilot on Accounts).
+
+---
+
+## [Unreleased] - 2026-11-27 — Pilot milestones: first scan, first invoice (ADR-332)
+
+### Added
+- `PilotMilestones` (`src/hosted/shell/PilotMilestones.tsx`): a small card with the milestone scene and `motion-milestone` on a tester's first scan and first invoice, once; `firstsReached`, `nextFirstsMemory`, `hoursSinceStart`, `readFirstsMemory`/`writeFirstsMemory` in `src/hosted/data/pilot.ts`.
+
+### Changed
+- Billing is re-read after a receipt is added to an expense and after a document is issued (`receiptQueries.ts`, `issuedQueries.ts`). `CloseIcon` is exported from `DrawerFrame`.
+
+### Technical
+- Tests: `src/hosted/shell/__tests__/PilotMilestones.test.tsx`.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-755: the pilot Welcome, once per account (ADR-331)
+
+### Added
+- `PilotWelcomeDrawer` (`?pilotWelcome=true`): "Business, free until <date>", three steps on `pilot-welcome-1..3` with `motion-pilot-sheet`, Later and Start with a receipt (to Receipts); closing calls `POST /v1/billing/pilot-welcome` (`api.pilotWelcomeSeen`).
+- `PilotWelcomeOpener` in the shell; `usePilot`, `usePilotWelcomeSeen` (`src/hosted/data/pilotQueries.ts`); `mayBeOnPilot`, `pilotWelcomeDue` (`src/hosted/data/pilot.ts`); `session/pilotWelcomeOffer.ts` (reset in `endSession`).
+
+### Technical
+- Tests: `src/hosted/components/__tests__/PilotWelcome.test.tsx`.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.213.0-mut753, ADR-330)
+
+### Added
+- Portal: Billing's `pilot` and `pilotEnded` panels (`src/hosted/data/billingView.ts`, `BillingDrawer.tsx`): status, this month's lines, the plans with Expected prices from `pilot.plans`, one Write to us link; the last 14 days; Pilot ended with the `pilot-ended` scene. `src/hosted/data/pilot.ts`, `src/hosted/components/PilotBilling.tsx`.
+- Shared usage lines: `usageLinesOf` (`src/hosted/data/usageLines.ts`) and `PlanUsageLines` (butter from 90%, design review 2B), for MUT-754 and MUT-733 to reuse.
+- `formatLongDay` in `src/hosted/format/dates.ts` ("27 January 2027", Levantine months in Arabic).
+- Server: `pilotEndedOf` (`server/src/billing/pilot.ts`) and `pilotEnded` on `GET /v1/billing` (`BillingPilotEnded`), no migration.
+
+### Technical
+- Tests: `server/src/billing/__tests__/pilot.test.ts`, `server/src/__tests__/billing-pilot.test.ts`, `src/hosted/data/__tests__/pilot.test.ts`, `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx`. OpenAPI and `src/hosted/api/schema.d.ts` regenerated.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-774 portal half: each client's balance on the clients list; the ledger-empty scene
+
+### Added
+- Clients list: one Balance column (wireframe A) from `GET /v1/customer-balances` (`api.customerBalances`, `useCustomerBalances` under the profile's `summary` scope): one line per currency stacked, never summed; "Client in credit · <amount>" below zero, "Settled" at zero, "—" with no movement (`ClientBalance`, `src/hosted/components/ledger/ClientBalance.tsx`). The other columns stay.
+- The ledger card's empty state shows the `ledger-empty` scene (drop-in).
+
+### Technical
+- Tests: `src/hosted/pages/__tests__/clientBalances.test.tsx`, `LedgerCard.test.tsx` (no movements). The test harness's `emptyProfileRoutes` answers `/v1/customer-balances`.
+
+## [Unreleased] - 2026-11-27 — MUT-769: /setup for an accountant's customer: who set it up, the code, the password, the account is theirs, the card (ADR-320, API 1.211.0-mut769)
+
+Plan `docs/designs/accountant-channel.md` (DR-1, DR-7; B7, B9). No new page: the existing `/setup` takes a provisioned branch.
+
+### Added
+- `ClaimCodeStep` (`src/hosted/pages/auth/ClaimCodeStep.tsx`): the context line with the `handover-welcome` scene, step 1 of 3, six digit boxes, Verify on `POST /v1/account-setup/claim-code`; wrong code with tries left; `ClaimDeadEnd` for the locked code (`code-locked`) and a dead accountant's link (`link-expired`). Rules in `claimStep.ts` (`claimContextKey`, `claimCodeFailure`, `isClaimRefusal`, `paysAlready`, `claimNext`).
+- `HandoverClaimedMotion` (`src/hosted/components/HandoverClaimedMotion.tsx`): `motion-handover-claimed` from its spec on the two generated scenes, stacked; reduced motion shows the claimed scene.
+- `api.checkClaimCode`. `hosted.accountantChannel.claim.*` strings (ar + en).
+- Server: the dead-link check adds `provisioned: true` for an accountant's customer's link (ADR-320 d3). API 1.211.0-mut769, OpenAPI and hosted types regenerated. No migration.
+
+### Changed
+- `SetupPage`: the provisioned branch (code, then the password with `claimCode`, step 2 of 3 under the context line); after sign-in the hand-over moment on the passkey nudge (or on its own card with Continue), then Billing › Subscribe on the business profile when no covering subscription, else the app. A lock or a replaced code at the redeem goes back to the right screen. A dead accountant's link asks for the accountant, never Send a new link.
+- `PinBoxes`: `length` (a fixed number of boxes) and `boxLabel` ("Digit n of 6"); PIN behaviour unchanged.
+- `SetupPasskeyStep`: an `art` slot above the title.
+- QA: `FakeApi` setup links take `claim` (code, tries) and answer the claim-code route and `provisioned` on dead links.
+
+### Technical
+- Tests: `SetupClaim.test.tsx`, `claimStep.test.ts` (with motion-handover-claimed's spec values), `server/src/__tests__/routes-accountant-claim.test.ts` (the dead-link flag); release QA `portal.setup.claim-code`, `portal.setup.claim-refused`.
+
+## [Unreleased] - 2026-11-28 — Art for the guides, Get started and the help centre, from Claude Design (epic MUT-672, MUT-690; assets only, no behaviour change)
+
+Brief `.claude/designs/guides-and-help/claude-design-brief-guides-and-help.md`; mockups beside it. Nothing renders the new art yet: the guide viewer (MUT-674), Get started (MUT-676/677) and the help shell (MUT-692) use it when they are built.
+
+### Added
+- 29 scenes in `assets/illustrations/source/` (58 drawings with the `-rtl` twins; the two neutral help scenes have none): `guide-{tax,claude,scan,banktext,accountant}-{hero,1..n}`, `getstarted-done`, `help-cluster-{allocation,documents,receipts}`, `help-explainer-{allocation,documents,receipts}`, `help-not-found`. Generated into `src/components/illustrations/generated/` (`npm run illustrations:generate`), so `SCENE_NAMES` lists them.
+- 3 icons in `assets/icons/source/`: `guide`, `get-started`, `support` (generated: `GuideIcon`, `GetStartedIcon`, `SupportIcon`).
+- Motion specs, key frames, stills and GIF/MP4 references for `getstarted-done`, `step-done`, `progress-fill`, `card-hide`, `website-entrance`, `prompt-in-out`, `prompt-to-guide` and `guide-step-change` in `docs/design/motion/2026-11-27-guides/` (the delivery's README is there too).
+
+### Fixed
+- The check marks in `activating-rtl` and `claimed-spot-rtl` (and the activating RTL key frame and still) no longer mirror, from Claude Design's correction of the 2026-11-27 plans, hand-over and pilot set.
+
+### Technical
+- Audited before import: every scene passes `sceneFromSvg` (three colours, sizes, dialect), every step scene keeps its subject inside the central 120×96, no `-rtl` is a plain copy, and the files carry no script or external reference.
+
+---
+
+## [Unreleased] - 2026-11-27 — MUT-703 server half: offers on Solo, Business and Firm (API 1.210.0-mut703, ADR-340)
+
+Plan `.claude/designs/mut-703-offers-plan.md` (Basel approved all 12 §13 defaults). No migration, no new env. The portal's lines are the billing lane's (§11 hooks).
+
+### Added
+- `offers.json`: three entries on `["solo","business","firm"]`: `launch-plans-2026` (yearly), `stay-plans-2026` (monthly), `comeback-plans-2026` (percent, monthly only). Entries name their `plans`; lookup by kind, plan and interval (`entryFor`, `stayEntryFor`, `comebackEntryFor`).
+- `billing:plans` makes the three coupons (`COUPON_SPEC`: launch 50% once until 2027-02-22 00:59 Jerusalem, stay 50% × 2 months, come-back 67% once), all restricted to the plans' products; a live coupon of another shape stops the run with "give the spec a new id"; name/metadata drift updated; `RETIRED_COUPON_IDS` deleted. A test ties offers.json to the spec.
+- GET `/v1/billing`: `plans[].launch` (`{ id, firstYear }`) and `plans[].comeback`; `comeback.plan` and `.percentOff`; `yearlySwitch.plan`. POST `/v1/billing/plan-change/preview` upgrade: `offerEnds`. `SCHEDULED` refusal on stay, pause and the yearly switch.
+- A yearly plan Checkout carries the launch coupon (never on the Solo trial or an accountant's activation); a monthly one the come-back; `expectedOffer`/OFFER_ENDED as on the legacy path; audit `offer`.
+
+### Changed
+- Launch eligibility: never had a subscription that took money (an incomplete one, or a trial cancelled at or before its end, doesn't count). Stripe's subscription list now carries `trialEnd`/`endedAt`.
+- Stay, pause and the yearly switch work on any plan's monthly list price, from its own plan's catalog; the legacy stay coupon stays for ₪29 payers.
+- Come-back: Firm lapses count; "already had" reads every come-back id; with PLAN_CHECKOUT on the mail offers the lapsed plan (Solo for a ₪29 lapser) at 67%, monthly only, and names it.
+- Renewal notice: any plan's list price is due; the mail names the plan. `renewsAtListPrice` on any plan's list price.
+- Plan change: an upgrade drops running discounts in the same update (and its preview prices without them); a downgrade's schedule carries the discounts into both phases (spike S2: before, scheduling dropped a running stay offer).
+- Trial mails' offer line reads the plans' launch while PLAN_CHECKOUT is on.
+
+### Technical
+- Spikes S1 (no over-credit after a spent launch coupon), S1b (a plans-wide coupon follows an upgrade unless dropped) and S2 (phases drop discounts unless carried by `di_…`) run in the Stripe sandbox; results in the plan's "Build decisions". `docs/operations/before-release.md` stage 1: Write on Coupons on the live key, then the script. TD-372.
+- Files: `server/src/billing/{offer,offer-read,offers.json,retention,comeback,comeback-read,comeback-mail,renewal-mail,yearly-switch-line,monthly-summary-mail,checkout}.ts`, `billing/stripe/{plan-gateway,checkout-gateway}.ts`, `routes/{billing,billing-plan,billing-plan-change,comeback-mail,trial-mail,monthly-summary-mail}.ts`, `scripts/stripe-plans.ts`, `email/{ports,templates/copy}.ts`, `schemas.ts`, `openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`.
+
+---
+
 ## [Unreleased] - 2026-11-27 — The accountant's customers on the Client books desk (MUT-768 portal, epic MUT-762, ADR-325, no API change)
 
 Plan `docs/designs/accountant-channel.md` (DR-2..DR-6, B22). Wireframe `.claude/designs/accountant-channel-wireframe.html`, extended with a Take card pane and a five-field Add customer drawer, approved by Basel.

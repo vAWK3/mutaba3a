@@ -21,6 +21,7 @@
     "dataSecurity",
     "noTracking",
     "usageAnalytics",
+    "pilotSessions",
     "errorReports",
     "cookies",
     "retention",
@@ -151,6 +152,10 @@
     "contact": {
       "title": "Contact",
       "body": "Questions about this policy, requests about your information and complaints can be sent to info@mtb3a.com. We reply within 2 working days. By post: Barmajiyat Ltd, 65 London Wall, London, United Kingdom."
+    },
+    "pilotSessions": {
+      "title": "Watched pilot sessions",
+      "body": "If you join our free pilot, we ask you once whether we may watch you use MTB3A, and record your screen, in sessions we arrange with you. We keep your answer and its date with your account. If you say no, the pilot works the same and we do not watch or record you. A recording is used only to improve MTB3A, stays with us and is never shared. [TODO: how long recordings are kept, and where.] Our usage counts never record your screen."
     }
   }
 }

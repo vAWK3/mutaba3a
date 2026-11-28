@@ -164,6 +164,9 @@ export interface SubscriptionState {
   currentPeriodEnd: Date;
   /** MUT-534 (R7): the offer its Checkout carried (`metadata.mutaba3a_offer`), from Stripe's own list; absent from the mirror's. */
   offerId?: string | null;
+  /** MUT-703 (§13 Q6): Stripe's `trial_end` and `ended_at`, so a trial cancelled before it paid doesn't use the launch offer up. */
+  trialEnd?: Date | null;
+  endedAt?: Date | null;
 }
 
 export type CheckoutRefusal =

@@ -515,3 +515,95 @@ describe('feature flags (MUT-462, design 15A)', () => {
     expect(within(screen.getByRole('region', { name: 'الدفع' })).getByRole('button', { name: /منح تغطية/ })).toBeInTheDocument();
   });
 });
+
+/** MUT-757 (design review 5A, P7–P8): the Pilot filter, the chip, the accountant, the ticks, and the grant form's pilot. */
+describe('the pilot on Accounts (MUT-757)', () => {
+  const ACCOUNTANT = '77777777-aaaa-4aaa-8aaa-777777777777';
+  const DAY_MS = 86_400_000;
+  const at = (days: number) => new Date(NOW.getTime() + days * DAY_MS).toISOString();
+  const rowOf = (id: string, email: string, pilot: Record<string, unknown> | null, milestones?: Record<string, unknown>) => ({
+    id,
+    email,
+    displayName: email.split('@')[0],
+    status: 'ACTIVE',
+    operator: false,
+    lastSignInAt: null,
+    features: [],
+    pilot,
+    ...(milestones ? { milestones } : {}),
+  });
+  const accountant = { id: ACCOUNTANT, email: 'nasser@acct.example', displayName: 'Nasser & Co' };
+  const ROWS = [
+    rowOf('00000000-0000-4000-8000-000000000001', 'lina@studio.example', { cohort: 'dec-2026', startedAt: at(-10), endsAt: '2027-01-27T10:00:00.000Z', referredBy: accountant }, { firstScanAt: at(-9), firstInvoiceAt: at(-8) }),
+    rowOf('00000000-0000-4000-8000-000000000002', 'omar@studio.example', { cohort: 'dec-2026', startedAt: at(-50), endsAt: at(9), referredBy: accountant, watchConsentAt: null }, { firstScanAt: at(-40), firstInvoiceAt: null }),
+    rowOf('00000000-0000-4000-8000-000000000003', 'rami@studio.example', { cohort: 'dec-2026', startedAt: at(-70), endsAt: at(-1), referredBy: null, watchConsentAt: '2026-10-01T09:00:00.000Z' }, { firstScanAt: null, firstInvoiceAt: null }),
+  ];
+  const listed: Handler = (request) => {
+    const pilotOn = request.url.searchParams.get('pilot') === '1';
+    const plainRow = rowOf(SARA, 'sara@studio.example', null);
+    return ok({ data: pilotOn ? ROWS : [plainRow, { ...ROWS[0], milestones: undefined }], nextCursor: null, stepUpUntil: FRESH });
+  };
+
+  it('the Pilot filter keeps the testers, in the address, with the chip, the accountant and the two ticks', async () => {
+    const { user, router, api } = portal({ path: '/operator/accounts', extra: { 'GET /v1/operator/accounts': listed } });
+    const list = await screen.findByRole('list', { name: 'Accounts' });
+    // Without the filter: the chip and the accountant, never the ticks.
+    expect(within(list).getByText(/^Pilot · ends .*2027$/)).toBeInTheDocument();
+    expect(within(list).queryByText(/Scan/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Pilot', pressed: false }));
+    await waitFor(() => expect(locationOf(router)).toBe('/operator/accounts?pilot=1'));
+    expect(api.calls.some((c) => c.url.pathname === '/v1/operator/accounts' && c.url.searchParams.get('pilot') === '1')).toBe(true);
+    const lines = (await screen.findAllByTestId('pilot-line')).map((l) => l.textContent);
+    expect(lines).toEqual([
+      'Accountant: Nasser & Co · ✓ Scan · ✓ Invoice',
+      'Accountant: Nasser & Co · – Not agreed to watching · ✓ Scan · – Invoice',
+      expect.stringMatching(/^✓ Agreed to watching · .+ · – Scan · – Invoice$/),
+    ]);
+    const filtered = screen.getByRole('list', { name: 'Accounts' });
+    expect(within(filtered).getByText('9 days left')).toHaveClass('badge-warning');
+    expect(within(filtered).getByText('Ended')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pilot', pressed: true })).toBeInTheDocument();
+  });
+
+  it('grants a pilot: the cohort, and the accountant found by email', async () => {
+    const lookup: Handler = (request) => {
+      const email = request.url.searchParams.get('email');
+      if (email) return ok({ account: email === 'nasser@acct.example' ? { ...accountant, status: 'ACTIVE' } : null, stepUpUntil: FRESH });
+      return ok({ data: [], nextCursor: null, stepUpUntil: FRESH });
+    };
+    const { user, api } = portal({ path: `/operator/accounts/${SARA}?grant=new`, extra: { 'GET /v1/operator/accounts': lookup } });
+    const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
+    await user.click(drawer.getByRole('radio', { name: /Business/ }));
+    await user.type(drawer.getByLabelText('Reason'), 'pilot Nasser');
+    await user.click(drawer.getByRole('button', { name: 'No end date' }));
+    await user.type(drawer.getByLabelText('Pilot cohort'), 'dec-2026');
+    expect(drawer.getByText('Ends in 60 days')).toBeInTheDocument();
+    await user.type(drawer.getByLabelText("Referring accountant's email"), 'nobody@acct.example');
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    expect(await drawer.findByText('No account with this email.')).toBeInTheDocument();
+    expect(api.count(`POST /v1/operator/accounts/${SARA}/billing-grants`)).toBe(0);
+
+    await user.clear(drawer.getByLabelText("Referring accountant's email"));
+    await user.type(drawer.getByLabelText("Referring accountant's email"), 'nasser@acct.example');
+    // MUT-777: the tester's yes, recorded on their behalf.
+    await user.click(drawer.getByRole('checkbox', { name: 'The tester agreed to watched and recorded sessions' }));
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    await toasted('Coverage granted to sara@studio.example');
+    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'BUSINESS', reason: 'pilot Nasser', cohort: 'dec-2026', referredByUserId: ACCOUNTANT, watchConsent: true });
+  });
+
+  it('says what is wrong before sending: a cohort that is not a slug, an accountant without a cohort', async () => {
+    const { user, api } = portal({ path: `/operator/accounts/${SARA}?grant=new` });
+    const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
+    await user.type(drawer.getByLabelText('Reason'), 'pilot');
+    await user.type(drawer.getByLabelText('Pilot cohort'), 'Rana Haddad');
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    expect(await drawer.findByText('Lowercase letters, digits, dots and dashes only.')).toBeInTheDocument();
+    await user.clear(drawer.getByLabelText('Pilot cohort'));
+    await user.type(drawer.getByLabelText("Referring accountant's email"), 'nasser@acct.example');
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    expect(await drawer.findByText('Add a pilot cohort first.')).toBeInTheDocument();
+    expect(api.count(`POST /v1/operator/accounts/${SARA}/billing-grants`)).toBe(0);
+  });
+});

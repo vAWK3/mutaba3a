@@ -243,6 +243,7 @@ export type SignupReviewVerb = 'approve' | 'decline' | 'resend';
 /** MUT-461: the operator console's accounts (/v1/operator/accounts). */
 /** MUT-527: the list of every account (no `email`); the exact-email answer stays for other callers, unused here. */
 export type OperatorAccountList = Schemas['OperatorAccountList'];
+export type OperatorAccountSearch = Schemas['OperatorAccountSearch'];
 export type OperatorAccountListItem = Schemas['OperatorAccountListItem'];
 export type OperatorAccount = Schemas['OperatorAccount'];
 export type OperatorAccountView = Schemas['OperatorAccountView'];
@@ -685,8 +686,11 @@ export const api = {
     request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),
   /** MUT-461: an account by its exact email; no match is `account: null` (never a 404). */
   /** MUT-527: one page of every account, newest sign-in first; `q` is any part of the email or name. */
-  operatorAccounts: (page: { q: string; cursor: string | null }, signal?: AbortSignal) =>
-    request<OperatorAccountList>('GET', '/v1/operator/accounts', { query: { q: page.q, cursor: page.cursor, limit: OPERATOR_ACCOUNTS_PAGE }, signal }),
+  /** MUT-757: `pilot` keeps the accounts that ever held a pilot grant, each with its first-scan / first-invoice ticks. */
+  operatorAccounts: (page: { q: string; cursor: string | null; pilot?: boolean }, signal?: AbortSignal) =>
+    request<OperatorAccountList>('GET', '/v1/operator/accounts', { query: { q: page.q, cursor: page.cursor, limit: OPERATOR_ACCOUNTS_PAGE, pilot: page.pilot ? '1' : undefined }, signal }),
+  /** MUT-757: the grant form's accountant, by exact email (MUT-461's search); no match is `account: null`. */
+  operatorAccountByEmail: (email: string, signal?: AbortSignal) => request<OperatorAccountSearch>('GET', '/v1/operator/accounts', { query: { email }, signal }),
   /** MUT-461: one account as the operator sees it; 404 details.reason ACCOUNT_NOT_FOUND when it's gone. */
   operatorAccount: (userId: string, signal?: AbortSignal) => request<OperatorAccountView>('GET', `/v1/operator/accounts/${encodeURIComponent(userId)}`, { signal }),
   /** MUT-461: disable or enable an account; the answer says what the disable ended. 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
@@ -749,6 +753,9 @@ export const api = {
   /** MUT-333: Keep my account, within the grace. Idempotent. */
   keepAccount: () => request<Schemas['KeepAccountResponse']>('DELETE', '/v1/me/closure'),
   /** MUT-235/236: the setup-link token travels in the body only, never in a URL. */
+  /** MUT-769 (MUT-765 B9): the claim code of an accountant's link, before the password; 403 CLAIM_CODE_WRONG (`details.triesLeft`) or CLAIM_CODE_LOCKED. */
+  checkClaimCode: (body: Schemas['SetupLinkClaimCodeRequest'], signal?: AbortSignal) =>
+    request<Schemas['SetupLinkClaimCodeResponse']>('POST', '/v1/account-setup/claim-code', { body, signal }),
   checkSetupLink: (token: string, signal?: AbortSignal) =>
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
   redeemSetupLink: (body: Schemas['SetupLinkRedeemRequest'], signal?: AbortSignal) =>
@@ -829,6 +836,10 @@ export const api = {
   chooseStarter: () => request<Schemas['StarterChoice']>('POST', '/v1/billing/starter'),
   /** MUT-731 (Basel Q5): the business kept active on Starter. */
   setActiveBusinesses: (organizationIds: string[]) => request<Schemas['ActiveBusinesses']>('PUT', '/v1/billing/active-businesses', { body: { organizationIds } }),
+  /** MUT-755 (ADR-296): the pilot Welcome was closed (Later, its action or ✕); idempotent, the first instant is kept. */
+  pilotWelcomeSeen: () => request<Schemas['PilotWelcomeSeen']>('POST', '/v1/billing/pilot-welcome'),
+  /** MUT-777 (ADR-333): the tester's one yes to watched sessions; idempotent, the first yes is kept. */
+  pilotWatchConsent: () => request<Schemas['PilotWatchConsent']>('POST', '/v1/billing/pilot-watch-consent'),
   /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */
   soloTrialOffered: () => request<Schemas['SoloTrialOffer']>('POST', '/v1/billing/solo-trial/offered'),
 
@@ -880,6 +891,8 @@ export const api = {
   removeExternalInvoice: (profileId: string, id: string) => request<void>('DELETE', `/v1/issuing/external-invoices/${encodeURIComponent(id)}`, { profileId }),
   issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
   /** MUT-664: one page of a client's ledger card in one currency (newest first for the portal). */
+  /** MUT-774: each client's closing balance per currency (MUT-664's statement with no period); negative = in credit. */
+  customerBalances: (profileId: string, signal?: AbortSignal) => request<Get<'/v1/customer-balances'>>('GET', '/v1/customer-balances', { profileId, signal }),
   customerStatement: (profileId: string, customerId: string, query: Query<'/v1/customers/{customerId}/statement'>, signal?: AbortSignal) =>
     request<CustomerStatement>('GET', `/v1/customers/${encodeURIComponent(customerId)}/statement`, { profileId, query, signal }),
   issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string; cursor?: string | null } = {}, signal?: AbortSignal) =>

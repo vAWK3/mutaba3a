@@ -19057,7 +19057,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them. `pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, and the plans with their Expected prices and limits; null otherwise.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. MUT-703 (PLAN_CHECKOUT on): `offer` describes the plans’ launch offer (its `firstYear` is Solo’s, for older portals) and each `plans[]` item carries its own `launch` (first year per currency while the coupon runs) and `comeback` (while it is open to this person: the first month back on that plan, monthly only); `comeback` names the plan the mail offered (`plan`, the lapsed plan, Solo for a legacy Freelancer lapse) and its `percentOff`; `yearlySwitch.plan` is the subscription’s plan, whose saving it shows. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them. `pilot` (MUT-752): the free pilot (an operator grant with a cohort) while it runs and the person doesn’t pay: its end, whether the Welcome was closed, and the plans with their Expected prices and limits; null otherwise. `pilotEnded` (MUT-753): the pilot that ended (expired or revoked) in the last 30 days, while no pilot runs, no other grant covers the person and they don’t pay; null otherwise.
          */
         get: {
             parameters: {
@@ -19116,7 +19116,7 @@ export interface paths {
         put?: never;
         /**
          * Open Stripe Checkout for a plan
-         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout. MUT-702 Part B (ADR-288, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open profile-plan Checkouts are expired. No offers apply until MUT-703. `trial: true` (Solo only) carries the one-time 14-day Solo trial with a card required, for an account web onboarding offered it to that never used it.
+         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout. MUT-702 Part B (ADR-288, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open profile-plan Checkouts are expired. `trial: true` (Solo only) carries the one-time 14-day Solo trial with a card required, for an account web onboarding offered it to that never used it. MUT-703: a yearly plan Checkout by someone who never had a subscription that took money carries the plans’ launch coupon while it runs; otherwise a monthly one by someone the come-back is open to carries the plans’ come-back coupon. `expectedOffer` and OFFER_ENDED as above. No offer on the Solo trial or on an accountant’s activation.
          */
         post: {
             parameters: {
@@ -19593,6 +19593,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/pilot-watch-consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The pilot tester said yes to watched sessions
+         * @description MUT-777 (ADR-333): the tester’s one yes, given when they join the pilot (the Welcome), to being watched and recorded in later watched sessions. Stored on the person with its instant; `GET /v1/billing` `pilot.watchConsentAt` and the operator’s Accounts row show it. Idempotent: the first yes is kept. No yes: the pilot works the same, unwatched. PostHog session replay stays off. Additive since 1.214.0-mut777.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PilotWatchConsent"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/yearly-switch": {
         parameters: {
             query?: never;
@@ -19640,7 +19697,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it) */
+                /** @description CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED (MUT-703: a plan change waits; undo it first), DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19732,7 +19789,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it) */
+                /** @description CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED (MUT-703: a plan change waits; undo it first), DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19832,7 +19889,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -19940,7 +19997,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -20027,7 +20084,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -20132,7 +20189,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -20219,7 +20276,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -20324,7 +20381,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, SCHEDULED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE). MUT-703: SCHEDULED is a plan change (MUT-734) waiting on a Stripe schedule; the person undoes it first. */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -20388,7 +20445,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a plan change (MUT-734)
-         * @description Up a rank: Stripe’s proration charged now, tax included, at `prorationAt`. Down (or to Starter): from the paid period’s end, no refund; past the target’s business count the person picks which businesses stay active (`mustChoose`). The interval is kept. Additive since 1.157.0-mut734.
+         * @description Up a rank: Stripe’s proration charged now, tax included, at `prorationAt`. Down (or to Starter): from the paid period’s end, no refund; past the target’s business count the person picks which businesses stay active (`mustChoose`). The interval is kept. Additive since 1.157.0-mut734. MUT-703: an upgrade ends a running offer (a stay offer or a come-back month): `offerEnds` names it and `amountDue` is without it; a downgrade keeps it to its own end.
          */
         post: {
             parameters: {
@@ -27819,7 +27876,7 @@ export interface paths {
         put?: never;
         /**
          * Daily come-back mails (Cloud Scheduler)
-         * @description Mails each person whose latest paid Freelancer plan Stripe ended 30–44 or 90–104 days ago, in their language: their records are still there, and the first month back costs the list price less the come-back coupon. Each stage is recorded once per person, ever, and that record opens the offer at Checkout. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues.
+         * @description Mails each person whose latest paid plan Stripe ended 30–44 or 90–104 days ago, in their language: their records are still there, and the first month back costs the list price less the come-back coupon (MUT-703: with PLAN_CHECKOUT on, the plan they lapsed from, Solo for a legacy Freelancer lapse, Firm included). Each stage is recorded once per person, ever, and that record opens the offer at Checkout. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues.
          */
         post: {
             parameters: {
@@ -30739,6 +30796,8 @@ export interface components {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
             purpose?: components["schemas"]["SetupLinkPurpose"];
+            /** @enum {boolean} */
+            provisioned?: true;
         };
         /** @enum {string} */
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
@@ -34915,6 +34974,7 @@ export interface components {
                 canDowngradeTo: string[];
             };
             pilot?: components["schemas"]["BillingPilot"] | unknown;
+            pilotEnded?: components["schemas"]["BillingPilotEnded"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -34930,6 +34990,8 @@ export interface components {
             };
         };
         BillingYearlySwitch: {
+            /** @enum {string} */
+            plan?: "freelancer" | "solo" | "business" | "firm";
             /** @enum {string} */
             currency: "ILS" | "USD";
             savings: number | null;
@@ -34952,6 +35014,9 @@ export interface components {
                 ILS: number | null;
                 USD: number | null;
             };
+            percentOff?: number | null;
+            /** @enum {string} */
+            plan?: "freelancer" | "solo" | "business" | "firm";
         };
         BillingAccountantPlan: {
             /** @enum {string} */
@@ -35042,7 +35107,35 @@ export interface components {
                 documentsPerMonth: number;
                 scansPerMonth: number;
             };
+            launch?: components["schemas"]["BillingPlanLaunch"];
+            comeback?: components["schemas"]["BillingPlanComeback"];
         };
+        BillingPlanLaunch: {
+            id: string;
+            firstYear: {
+                ILS: number | null;
+                USD: number | null;
+            };
+        } | null;
+        BillingPlanComeback: {
+            id: string;
+            firstMonth: {
+                ILS: number | null;
+                USD: number | null;
+            };
+            listMonth: {
+                ILS: number | null;
+                USD: number | null;
+            };
+            firstYear: {
+                ILS: number | null;
+                USD: number | null;
+            } | null;
+            listYear: {
+                ILS: number | null;
+                USD: number | null;
+            } | null;
+        } | null;
         BillingAddress: {
             country: string;
             line1: string;
@@ -35061,6 +35154,8 @@ export interface components {
             firstScanAt?: string | null;
             /** Format: date-time */
             firstInvoiceAt?: string | null;
+            /** Format: date-time */
+            watchConsentAt?: string | null;
             pricesExpected: boolean;
             plans: {
                 /** @enum {string} */
@@ -35076,6 +35171,11 @@ export interface components {
                     scansPerMonth: number;
                 };
             }[];
+        };
+        BillingPilotEnded: {
+            cohort: string;
+            /** Format: date-time */
+            endedAt: string;
         };
         BillingRedirect: {
             /** Format: uri */
@@ -35128,6 +35228,10 @@ export interface components {
         PilotWelcomeSeen: {
             /** Format: date-time */
             welcomeSeenAt: string;
+        };
+        PilotWatchConsent: {
+            /** Format: date-time */
+            watchConsentAt: string;
         };
         YearlySwitchPreview: {
             amountDue: number;
@@ -35225,6 +35329,11 @@ export interface components {
                 documentsPerMonth: number;
                 scansPerMonth: number;
             };
+            offerEnds?: {
+                id: string;
+                /** @enum {string} */
+                kind: "launch" | "stay" | "comeback";
+            } | null;
         } | {
             /** @enum {string} */
             kind: "downgrade" | "to_starter";
@@ -35802,6 +35911,8 @@ export interface components {
                     email: string;
                     displayName: string;
                 } | unknown;
+                /** Format: date-time */
+                watchConsentAt?: string | null;
             } | unknown;
             milestones?: {
                 /** Format: date-time */
@@ -35924,6 +36035,7 @@ export interface components {
             cohort?: string;
             /** Format: uuid */
             referredByUserId?: string;
+            watchConsent?: boolean;
         };
         RevokeEntitlementGrantResponse: {
             grant: components["schemas"]["EntitlementGrant"];
@@ -36108,6 +36220,7 @@ export interface components {
             cohort?: string;
             /** Format: uuid */
             referredByUserId?: string;
+            watchConsent?: boolean;
         };
         EntitlementGrantList: {
             grants: components["schemas"]["EntitlementGrant"][];

@@ -47,7 +47,7 @@ import {
   type BillingView,
 } from '../data/billingView';
 import { countryName, countryOptions } from '../data/countries';
-import { formatInstant } from '../format/dates';
+import { formatInstant, formatLongDay } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
 import { trialWelcomeApplies } from '../data/trialPrompt';
 import { useAnswerTrialPrompt } from '../data/trialPromptQueries';
@@ -69,6 +69,10 @@ import { PlanMeters } from './PlanMeters';
 import { BillingAddressFields, PlanRow } from './BillingPlanPicker';
 import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, savedAddressOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
 import { ContinueFreeOnStarter, PickActiveBusiness, StarterBilling } from './StarterPlan';
+import { billingPilotOf } from '../data/pilot';
+import { usageLinesOf } from '../data/usageLines';
+import { PilotBilling } from './PilotBilling';
+import { Scene } from './Scene';
 
 /**
  * Settings › Billing (MUT-362, plan §2.7–§2.8): the account menu's drawer, Arabic first. The status view reads in one
@@ -387,9 +391,11 @@ function StatusView({
   const offer = eligibleOfferOf(billing);
   const switchLine = yearlySwitchLineOf(billing);
   const starterUsage = starterUsageOf(billing);
-  // MUT-705: a paid plan's month (Solo, Business, Firm); Starter keeps its own body below.
+  const pilot = billingPilotOf(billing);
+  const onStarter = view.panel.kind === 'starter' || (view.panel.kind === 'pilotEnded' && view.panel.onStarter);
+  // MUT-705: a paid plan's month (Solo, Business, Firm); Starter and the pilot keep their own bodies below.
   const paidUsage = planUsageOf(billing);
-  const paid = paidUsage && paidUsage.plan !== 'starter' ? paidUsage : null;
+  const paid = paidUsage && paidUsage.plan !== 'starter' && view.panel.kind !== 'pilot' && !onStarter ? paidUsage : null;
   const paidActive = paid ? activeBusinessesOf(billing) : null;
   // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
   // MUT-534: only the launch offer says so here; a come-back Checkout (or a server older than 1.99.0) reads by its kind.
@@ -424,6 +430,8 @@ function StatusView({
         <Banner tone="ok" text={sentence(t, 'hosted.billing.stay.done', { price: <Amount minor={outcome.result.monthlyAmount} currency={outcome.result.currency} language={language} /> })} />
       )}
 
+      {/* MUT-753: the pilot's end state opens on its scene (decoration; the headline carries the meaning). */}
+      {view.panel.kind === 'pilotEnded' && phase === null && <Scene name="pilot-ended" size={120} className="hp-pilot-ended-art" />}
       {phase === 'confirming' ? (
         <div className="hp-billing-status">
           <Chip tone="butter" label={t('hosted.billing.chip.confirming')} />
@@ -452,7 +460,9 @@ function StatusView({
         </div>
       )}
       {/* MUT-731 (wireframe 1): Starter's month, its lines, and the active business (Change opens the pick pane). */}
-      {view.panel.kind === 'starter' && starterUsage && (
+      {/* MUT-753 (design review 1A): the pilot's limits, the plans with their Expected prices, and Write to us. */}
+      {view.panel.kind === 'pilot' && pilot && <PilotBilling billing={billing} pilot={pilot} usage={usageLinesOf(billing)} />}
+      {onStarter && starterUsage && (
         <StarterBilling usage={starterUsage} activeBusinesses={activeBusinessesOf(billing)} canUpgrade={isSellable(billing)} onChangeActive={onChangeActive} />
       )}
       {paid && <PlanMeters usage={paid} canUpgrade={isSellable(billing)} />}
@@ -464,7 +474,7 @@ function StatusView({
         />
       )}
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
-      {list.length > 0 && view.panel.kind !== 'starter' && <ProfilesList profiles={list} />}
+      {list.length > 0 && !onStarter && view.panel.kind !== 'pilot' && <ProfilesList profiles={list} />}
     </div>
   );
 }
@@ -486,7 +496,8 @@ function PanelStatus({
   const t = useT();
   const tp = useTp();
   const day = (iso: string | null) => (iso ? formatInstant(iso, language, browserTimezone()) : '');
-  const copy = panelCopy(panel, t, tp, day, planNameOf(plan, t));
+  const longDay = (iso: string | null) => (iso ? formatLongDay(iso, language, browserTimezone()) : '');
+  const copy = panelCopy(panel, t, tp, day, longDay, planNameOf(plan, t));
   const { chip, tone, headline } = copy;
   // MUT-525 DD3: a list-price plan says what it renews at (founder prices and a plan that ends keep today's line).
   const context: ReactNode =
@@ -518,6 +529,9 @@ function panelCopy(
   t: Translate,
   tp: PluralTranslate,
   day: (iso: string | null) => string,
+  /** MUT-753: the pilot's dates in words ("27 January 2027", design review). */
+  longDay: (iso: string | null) => string = day,
+  /** MUT-705: the plan the headline names. */
   planName = t('hosted.plan.name.freelancer'),
 ): { chip: string; tone: Tone; headline: string; context: string | null } {
   const k = (key: string, vars?: Record<string, string>) => t(`hosted.billing.${key}`, vars);
@@ -656,6 +670,25 @@ function panelCopy(
         headline: k('headline.starter'),
         context: null,
       };
+    // MUT-753 (design review, interaction states): Pilot, then "N days left" in the last 14 days, then Pilot ended.
+    case 'pilot':
+      return panel.lastDays
+        ? {
+            chip: tp('hosted.billing.pilot.daysLeft', panel.daysLeft),
+            tone: 'butter',
+            headline: k('pilot.endsOn', { date: longDay(panel.endsAt) }),
+            context: panel.thenStarter ? k('pilot.thenFree', { plan: t('hosted.plan.name.starter') }) : null,
+          }
+        : {
+            chip: k('chip.pilot'),
+            tone: 'lavender',
+            headline: k('pilot.freeUntil', { date: longDay(panel.endsAt) }),
+            context: k('pilot.offLine', { plan: t('hosted.plan.name.business') }),
+          };
+    case 'pilotEnded':
+      return panel.onStarter
+        ? { chip: t('hosted.plan.name.starter'), tone: 'mint', headline: k('pilot.ended'), context: null }
+        : { chip: k('chip.readOnly'), tone: 'rose', headline: k('pilot.ended'), context: null };
   }
 }
 

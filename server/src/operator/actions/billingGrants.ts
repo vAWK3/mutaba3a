@@ -31,6 +31,8 @@ export interface CreateGrantInput {
   cohort?: string | undefined;
   /** MUT-752: the accountant who referred the tester; only with `cohort`. */
   referredByUserId?: string | undefined;
+  /** MUT-777 (ADR-333): the tester's yes to watched sessions, given when they joined; only with `cohort`. */
+  watchConsent?: boolean | undefined;
 }
 
 /** MUT-752: the pilot fields checked, and the expiry a pilot gets (60 days unless given). 422 before anything is looked up. */
@@ -38,6 +40,7 @@ function pilotFieldsOf(input: CreateGrantInput, expiresAt: Date | null, at: Date
   const { cohort, referredByUserId } = input;
   if (cohort === undefined) {
     if (referredByUserId !== undefined) throw new ApiError('VALIDATION_FAILED', 'A referring accountant is named only on a pilot grant (give cohort)', { field: 'referredByUserId', reason: 'REFERRAL_NEEDS_PILOT' });
+    if (input.watchConsent === true) throw new ApiError('VALIDATION_FAILED', 'A yes to watched sessions is recorded only on a pilot grant (give cohort)', { field: 'watchConsent', reason: 'CONSENT_NEEDS_PILOT' });
     return { cohort: null, referredByUserId: null, expiresAt };
   }
   if (!isPilotCohort(cohort)) throw new ApiError('VALIDATION_FAILED', 'cohort is a lowercase slug: a-z, 0-9, dot, dash or underscore, at most 64', { field: 'cohort' });
@@ -88,10 +91,14 @@ export function billingGrantActions({ store }: BillingGrantActionOptions) {
       reason: input.reason,
       expiresAt: expiresAt?.toISOString() ?? null,
       ...(pilot.cohort !== null ? { cohort: pilot.cohort, referredByUserId: pilot.referredByUserId } : {}),
+      ...(pilot.cohort !== null && input.watchConsent === true ? { watchConsent: true } : {}),
     };
     const audit = await auditOn(input.target, ctx, 'billing.grant_created', id, metadata);
     try {
-      return await store.billing.createGrant({ id, ...input.target, tier: input.tier, reason: input.reason, expiresAt, cohort: pilot.cohort, referredByUserId: pilot.referredByUserId, grantedBy: byLabelOf(ctx.actor, TOKEN_GRANTED_BY), at: ctx.at, audit });
+      const grant = await store.billing.createGrant({ id, ...input.target, tier: input.tier, reason: input.reason, expiresAt, cohort: pilot.cohort, referredByUserId: pilot.referredByUserId, grantedBy: byLabelOf(ctx.actor, TOKEN_GRANTED_BY), at: ctx.at, audit });
+      // MUT-777 (ADR-333): the tester's yes, given when they joined, recorded on the person (the grant's audit row says so).
+      if (pilot.cohort !== null && input.watchConsent === true && input.target.userId) await store.billing.markPilotWatchConsent(input.target.userId, ctx.at);
+      return grant;
     } catch (err) {
       if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'User or organization not found');
       throw err;

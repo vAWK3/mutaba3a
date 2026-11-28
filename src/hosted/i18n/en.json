@@ -364,14 +364,16 @@
         "outstanding": "Outstanding",
         "overdue": "Overdue",
         "lastPayment": "Last payment",
-        "status": "Status"
+        "status": "Status",
+        "balance": "Balance"
       },
       "empty": {
         "title": "No clients on this profile yet"
       },
       "noMatch": "No clients match \"{query}\".",
       "add": "Add client",
-      "addFailed": "Couldn't add the client. Try again."
+      "addFailed": "Couldn't add the client. Try again.",
+      "settled": "Settled"
     },
     "client": {
       "back": "All clients",
@@ -1287,7 +1289,8 @@
         "help": "Needs a hand",
         "pending": "Payment pending",
         "paused": "Paused",
-        "pausing": "Pause booked"
+        "pausing": "Pause booked",
+        "pilot": "Pilot"
       },
       "headline": {
         "trialDaysLeft": {
@@ -1580,6 +1583,26 @@
         "city": "City",
         "postalCode": "Postal code",
         "noMatch": "No match"
+      },
+      "pilot": {
+        "daysLeft": {
+          "one": "{count} day left",
+          "other": "{count} days left"
+        },
+        "freeUntil": "Free until {date}",
+        "endsOn": "Ends {date}",
+        "offLine": "{plan} · 100% off",
+        "thenFree": "Then free {plan}",
+        "ended": "Pilot ended",
+        "plansTitle": "Plans",
+        "expected": "Expected",
+        "businesses": "{used} of {cap} businesses",
+        "partners": {
+          "one": "{count} partner per business",
+          "other": "{count} partners per business"
+        },
+        "writeToUs": "Write to us",
+        "mailSubject": "MTB3A pilot"
       },
       "keep": {
         "title": "Active businesses",
@@ -2388,6 +2411,29 @@
         "exportWithPasskey": "Export CSV with passkey",
         "personLevel": "Not on a profile",
         "profileThisMonth": "This month: {documents} documents, {scans} scans"
+      },
+      "pilot": {
+        "filter": "Pilot",
+        "empty": "No pilot testers yet",
+        "ended": "Ended",
+        "daysLeft": {
+          "one": "{count} day left",
+          "other": "{count} days left"
+        },
+        "ends": "Pilot · ends {date}",
+        "accountant": "Accountant: {name}",
+        "scan": "Scan",
+        "invoice": "Invoice",
+        "cohort": "Pilot cohort",
+        "cohortInvalid": "Lowercase letters, digits, dots and dashes only.",
+        "accountantEmail": "Referring accountant's email",
+        "accountantNeedsCohort": "Add a pilot cohort first.",
+        "accountantUnknown": "No account with this email.",
+        "accountantRefused": "This account can't be the accountant.",
+        "defaultEnd": "Ends in 60 days",
+        "watched": "Agreed to watching · {date}",
+        "notWatched": "Not agreed to watching",
+        "consentLabel": "The tester agreed to watched and recorded sessions"
       }
     },
     "welcome": {
@@ -2415,102 +2461,6 @@
         "continue": "Continue on this device"
       },
       "whatIs": "What is MTB3A?"
-    },
-    "desk": {
-      "add": "Add customer",
-      "filters": {
-        "label": "Show",
-        "all": "All",
-        "awaiting": "Awaiting claim",
-        "needcard": "Needs card",
-        "active": "Active"
-      },
-      "states": {
-        "await": "Awaiting claim",
-        "expired": "Link expired",
-        "card": "Needs card",
-        "activating": "Activating",
-        "active": "Active",
-        "ended": "No longer shared"
-      },
-      "cols": {
-        "customer": "Customer",
-        "state": "State"
-      },
-      "next": {
-        "newCode": "New code",
-        "resend": "Resend link",
-        "takeCard": "Take card"
-      },
-      "nextAria": "{action}: {profile}",
-      "emptyTitle": "No clients yet",
-      "emptyOr": "or ask a client to share",
-      "required": "Required",
-      "invalidEmail": "Check the email",
-      "addDrawer": {
-        "title": "Add customer",
-        "name": "Customer name",
-        "business": "Business name",
-        "email": "Email",
-        "language": "Language of the mail",
-        "country": "Country",
-        "submit": "Add",
-        "submitting": "Adding…",
-        "added": "Added",
-        "sent": "Link sent to {email}",
-        "notSent": "Added, link not sent",
-        "code": "Code",
-        "done": "Done"
-      },
-      "customerDrawer": {
-        "title": "Customer",
-        "claimed": "Claimed",
-        "changeEmail": "Change email",
-        "newEmail": "New email",
-        "changeWarn": "Old link and code stop working.",
-        "change": "Change",
-        "sent": "Link sent to {email}",
-        "code": "Code"
-      },
-      "takeCard": {
-        "plan": "Plan",
-        "plans": {
-          "solo": "Solo",
-          "business": "Business",
-          "firm": "Firm"
-        },
-        "interval": "Payment",
-        "monthly": "Monthly",
-        "yearly": "Yearly",
-        "buyer": "Customer type",
-        "company": "Company (tax ID)",
-        "person": "Person",
-        "country": "Country",
-        "countryChoose": "Choose a country",
-        "address": "Address",
-        "city": "City",
-        "postalCode": "Postal code",
-        "back": "Back",
-        "stripe": "Continue to Stripe",
-        "opening": "Opening Stripe…"
-      },
-      "errors": {
-        "notApproved": "You can't add customers yet",
-        "claimed": "Claimed",
-        "addressRefused": "Use the customer's own address",
-        "exists": "An account exists. Ask the customer to share with you.",
-        "limitCreate": "Daily limit of {max} customers reached",
-        "limitLookup": "Daily limit reached",
-        "limitReissue": "Daily limit reached for this customer",
-        "rateLimited": "Try again later",
-        "emailTaken": "This email already has an account",
-        "alreadyPaid": "Already paid",
-        "cardUnavailable": "The card can't be taken here",
-        "countryNeedsBusiness": "Companies only in this country",
-        "addressInvalid": "Check the address",
-        "stripeDown": "Stripe is unavailable",
-        "failed": "Something went wrong"
-      }
     },
     "clientBooks": {
       "title": "Client books",
@@ -3673,7 +3623,7 @@
         "business": "Business",
         "firm": "Firm",
         "starter": "Starter",
-        "freelancer": "Freelancer"
+        "freelancer": "Previous plan"
       },
       "starter": {
         "includes": "1 business and your personal profile",
@@ -3717,6 +3667,120 @@
         "back": "Back"
       }
     },
+    "pilotWelcome": {
+      "title": "Welcome",
+      "lead": "{plan}, free until {date}",
+      "steps": {
+        "scan": "Scan a receipt",
+        "invoice": "Issue an invoice",
+        "tell": "Tell us what is unclear"
+      },
+      "later": "Later",
+      "start": "Start with a receipt",
+      "consent": "You may watch and record my sessions in this pilot"
+    },
+    "pilot": {
+      "milestone": {
+        "scan": "First scan saved",
+        "invoice": "First invoice issued"
+      }
+    },
+    "desk": {
+      "add": "Add customer",
+      "filters": {
+        "label": "Show",
+        "all": "All",
+        "awaiting": "Awaiting claim",
+        "needcard": "Needs card",
+        "active": "Active"
+      },
+      "states": {
+        "await": "Awaiting claim",
+        "expired": "Link expired",
+        "card": "Needs card",
+        "activating": "Activating",
+        "active": "Active",
+        "ended": "No longer shared"
+      },
+      "cols": {
+        "customer": "Customer",
+        "state": "State"
+      },
+      "next": {
+        "newCode": "New code",
+        "resend": "Resend link",
+        "takeCard": "Take card"
+      },
+      "nextAria": "{action}: {profile}",
+      "emptyTitle": "No clients yet",
+      "emptyOr": "or ask a client to share",
+      "required": "Required",
+      "invalidEmail": "Check the email",
+      "addDrawer": {
+        "title": "Add customer",
+        "name": "Customer name",
+        "business": "Business name",
+        "email": "Email",
+        "language": "Language of the mail",
+        "country": "Country",
+        "submit": "Add",
+        "submitting": "Adding…",
+        "added": "Added",
+        "sent": "Link sent to {email}",
+        "notSent": "Added, link not sent",
+        "code": "Code",
+        "done": "Done"
+      },
+      "customerDrawer": {
+        "title": "Customer",
+        "claimed": "Claimed",
+        "changeEmail": "Change email",
+        "newEmail": "New email",
+        "changeWarn": "Old link and code stop working.",
+        "change": "Change",
+        "sent": "Link sent to {email}",
+        "code": "Code"
+      },
+      "takeCard": {
+        "plan": "Plan",
+        "plans": {
+          "solo": "Solo",
+          "business": "Business",
+          "firm": "Firm"
+        },
+        "interval": "Payment",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "buyer": "Customer type",
+        "company": "Company (tax ID)",
+        "person": "Person",
+        "country": "Country",
+        "countryChoose": "Choose a country",
+        "address": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "back": "Back",
+        "stripe": "Continue to Stripe",
+        "opening": "Opening Stripe…"
+      },
+      "errors": {
+        "notApproved": "You can't add customers yet",
+        "claimed": "Claimed",
+        "addressRefused": "Use the customer's own address",
+        "exists": "An account exists. Ask the customer to share with you.",
+        "limitCreate": "Daily limit of {max} customers reached",
+        "limitLookup": "Daily limit reached",
+        "limitReissue": "Daily limit reached for this customer",
+        "rateLimited": "Try again later",
+        "emailTaken": "This email already has an account",
+        "alreadyPaid": "Already paid",
+        "cardUnavailable": "The card can't be taken here",
+        "countryNeedsBusiness": "Companies only in this country",
+        "addressInvalid": "Check the address",
+        "stripeDown": "Stripe is unavailable",
+        "failed": "Something went wrong"
+      }
+    },
     "accountantChannel": {
       "code": {
         "label": "Code",
@@ -3744,6 +3808,34 @@
         "awaiting": "Awaiting claim",
         "needsCard": "Needs card",
         "active": "Active"
+      },
+      "claim": {
+        "context": "{accountant} set up MTB3A for {business}.",
+        "contextNoAccountant": "Your accountant set up MTB3A for {business}.",
+        "contextNoBusiness": "{accountant} set up MTB3A for you.",
+        "contextNone": "Your accountant set up MTB3A for you.",
+        "codeTitle": "Enter the code your accountant gave you",
+        "digit": "Digit {n} of {total}",
+        "verify": "Verify",
+        "verifying": "Checking…",
+        "required": "Enter all six digits.",
+        "wrong": {
+          "one": "Wrong code. {count} try left.",
+          "other": "Wrong code. {count} tries left."
+        },
+        "locked": {
+          "title": "Too many tries",
+          "body": "Ask your accountant for a new code."
+        },
+        "dead": {
+          "title": "This link is no longer valid",
+          "body": "Ask your accountant for a new one."
+        },
+        "step": "Step {n} of {total}",
+        "claimed": {
+          "title": "The account is yours",
+          "continue": "Continue"
+        }
       }
     }
   }

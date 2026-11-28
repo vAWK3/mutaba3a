@@ -368,14 +368,16 @@
         "outstanding": "المستحق",
         "overdue": "المتأخر",
         "lastPayment": "آخر دفعة",
-        "status": "الحالة"
+        "status": "الحالة",
+        "balance": "الرصيد"
       },
       "empty": {
         "title": "لا عملاء على هذا الملف بعد"
       },
       "noMatch": "لا عملاء يطابقون \"{query}\".",
       "add": "إضافة عميل",
-      "addFailed": "تعذّرت إضافة العميل. حاول مجدداً."
+      "addFailed": "تعذّرت إضافة العميل. حاول مجدداً.",
+      "settled": "مسدّد"
     },
     "client": {
       "back": "كل العملاء",
@@ -1339,7 +1341,8 @@
         "help": "يحتاج مساعدتنا",
         "pending": "الدفع معلّق",
         "paused": "متوقف مؤقتًا",
-        "pausing": "إيقاف مجدول"
+        "pausing": "إيقاف مجدول",
+        "pilot": "تجريبي"
       },
       "headline": {
         "trialDaysLeft": {
@@ -1668,6 +1671,34 @@
         "city": "المدينة",
         "postalCode": "الرمز البريدي",
         "noMatch": "لا يوجد تطابق"
+      },
+      "pilot": {
+        "daysLeft": {
+          "zero": "لم يبقَ أيام",
+          "one": "بقي يوم واحد",
+          "two": "بقي يومان",
+          "few": "بقيت {count} أيام",
+          "many": "بقي {count} يومًا",
+          "other": "بقي {count} يوم"
+        },
+        "freeUntil": "مجاني حتى {date}",
+        "endsOn": "تنتهي في {date}",
+        "offLine": "{plan} · خصم 100%",
+        "thenFree": "ثم {plan} مجانًا",
+        "ended": "انتهت التجربة",
+        "plansTitle": "الخطط",
+        "expected": "متوقّع",
+        "businesses": "{used} من {cap} ملفات تجارية",
+        "partners": {
+          "zero": "{count} شريك لكل ملف تجاري",
+          "one": "شريك واحد لكل ملف تجاري",
+          "two": "شريكان لكل ملف تجاري",
+          "few": "{count} شركاء لكل ملف تجاري",
+          "many": "{count} شريكًا لكل ملف تجاري",
+          "other": "{count} شريك لكل ملف تجاري"
+        },
+        "writeToUs": "راسلنا",
+        "mailSubject": "تجربة متابعة"
       },
       "keep": {
         "title": "الأنشطة الفعّالة",
@@ -2528,6 +2559,33 @@
         "exportWithPasskey": "تصدير CSV بمفتاح المرور",
         "personLevel": "ليس على ملف",
         "profileThisMonth": "هذا الشهر: {documents} مستندات، {scans} مسح"
+      },
+      "pilot": {
+        "filter": "تجريبي",
+        "empty": "لا يوجد مختبِرون في التجربة بعد",
+        "ended": "انتهت",
+        "daysLeft": {
+          "zero": "لم يبقَ أيام",
+          "one": "بقي يوم واحد",
+          "two": "بقي يومان",
+          "few": "بقيت {count} أيام",
+          "many": "بقي {count} يومًا",
+          "other": "بقي {count} يوم"
+        },
+        "ends": "تجريبي · تنتهي في {date}",
+        "accountant": "المحاسب: {name}",
+        "scan": "مسح",
+        "invoice": "فاتورة",
+        "cohort": "مجموعة التجربة",
+        "cohortInvalid": "أحرف لاتينية صغيرة وأرقام ونقاط وشرطات فقط.",
+        "accountantEmail": "بريد المحاسب المُحيل",
+        "accountantNeedsCohort": "أضف مجموعة التجربة أولًا.",
+        "accountantUnknown": "لا يوجد حساب بهذا البريد.",
+        "accountantRefused": "لا يمكن أن يكون هذا الحساب هو المحاسب.",
+        "defaultEnd": "تنتهي بعد 60 يومًا",
+        "watched": "وافق على المشاهدة · {date}",
+        "notWatched": "لم يوافق على المشاهدة",
+        "consentLabel": "وافق المختبِر على مشاهدة جلساته وتسجيلها"
       }
     },
     "welcome": {
@@ -2555,102 +2613,6 @@
         "continue": "تابِع على هذا الجهاز"
       },
       "whatIs": "ما هي متابعة؟"
-    },
-    "desk": {
-      "add": "إضافة عميل",
-      "filters": {
-        "label": "عرض",
-        "all": "الكل",
-        "awaiting": "بانتظار التفعيل",
-        "needcard": "بحاجة إلى بطاقة",
-        "active": "نشط"
-      },
-      "states": {
-        "await": "بانتظار التفعيل",
-        "expired": "انتهى الرابط",
-        "card": "بحاجة إلى بطاقة",
-        "activating": "جارٍ التفعيل",
-        "active": "نشط",
-        "ended": "لم يعد مشاركًا"
-      },
-      "cols": {
-        "customer": "العميل",
-        "state": "الحالة"
-      },
-      "next": {
-        "newCode": "رمز جديد",
-        "resend": "إعادة إرسال الرابط",
-        "takeCard": "أخذ البطاقة"
-      },
-      "nextAria": "{action}: {profile}",
-      "emptyTitle": "لا عملاء بعد",
-      "emptyOr": "أو اطلب من العميل المشاركة",
-      "required": "مطلوب",
-      "invalidEmail": "تحقق من البريد",
-      "addDrawer": {
-        "title": "إضافة عميل",
-        "name": "اسم العميل",
-        "business": "اسم النشاط",
-        "email": "البريد الإلكتروني",
-        "language": "لغة الرسالة",
-        "country": "الدولة",
-        "submit": "إضافة",
-        "submitting": "جارٍ الإضافة…",
-        "added": "تمت الإضافة",
-        "sent": "أُرسل الرابط إلى {email}",
-        "notSent": "تمت الإضافة، لم يُرسل الرابط",
-        "code": "الرمز",
-        "done": "تم"
-      },
-      "customerDrawer": {
-        "title": "العميل",
-        "claimed": "تم التفعيل",
-        "changeEmail": "تغيير البريد",
-        "newEmail": "البريد الجديد",
-        "changeWarn": "يتوقف الرابط والرمز القديمان.",
-        "change": "تغيير",
-        "sent": "أُرسل الرابط إلى {email}",
-        "code": "الرمز"
-      },
-      "takeCard": {
-        "plan": "الخطة",
-        "plans": {
-          "solo": "Solo",
-          "business": "Business",
-          "firm": "Firm"
-        },
-        "interval": "الدفع",
-        "monthly": "شهريًا",
-        "yearly": "سنويًا",
-        "buyer": "نوع العميل",
-        "company": "شركة (برقم ضريبي)",
-        "person": "فرد",
-        "country": "الدولة",
-        "countryChoose": "اختر بلدًا",
-        "address": "العنوان",
-        "city": "المدينة",
-        "postalCode": "الرمز البريدي",
-        "back": "رجوع",
-        "stripe": "المتابعة إلى Stripe",
-        "opening": "جارٍ فتح Stripe…"
-      },
-      "errors": {
-        "notApproved": "لا يمكنك إضافة عملاء بعد",
-        "claimed": "تم التفعيل",
-        "addressRefused": "استخدم بريد العميل نفسه",
-        "exists": "يوجد حساب بهذا البريد. اطلب من العميل المشاركة معك.",
-        "limitCreate": "بلغت الحد اليومي: {max} عميلًا",
-        "limitLookup": "بلغت الحد اليومي",
-        "limitReissue": "بلغت الحد اليومي لهذا العميل",
-        "rateLimited": "حاول لاحقًا",
-        "emailTaken": "لهذا البريد حساب بالفعل",
-        "alreadyPaid": "تم الدفع",
-        "cardUnavailable": "تعذّر أخذ البطاقة هنا",
-        "countryNeedsBusiness": "للشركات فقط في هذا البلد",
-        "addressInvalid": "تحقق من العنوان",
-        "stripeDown": "Stripe غير متاح",
-        "failed": "حدث خطأ"
-      }
     },
     "clientBooks": {
       "title": "دفاتر العملاء",
@@ -3972,6 +3934,120 @@
         "back": "رجوع"
       }
     },
+    "pilotWelcome": {
+      "title": "أهلًا بك",
+      "lead": "{plan} مجانًا حتى {date}",
+      "steps": {
+        "scan": "صوّر إيصالًا",
+        "invoice": "أصدر فاتورة",
+        "tell": "أخبرنا بما هو غير واضح"
+      },
+      "later": "لاحقًا",
+      "start": "ابدأ بإيصال",
+      "consent": "أوافق على أن تشاهدوا جلساتي في هذه التجربة وتسجّلوها"
+    },
+    "pilot": {
+      "milestone": {
+        "scan": "حُفظ أول مسح",
+        "invoice": "صدرت أول فاتورة"
+      }
+    },
+    "desk": {
+      "add": "إضافة عميل",
+      "filters": {
+        "label": "عرض",
+        "all": "الكل",
+        "awaiting": "بانتظار التفعيل",
+        "needcard": "بحاجة إلى بطاقة",
+        "active": "نشط"
+      },
+      "states": {
+        "await": "بانتظار التفعيل",
+        "expired": "انتهى الرابط",
+        "card": "بحاجة إلى بطاقة",
+        "activating": "جارٍ التفعيل",
+        "active": "نشط",
+        "ended": "لم يعد مشاركًا"
+      },
+      "cols": {
+        "customer": "العميل",
+        "state": "الحالة"
+      },
+      "next": {
+        "newCode": "رمز جديد",
+        "resend": "إعادة إرسال الرابط",
+        "takeCard": "أخذ البطاقة"
+      },
+      "nextAria": "{action}: {profile}",
+      "emptyTitle": "لا عملاء بعد",
+      "emptyOr": "أو اطلب من العميل المشاركة",
+      "required": "مطلوب",
+      "invalidEmail": "تحقق من البريد",
+      "addDrawer": {
+        "title": "إضافة عميل",
+        "name": "اسم العميل",
+        "business": "اسم النشاط",
+        "email": "البريد الإلكتروني",
+        "language": "لغة الرسالة",
+        "country": "الدولة",
+        "submit": "إضافة",
+        "submitting": "جارٍ الإضافة…",
+        "added": "تمت الإضافة",
+        "sent": "أُرسل الرابط إلى {email}",
+        "notSent": "تمت الإضافة، لم يُرسل الرابط",
+        "code": "الرمز",
+        "done": "تم"
+      },
+      "customerDrawer": {
+        "title": "العميل",
+        "claimed": "تم التفعيل",
+        "changeEmail": "تغيير البريد",
+        "newEmail": "البريد الجديد",
+        "changeWarn": "يتوقف الرابط والرمز القديمان.",
+        "change": "تغيير",
+        "sent": "أُرسل الرابط إلى {email}",
+        "code": "الرمز"
+      },
+      "takeCard": {
+        "plan": "الخطة",
+        "plans": {
+          "solo": "Solo",
+          "business": "Business",
+          "firm": "Firm"
+        },
+        "interval": "الدفع",
+        "monthly": "شهريًا",
+        "yearly": "سنويًا",
+        "buyer": "نوع العميل",
+        "company": "شركة (برقم ضريبي)",
+        "person": "فرد",
+        "country": "الدولة",
+        "countryChoose": "اختر بلدًا",
+        "address": "العنوان",
+        "city": "المدينة",
+        "postalCode": "الرمز البريدي",
+        "back": "رجوع",
+        "stripe": "المتابعة إلى Stripe",
+        "opening": "جارٍ فتح Stripe…"
+      },
+      "errors": {
+        "notApproved": "لا يمكنك إضافة عملاء بعد",
+        "claimed": "تم التفعيل",
+        "addressRefused": "استخدم بريد العميل نفسه",
+        "exists": "يوجد حساب بهذا البريد. اطلب من العميل المشاركة معك.",
+        "limitCreate": "بلغت الحد اليومي: {max} عميلًا",
+        "limitLookup": "بلغت الحد اليومي",
+        "limitReissue": "بلغت الحد اليومي لهذا العميل",
+        "rateLimited": "حاول لاحقًا",
+        "emailTaken": "لهذا البريد حساب بالفعل",
+        "alreadyPaid": "تم الدفع",
+        "cardUnavailable": "تعذّر أخذ البطاقة هنا",
+        "countryNeedsBusiness": "للشركات فقط في هذا البلد",
+        "addressInvalid": "تحقق من العنوان",
+        "stripeDown": "Stripe غير متاح",
+        "failed": "حدث خطأ"
+      }
+    },
     "accountantChannel": {
       "code": {
         "label": "الرمز",
@@ -3999,6 +4075,38 @@
         "awaiting": "بانتظار التفعيل",
         "needsCard": "بحاجة إلى بطاقة",
         "active": "نشط"
+      },
+      "claim": {
+        "context": "أعدّ {accountant} حساب متابعة لـ{business}.",
+        "contextNoAccountant": "أعدّ محاسبك حساب متابعة لـ{business}.",
+        "contextNoBusiness": "أعدّ {accountant} حساب متابعة لك.",
+        "contextNone": "أعدّ محاسبك حساب متابعة لك.",
+        "codeTitle": "أدخل الرمز الذي أعطاك إياه محاسبك",
+        "digit": "الرقم {n} من {total}",
+        "verify": "تحقّق",
+        "verifying": "جارٍ التحقّق…",
+        "required": "أدخل الأرقام الستة.",
+        "wrong": {
+          "zero": "الرمز خاطئ.",
+          "one": "الرمز خاطئ. بقيت محاولة واحدة.",
+          "two": "الرمز خاطئ. بقيت محاولتان.",
+          "few": "الرمز خاطئ. بقيت {count} محاولات.",
+          "many": "الرمز خاطئ. بقيت {count} محاولة.",
+          "other": "الرمز خاطئ. بقيت {count} محاولة."
+        },
+        "locked": {
+          "title": "محاولات كثيرة",
+          "body": "اطلب من محاسبك رمزًا جديدًا."
+        },
+        "dead": {
+          "title": "هذا الرابط لم يعد صالحًا",
+          "body": "اطلب من محاسبك رابطًا جديدًا."
+        },
+        "step": "الخطوة {n} من {total}",
+        "claimed": {
+          "title": "الحساب لك الآن",
+          "continue": "متابعة"
+        }
       }
     }
   }

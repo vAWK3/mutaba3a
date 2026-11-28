@@ -103,6 +103,34 @@ describe('POST /v1/accountant/customers/{userId}/checkout-session (MUT-766)', ()
     expect(h.checkout.expiredCheckouts - expiredBefore).toBe(1);
   });
 
+  it('MUT-703 (ADR-300 d2): an activation carries no offer, even yearly while the plans’ launch runs; the customer buying later gets it by the rule', async () => {
+    const h = harness();
+    h.checkout.coupons.set('mtb3a_launch_yearly_plans_2026', {
+      id: 'mtb3a_launch_yearly_plans_2026',
+      valid: true,
+      percentOff: 50,
+      amountOff: null,
+      amountOffIn: { ILS: null, USD: null },
+      duration: 'once',
+      durationInMonths: null,
+      redeemBy: new Date('2027-02-21T22:59:00.000Z'),
+      appliesToProducts: ['prod_solo', 'prod_business', 'prod_firm'],
+    });
+    const accountant = await approved(h);
+    const c = await customer(h, accountant);
+    expect((await activate(h, accountant, c.userId, activation({ interval: 'year' }))).status).toBe(200);
+    expect(h.checkout.checkoutSessions[0]!.discounts).toBeUndefined();
+    expect(h.checkout.couponReads).toEqual([]);
+    const started = (await h.store.audit.listByOrganization(c.profileId, 50)).find((e) => e.action === 'billing.checkout_started');
+    expect(started?.metadata).toMatchObject({ offer: null, payerUserId: c.userId });
+
+    expect((await claim(h, c)).status).toBe(200);
+    const self = await signedIn(h, c.email, PASSWORD, c.userId, '');
+    const own = await h.app.request('/v1/billing/checkout-session', json({ ...activation({ interval: 'year' }), returnPath: '/client-books' }, self.auth));
+    expect(own.status).toBe(200);
+    expect(h.checkout.checkoutSessions[1]!.discounts).toEqual([{ coupon: 'mtb3a_launch_yearly_plans_2026' }]);
+  });
+
   it('is 404 for another accountant’s customer, an unknown id and a claimed customer; 403 when not approved', async () => {
     const h = harness();
     const a = await approved(h);

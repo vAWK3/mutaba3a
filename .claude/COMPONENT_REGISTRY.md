@@ -2506,6 +2506,8 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `AccessScopeList` — `src/hosted/components/AccessScopeList.tsx`: the four "sees / can download / can't change / doesn't see" points (`hosted.accessScope.*`). Reuse it for any accountant-facing promise (MUT-562).
 - `Scene` — `src/hosted/components/Scene.tsx`: `name` (`SceneName`: drawn or on order; `SCENE_NAMES` lists the drawn ones, never an `-rtl` drawing), `size` (width in px, height keeps the aspect ratio; default the drawn size, 160×160 or 120×96), `motion: 'drop-in' | 'none'`. In an RTL document (`useOptionalDirection`, else `<html dir>`) it shows `<name>-rtl` when that art exists (2026-11-27), never a CSS mirror; `sceneArtFor(name, direction)` is the pure choice. A scene not drawn yet shows `empty-state` (`data-placeholder`). Art from `npm run illustrations:generate` (`scripts/illustration-set.ts`, `scripts/generate-illustrations.ts` → `src/components/illustrations/generated/`, `SCENE_ART`); never hand-edit the generated folder.
 - `CodeReveal` — `src/hosted/components/CodeReveal.tsx` (MUT-770): `code` (six digits; spaces ignored), `labelledBy?` (the id of the heading that names it, e.g. "Code"). Shown once, Plex Mono at `--text-figure-fluid`, `dir="ltr"`, 3 and 3, `role="img"` named by the spaced digits, Copy → Copied (polite) for `COPIED_HOLD_MS`. `motion-claim-code` in `hosted.css`. Rules in `claimCode.ts`. Use it for any code a person reads out to another (the accountant desk's Add customer and New code panes).
+- `HandoverClaimedMotion` — `src/hosted/components/HandoverClaimedMotion.tsx` (MUT-769): `size?` (default 160). `motion-handover-claimed` on the `handover-claimed` scene with the `handover-welcome` scene stacked above for the trail and label; reduced motion shows the claimed scene.
+- `ClaimCodeStep` / `ClaimContextLine` / `ClaimStepCount` / `ClaimDeadEnd` — `src/hosted/pages/auth/ClaimCodeStep.tsx` (MUT-769): the accountant's-customer branch of `/setup`. Rules in `claimStep.ts`. `PinBoxes` gained `length` and `boxLabel` for a fixed-length code.
 - `ActivatingMotion` — `src/hosted/components/ActivatingMotion.tsx` (MUT-770): `done`, `size?` (default 120). `motion-activating`: the loop while waiting, then the resolve onto the `activating` scene; under reduced motion the scene itself. Timing in `activatingHop.ts` (`hopEnd`).
 - `ActivatingStatus` — `src/hosted/components/ActivatingStatus.tsx` (MUT-770): `name`, `phase` (`ActivatingPhase`), `onClose?`. The motion with one line and a polite live region. Pair with `useActivatingPoll({ startedAt, paid, poll })` (`src/hosted/data/activatingPoll.ts`, 4 s for at most 2 min).
 - `LinksColumn` — `src/hosted/pages/sharing/LinksColumn.tsx`: `profile`, `query` (`useShareLinks`), `onCreate`. `HostedTable` with a sticky action; Turn off confirms in the row's detail row.
@@ -2626,6 +2628,21 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/components/BusinessChecklist.tsx` | `BusinessChecklist` (checkboxes + N of N), `PickActiveBusinesses` (save pane), `ReadOnlyBusinesses` (Billing section) | Billing drawer; MUT-734's downgrade preview |
 | `src/hosted/components/PlanLimitNotice.tsx` | `PlanLimitNotice` (any plan, next plan + price), `UpgradeTo({ plan })`, `UpgradeToSolo` | as MUT-731, plus `PlanMeters`, Home's paid line |
 | `src/hosted/shell/AccountDrawers.tsx` | `openUpgrade(plan)` (`?billing=true&step=subscribe&billingPlan=`) | `UpgradeTo` |
+## MUT-753 — the Pilot panel (ADR-330)
+
+- `PlanUsageLines` (`src/hosted/components/PilotBilling.tsx`): a paid plan's usage lines from `usageLinesOf(billing)` (`src/hosted/data/usageLines.ts`): "12 of 250 documents" with a bar, the number and bar butter from 90% (`data-attention`), partners per business, the reset day. Shared: use it for any paid plan's meters (MUT-754, MUT-733) instead of a second meter row. Starter keeps `UsageMeter` (its "left" line and 80% rule).
+- `PilotBilling`: the Pilot panel's body (lines, plans with Expected prices, Write to us). Usage: `<PilotBilling billing={billing} pilot={billingPilotOf(billing)!} usage={usageLinesOf(billing)} />`.
+- `billingPilotOf`, `billingPilotEndedOf`, `pilotCurrencyOf`, `PILOT_LAST_DAYS` (`src/hosted/data/pilot.ts`).
+- `PilotWelcomeDrawer` (`src/hosted/components/PilotWelcomeDrawer.tsx`, MUT-755, ADR-331): the once-per-account Welcome, by URL key `pilotWelcome`; opened by `PilotWelcomeOpener` (`src/hosted/shell/`).
+- `usePilot()` (`src/hosted/data/pilotQueries.ts`): the pilot for shell-level features (Welcome, milestones); reads billing only when `mayBeOnPilot(me)`.
+- `PilotMilestones` (`src/hosted/shell/PilotMilestones.tsx`, ADR-332): the first-scan / first-invoice celebration card; `usePilotMilestones` is its queue (zustand, ephemeral).
+
+---
+
+## MUT-774 — client balances on the clients list
+
+- `ClientBalance` (`src/hosted/components/ledger/ClientBalance.tsx`): one client balance in one currency (owes / "Client in credit · …" / "Settled"), the ledger card's words. `useCustomerBalances(profileId)` (`src/hosted/data/statementQueries.ts`) groups `GET /v1/customer-balances` by client.
+
 ## MUT-768 — the accountant's desk (ADR-325)
 
 | Where | Exports | Used by |

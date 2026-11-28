@@ -1171,6 +1171,8 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-operator-list + .hp-operator-list, .hp-operator-list + .hp-empty { margin-block-start: var(--space-3); }
 .hp-operator-chips { display: flex; flex-wrap: wrap; gap: var(--space-1-5); margin-block-start: var(--space-1-5); }
 .hp-operator-chips:empty { display: none; }
+/* MUT-757: the Pilot filter above the Accounts list. */
+.hp-operator-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-3); }
 .hp-operator-list .hp-banner, .hp-operator-list .hp-copy-field { flex: 1 1 100%; margin: 0; }
 /* MUT-461 (17A, 5A, 4A, 12A): accounts. The search field, then its button under it. */
 .hp-operator-search { display: grid; justify-items: start; gap: var(--space-2); margin-block-end: var(--space-4); }
@@ -1526,8 +1528,10 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-chip-count { color: var(--muted); }
 .hp-desk-next { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); margin: var(--space-3) 0; }
 .hp-desk-next .btn, .hp-desk-next button { min-height: 44px; }
+/* MUT-771 (DR-10): a row's one next action is a 44 px target too */
+.hp-desk-row-action.btn { min-height: 44px; }
+/* MUT-771 (DR-9, DR-11): an ended row is faded by its muted ink alone; an opacity on top dropped its text below 4.5:1 (axe on the desk) */
 .hp-row-ended td { color: var(--muted); }
-.hp-row-ended td:not(.hp-sticky-end) { opacity: 0.6; }
 .hp-ended-note { font-size: var(--text-label); color: var(--muted); }
 .hp-row-open td { background: var(--accent-subtle); }
 .hp-read-only-line { margin: 0; flex-basis: 100%; color: var(--text-secondary); font-size: var(--text-label); }
@@ -1692,6 +1696,56 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 @keyframes hp-activating-dot-out { from { scale: 1; } to { scale: 0; } }
 @keyframes hp-activating-check-draw { from { stroke-dashoffset: 31; } to { stroke-dashoffset: 0; } }
 .hp-activating-still { animation: hp-fade-in-still 150ms linear both; }
+
+/*
+ * ---------- Handover claimed (MUT-769): motion-handover-claimed, 1.32 s once ----------
+ * docs/design/motion/2026-11-27/handover-claimed/motion-handover-claimed-spec.md. The claimed scene animates from the
+ * welcome pose; the welcome scene above it shows only the offer trail and the label, and fades them. The key: held
+ * out (116, 34) → resting (106, 114) over 700 ms, y on the spring (`translate`) and x linear (`transform`), so the
+ * path bows outward as an arc, tilting −16° mid-way (`rotate`, about the key's head). The tab: peach cross-fade at
+ * 640 ms (280 ms spring) and scale from its base 1 → 1.08 (160 ms overshoot) → 1 (240 ms spring). Sparkles at 900 ms,
+ * 420 ms on the spring. Origins are fill-box, so the -rtl drawings (flipped inside the SVG) use the same rules.
+ */
+/* /setup for an accountant's customer (MUT-769, DR-1): who set it up, the step count, the code, the hand-over moment */
+.hp-claim-card > .hp-scene, .hp-claim-card > .hp-handover-claimed { display: grid; margin-inline: auto; }
+.hp-claim-context { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; }
+.hp-claim-context-line { margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--on-accent-subtle); overflow-wrap: anywhere; }
+.hp-claim-steps { display: flex; gap: var(--space-1-5); margin: 0; }
+.hp-claim-steps > .hp-claim-step { flex: 1; block-size: 4px; border-radius: var(--radius-pill); background: var(--border); }
+.hp-claim-steps > .hp-claim-step-on { background: var(--accent); }
+.hp-claim-claimed { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.hp-claim-claimed-line { margin: 0; font-weight: var(--weight-semibold); }
+.hp-handover-claimed { display: inline-grid; justify-items: center; }
+.hp-handover-claimed > .hp-scene { grid-area: 1 / 1; }
+.hp-handover-claimed-welcome [data-part]:not([data-part="offer"]):not([data-part="offer-tick"]):not([data-part="label"]) { visibility: hidden; }
+.hp-handover-claimed-welcome [data-part="offer"], .hp-handover-claimed-welcome [data-part="offer-tick"] { animation: hp-fade-out-once 200ms linear both; }
+.hp-handover-claimed-welcome [data-part="label"] { animation: hp-fade-out-once 200ms linear 400ms both; }
+@keyframes hp-fade-out-once { from { opacity: 1; } to { opacity: 0; } }
+.hp-handover-claimed-art [data-part="key"] {
+  transform-box: fill-box; transform-origin: 80.36% 50%;
+  animation: hp-handover-key-y 700ms var(--ease-spring) both, hp-handover-key-x 700ms linear both, hp-handover-key-tilt 700ms var(--ease-spring) both;
+}
+@keyframes hp-handover-key-y { from { translate: 0 -80px; } to { translate: 0 0; } }
+@keyframes hp-handover-key-x { from { transform: translateX(10px); } to { transform: none; } }
+@keyframes hp-handover-key-tilt { 0% { rotate: 0deg; } 50% { rotate: -16deg; } 100% { rotate: 0deg; } }
+.hp-handover-claimed-art [data-part="tab"], .hp-handover-claimed-art [data-part="tab-claimed"] {
+  transform-box: fill-box; transform-origin: 33.333% 100%; animation: hp-handover-tab-pop 400ms 640ms both;
+}
+.hp-handover-claimed-art [data-part="tab-claimed"] { animation: hp-handover-tab-pop 400ms 640ms both, hp-handover-peach 280ms var(--ease-spring) 640ms both; }
+@keyframes hp-handover-tab-pop {
+  0% { scale: 1; animation-timing-function: var(--ease-overshoot); }
+  40% { scale: 1.08; animation-timing-function: var(--ease-spring); }
+  100% { scale: 1; }
+}
+@keyframes hp-handover-peach { from { opacity: 0; } to { opacity: 1; } }
+.hp-handover-claimed-art [data-part="sparkles"] { transform-box: fill-box; transform-origin: center; animation: hp-handover-sparkles 420ms var(--ease-spring) 900ms both; }
+@keyframes hp-handover-sparkles { from { opacity: 0; scale: 0; } to { opacity: 1; scale: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  /* The still (motion-handover-claimed-still.svg is the claimed scene), with the one 150 ms fade-in */
+  .hp-handover-claimed-welcome { display: none; }
+  .hp-handover-claimed-art [data-part] { animation: none; }
+  .hp-handover-claimed-art { animation: hp-fade-in-still 150ms linear both; }
+}
 .hp-activating-status { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-4); margin-block-end: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .hp-activating-status-text { display: flex; flex-direction: column; gap: var(--space-1); flex: 1 1 12rem; min-inline-size: 0; }
 .hp-activating-status-name { font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
@@ -1759,7 +1813,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 }
 /* MUT-562: the scenes on the public pages and the desk (MUT-561's Scene) */
 .hp-two-panel-scene { display: block; margin-bottom: var(--space-4); }
-.hp-two-panel-ended .hp-scene, .hp-client-gone .hp-scene, .hp-client-books-empty .hp-scene { display: block; margin-inline: auto; }
+.hp-two-panel-ended .hp-scene, .hp-client-gone .hp-scene, .hp-client-books-empty .hp-scene, .hp-ledger-empty .hp-scene { display: block; margin-inline: auto; }
 .hp-client-books-empty { text-align: center; }
 
 /* ---------- Client business details (MUT-642) ---------- */
@@ -2028,6 +2082,70 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-plan-meter[data-level="nudge"] .hp-progress > span,
 .hp-plan-meter[data-level="at_cap"] .hp-progress > span { background: var(--warning); }
 .hp-starter-active-name { font-weight: var(--weight-medium); }
+
+/* MUT-753: the Pilot panel. A paid line turns butter from 90% (design review 2B), the number with it; the plans are a
+   plain list (Business marked with the Pilot chip); Write to us is one 44 px link, last (6A). */
+.hp-plan-meter[data-attention] > span:first-child { font-weight: var(--weight-medium); color: var(--warning); }
+.hp-plan-meter[data-attention] .hp-progress > span { background: var(--warning); }
+.hp-pilot-plans { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.hp-pilot-plan { display: grid; gap: var(--space-0-5); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-pilot-plan[data-current] { border-color: var(--accent); }
+.hp-pilot-plan-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: var(--weight-medium); }
+.hp-pilot-plan-price { font-size: var(--text-label); }
+.hp-pilot-expected { color: var(--muted); }
+.hp-pilot-write { display: inline-flex; align-items: center; min-block-size: 44px; font-weight: var(--weight-medium); color: var(--accent-text); text-underline-offset: 2px; }
+.hp-pilot-ended-art { align-self: center; }
+
+/* MUT-755: the pilot Welcome. Three steps, each on its 120×96 scene. Motion from
+   docs/design/motion/2026-11-27/pilot-sheet/motion-pilot-sheet-spec.md: the drawer's own entrance stands for the
+   scrim and the half sheet; each step card rises 14px and fades in (350ms spring) from 180/230/280ms, and its spot's
+   nuqta scales 0→1 (220ms overshoot) from 480/530/580ms. Reduced motion: the still (the scenes as drawn), no movement. */
+.hp-pilot-welcome { display: grid; gap: var(--space-4); }
+.hp-pilot-welcome-lead { margin: 0; color: var(--text-secondary); }
+.hp-pilot-welcome-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.hp-pilot-welcome-step { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); font-weight: var(--weight-medium); }
+.hp-pilot-welcome-step .hp-scene { flex: none; }
+/* MUT-777: the one yes to watched sessions (Welcome) and its operator twin (grant drawer); a 44px row. */
+.hp-pilot-welcome-consent, .hp-operator-consent { display: flex; align-items: center; gap: var(--space-2); min-block-size: 44px; cursor: pointer; }
+.hp-pilot-welcome-consent input, .hp-operator-consent input { inline-size: 20px; block-size: 20px; flex: none; accent-color: var(--accent); }
+.hp-pilot-welcome-step [data-part="nuqta"] { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-pilot-welcome-step { animation: hp-pilot-step-rise 350ms var(--ease-spring) both; }
+  .hp-pilot-welcome-step [data-part="nuqta"] { animation: hp-pilot-nuqta-pop 220ms var(--ease-overshoot) both; }
+  .hp-pilot-welcome-step-1 { animation-delay: 180ms; }
+  .hp-pilot-welcome-step-2 { animation-delay: 230ms; }
+  .hp-pilot-welcome-step-3 { animation-delay: 280ms; }
+  .hp-pilot-welcome-step-1 [data-part="nuqta"] { animation-delay: 480ms; }
+  .hp-pilot-welcome-step-2 [data-part="nuqta"] { animation-delay: 530ms; }
+  .hp-pilot-welcome-step-3 [data-part="nuqta"] { animation-delay: 580ms; }
+}
+/* Pilot milestones: a small card above the floating chrome, the milestone scene and two words; it leaves after 4 s.
+   Motion from docs/design/motion/2026-11-27/milestone/motion-milestone-spec.md, in the art's own coordinates (the
+   nuqta and the badge centre at 74,52 in both drawings): the nuqta fades in (120ms linear) and drops 36px into the
+   badge (420ms overshoot); the badge bumps to 1.06 at 380ms (140ms spring) and settles at 520ms (200ms spring); the
+   three dots spring out from the nuqta, scale 0→1 from 420ms, 25ms apart, all ending at 940ms (overshoot). The
+   individual `translate`/`scale` properties keep the art's own transform attributes. Reduced motion: the still. */
+.hp-milestone-region { position: fixed; inset-inline: 0; inset-block-end: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; pointer-events: none; z-index: 50; padding-inline: var(--space-4); }
+.hp-milestone { pointer-events: auto; display: flex; align-items: center; gap: var(--space-3); max-inline-size: 100%; padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); }
+.hp-milestone-art { flex: none; }
+.hp-milestone-text { font-weight: var(--weight-medium); }
+.hp-milestone-close { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 44px; min-block-size: 44px; background: none; border: 0; color: var(--text-secondary); cursor: pointer; }
+.hp-milestone-art [data-part="badge"], .hp-milestone-art [data-part="confetti"] > * { transform-box: view-box; transform-origin: 74px 52px; }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-milestone-art [data-part="nuqta"] { animation: hp-milestone-nuqta-in 120ms linear both, hp-milestone-nuqta-drop 420ms var(--ease-overshoot) both; }
+  .hp-milestone-art [data-part="badge"] { animation: hp-milestone-bump 140ms var(--ease-spring) 380ms both, hp-milestone-settle 200ms var(--ease-spring) 520ms forwards; }
+  .hp-milestone-art [data-part="confetti"] > * { animation: hp-milestone-dot 520ms var(--ease-overshoot) 420ms both; }
+  .hp-milestone-art [data-part="confetti"] > :nth-child(2) { animation-duration: 495ms; animation-delay: 445ms; }
+  .hp-milestone-art [data-part="confetti"] > :nth-child(3) { animation-duration: 470ms; animation-delay: 470ms; }
+}
+@keyframes hp-milestone-nuqta-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hp-milestone-nuqta-drop { from { translate: 0 -36px; } to { translate: 0 0; } }
+@keyframes hp-milestone-bump { from { scale: 1; } to { scale: 1.06; } }
+@keyframes hp-milestone-settle { from { scale: 1.06; } to { scale: 1; } }
+@keyframes hp-milestone-dot { from { scale: 0; } to { scale: 1; } }
+
+@keyframes hp-pilot-step-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes hp-pilot-nuqta-pop { from { transform: scale(0); } to { transform: scale(1); } }
 .hp-pick-business { display: grid; gap: var(--space-3); }
 .hp-pick-business p { margin: 0; }
 .hp-pick-list { display: grid; gap: var(--space-2); }

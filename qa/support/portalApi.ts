@@ -790,6 +790,11 @@ export interface StubSetupLink {
   email?: string;
   locale?: 'en' | 'ar';
   purpose?: 'SETUP' | 'RESET';
+  /**
+   * MUT-769: an account an accountant created (MUT-764/765): the check names him and the business, the code is checked
+   * on /v1/account-setup/claim-code (five tries) and again with the password. On a dead link it adds `provisioned`.
+   */
+  claim?: { accountantName: string | null; businessName: string | null; code: string; triesLeft?: number };
 }
 
 /** MUT-731: a Starter person's month and choices, as the fake server holds them. */
@@ -1440,6 +1445,8 @@ export class FakeApi {
       return json(saved);
     }
     if (resource === 'customers' && method === 'GET' && id && sub === 'statement') return this.statementAnswer(id, q);
+    // MUT-774: the clients list's balance column, from the same lines as the ledger card.
+    if (resource === 'customer-balances' && method === 'GET') return this.balancesAnswer();
     if (resource === 'customers' && method === 'GET') {
       if (!id) return page(this.customers);
       const found = this.customers.find((c) => c.id === id);
@@ -1490,11 +1497,7 @@ export class FakeApi {
   private statementAnswer(customerId: string, q: (key: string) => string | undefined) {
     const currency = q('currency') ?? 'ILS';
     const toAmount = (minor: number) => toDecimal(minor);
-    const raw = [
-      ...this.receivables.filter((r) => r.customerId === customerId && r.currency === currency).map((r) => ({ id: r.id, date: r.postingDate as string, debit: toMinor(r.gross), credit: 0, line: { kind: 'CHARGE' as const, receivableId: r.id, number: (r as { number?: string }).number ?? null, outstanding: r.outstanding } })),
-      ...this.payments.filter((p) => p.customerId === customerId && p.currency === currency && p.status === 'POSTED').map((p) => ({ id: p.id, date: p.receivedOn as string, debit: 0, credit: toMinor(p.amount), line: { kind: 'PAYMENT' as const, paymentId: p.id, number: p.number } })),
-      ...this.issuedLines(customerId),
-    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : LINE_RANK[a.line.kind as string]! - LINE_RANK[b.line.kind as string]!));
+    const raw = this.statementRaw(customerId, currency);
     let running = 0;
     const lines = raw.map((x) => {
       running += x.debit - x.credit;
@@ -1502,6 +1505,30 @@ export class FakeApi {
     });
     const closing = toAmount(running);
     return json({ customerId, currency, projectId: null, from: q('from') ?? null, to: q('to') ?? null, asOf: '2026-10-15', openingBalance: '0.00', totals: { debit: toAmount(raw.reduce((s, x) => s + x.debit, 0)), credit: toAmount(raw.reduce((s, x) => s + x.credit, 0)) }, closingBalance: closing, lines: q('order') === 'desc' ? lines.reverse() : lines, nextCursor: null });
+  }
+
+  /** MUT-774: GET /v1/customer-balances: each client's closing balance per currency; a client with no movement is absent. */
+  private balancesAnswer() {
+    const balances: { customerId: string; currency: string; balance: string }[] = [];
+    for (const c of this.customers) {
+      const currencies = new Set<string>([...this.receivables.filter((r) => r.customerId === c.id).map((r) => r.currency as string), ...this.payments.filter((p) => p.customerId === c.id).map((p) => p.currency as string)]);
+      if (this.issuedLines(c.id).length > 0) currencies.add('ILS');
+      for (const currency of currencies) {
+        const raw = this.statementRaw(c.id, currency);
+        if (raw.length === 0) continue;
+        balances.push({ customerId: c.id, currency, balance: toDecimal(raw.reduce((sum, x) => sum + x.debit - x.credit, 0)) });
+      }
+    }
+    return json({ asOf: '2026-10-15', balances });
+  }
+
+  /** The ledger's lines for one client and currency, oldest first (the server's same-day order). */
+  private statementRaw(customerId: string, currency: string) {
+    return [
+      ...this.receivables.filter((r) => r.customerId === customerId && r.currency === currency).map((r) => ({ id: r.id, date: r.postingDate as string, debit: toMinor(r.gross), credit: 0, line: { kind: 'CHARGE' as const, receivableId: r.id, number: (r as { number?: string }).number ?? null, outstanding: r.outstanding } })),
+      ...this.payments.filter((p) => p.customerId === customerId && p.currency === currency && p.status === 'POSTED').map((p) => ({ id: p.id, date: p.receivedOn as string, debit: 0, credit: toMinor(p.amount), line: { kind: 'PAYMENT' as const, paymentId: p.id, number: p.number } })),
+      ...this.issuedLines(customerId),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : LINE_RANK[a.line.kind as string]! - LINE_RANK[b.line.kind as string]!));
   }
 
   /**
@@ -1976,17 +2003,37 @@ export class FakeApi {
   private setupAnswer(e: Logged) {
     const link = this.setupLink ?? { state: 'invalid' as const };
     const email = link.email ?? 'nour@office.ps';
+    const claim = 'claim' in link ? link.claim : undefined;
     if (e.path === '/v1/account-setup/check') {
-      if (link.state !== 'valid') return json({ state: link.state });
-      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: this.termsVersion });
+      if (link.state !== 'valid') return json(claim && link.state !== 'invalid' ? { state: link.state, purpose: 'SETUP', provisioned: true } : { state: link.state });
+      const named = claim ? { claim: { accountantName: claim.accountantName, businessName: claim.businessName, codeLocked: (claim.triesLeft ?? 5) <= 0 } } : {};
+      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: this.termsVersion, ...named });
     }
     if (link.state !== 'valid') return json({ error: { code: 'SETUP_LINK_UNUSABLE', message: 'Ask for a new link', details: { state: link.state } } }, 410);
+    // MUT-765: the claim code on its own route, and again with the password; the fifth wrong one locks it
+    if (e.path === '/v1/account-setup/claim-code' && !claim) return json({ error: { code: 'CONFLICT', message: 'No code', details: { reason: 'NO_CLAIM_CODE' } } }, 409);
+    if (claim) {
+      const refused = this.claimCodeRefusal(claim, (e.body as { claimCode?: string } | null)?.claimCode);
+      if (refused) return refused;
+      if (e.path === '/v1/account-setup/claim-code') return json({ ok: true });
+    }
     // MUT-324: the real server checks the version after the link state
     if ((e.body as { acceptedTermsVersion?: string } | null)?.acceptedTermsVersion !== this.termsVersion) {
       return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
     }
     this.markSetupLink('used');
     return json({ email });
+  }
+
+  /** MUT-765: null when the code is right; the refusal otherwise, counting a wrong one. */
+  private claimCodeRefusal(claim: NonNullable<StubSetupLink['claim']>, typed: string | undefined) {
+    const locked = () => json({ error: { code: 'CLAIM_CODE_LOCKED', message: 'Ask your accountant for a new code' } }, 403);
+    if ((claim.triesLeft ?? 5) <= 0) return locked();
+    if (!typed) return json({ error: { code: 'VALIDATION_FAILED', message: 'claimCode', details: { fields: ['claimCode'] } } }, 422);
+    if (typed.replace(/\s+/g, '') === claim.code) return null;
+    claim.triesLeft = (claim.triesLeft ?? 5) - 1;
+    if (claim.triesLeft <= 0) return locked();
+    return json({ error: { code: 'CLAIM_CODE_WRONG', message: 'Wrong code', details: { triesLeft: claim.triesLeft } } }, 403);
   }
 
   private nextId(kind: number) {

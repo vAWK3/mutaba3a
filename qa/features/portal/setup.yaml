@@ -54,3 +54,40 @@ features:
     expect:
       - The first try says MTB3A couldn't be reached and keeps the typed password
       - The second try lands on the first profile's Overview, signed in with the typed password
+  - id: claim-code
+    title: An accountant's customer opens their link to who set it up and for which business, enters the six-digit code (tries left on a wrong one), sets the password with the code, sees the account is theirs, then the card step on the business (MUT-769)
+    tier: core
+    legacy: [MUT-769, MUT-765]
+    paths:
+      - src/hosted/pages/auth/ClaimCodeStep.tsx
+      - src/hosted/pages/auth/claimStep.ts
+      - src/hosted/components/PinBoxes.tsx
+      - src/hosted/components/HandoverClaimedMotion.tsx
+    steps:
+      - Open the link an accountant's customer was mailed
+      - Type a wrong code and press Verify
+      - Type the code the accountant said and press Verify
+      - Set a password and press Save and sign in
+      - Press Continue
+      - Again in Arabic, at 375 px
+    expect:
+      - The context line names the accountant and the business beside the welcome scene; step 1 of 3; the heading has focus
+      - Six boxes read left to right, each named "Digit n of 6"; the step passes axe
+      - A wrong code says "Wrong code. 4 tries left." and empties the boxes
+      - The right code opens the password step (step 2 of 3) under the same context line, and the redeem carries the code
+      - '"The account is yours" shows the hand-over moment, and Continue opens Subscribe on the business profile'
+      - In Arabic the page reads right to left and the code boxes left to right, with no sideways scroll at 375 px
+  - id: claim-refused
+    title: A locked claim code or a dead accountant's link says to ask the accountant and offers no self-service link (MUT-769, B7)
+    tier: secondary
+    legacy: [MUT-769, MUT-765]
+    paths:
+      - src/hosted/pages/auth/ClaimCodeStep.tsx
+    steps:
+      - Type a fifth wrong code
+      - Open a link whose code is already locked
+      - Open an expired accountant's link
+    expect:
+      - '"Too many tries" with the code-locked scene and "Ask your accountant for a new code."'
+      - The already-locked link opens on the same screen
+      - '"This link is no longer valid" with the link-expired scene, "Ask your accountant for a new one.", no Send a new link and no password field'

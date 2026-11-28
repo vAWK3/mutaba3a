@@ -15,6 +15,8 @@ import { AccountDrawers } from './AccountDrawers';
 import { DESTINATIONS, destinationOf, destinationPath } from './destinations';
 import { ProfileDrawers } from './ProfileDrawers';
 import { TrialWelcomeOpener } from './TrialWelcomeOpener';
+import { PilotWelcomeOpener } from './PilotWelcomeOpener';
+import { PilotMilestones } from './PilotMilestones';
 import { YouIsland } from './YouIsland';
 import { backOf, sectionOf } from './youRoutes';
 
@@ -134,6 +136,10 @@ export function HostedShell({ profile, children, pill }: { profile: HostedProfil
       <AccountDrawers />
       {/* MUT-418: the first-run trial step for a first sign-in that didn't come through /setup. */}
       {profile && <TrialWelcomeOpener />}
+      {/* MUT-755: the pilot Welcome, once per account. */}
+      {profile && !local && <PilotWelcomeOpener />}
+      {/* Pilot milestones: the first scan and the first invoice. */}
+      {!local && <PilotMilestones />}
     </div>
   );
 }

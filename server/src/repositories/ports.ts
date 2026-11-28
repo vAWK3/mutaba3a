@@ -1934,6 +1934,8 @@ export interface OperatorAccountListItem {
   features: string[];
   /** MUT-757: the person's pilot grants (a cohort, not ACCOUNTANT), revoked and ended ones included; empty for most. */
   pilotGrants: OperatorPilotGrant[];
+  /** MUT-777 (ADR-333): the person's yes to watched sessions, and when; null = not asked or no. */
+  pilotWatchConsentAt: Date | null;
 }
 
 /** MUT-757 (ADR-297): one pilot grant as the operator's account list reads it, with the referring accountant. */
@@ -2827,6 +2829,10 @@ export interface BillingRepository {
   pilotWelcomeSeenOf(userId: string): Promise<Date | null>;
   /** MUT-752: records the Welcome closed (first time only; later calls keep the first date). Null for an unknown user. */
   markPilotWelcomeSeen(userId: string, at: Date): Promise<Date | null>;
+  /** MUT-777 (ADR-333): when the person said yes to watched sessions; null = not asked or no (or an unknown user). */
+  pilotWatchConsentOf(userId: string): Promise<Date | null>;
+  /** MUT-777: records the yes (first time only; later calls keep the first date). Null for an unknown user. */
+  markPilotWatchConsent(userId: string, at: Date): Promise<Date | null>;
   /** MUT-731: records that the web onboarding step showed the trial (first time only; later calls keep the first date). */
   markPaidTrialOffered(userId: string, at: Date): Promise<PaidTrialRecord | null>;
   /** MUT-702 Part B: records the Solo trial used when its trialing subscription first mirrors (first time only). */

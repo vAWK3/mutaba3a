@@ -91,6 +91,28 @@ features:
       - The ledger card lists only this client's movements, newest first, asks the statement with order=desc in ILS, and a balance below zero reads "Client in credit" without a minus (D15)
       - Documents lists only this client's files; Details shows Last payment, the ILS strip and each matter with its status
       - All clients returns to the list
+  - id: client-balances
+    title: The clients list shows each client's balance per currency, stacked and never summed; in credit and settled say so (MUT-774)
+    tier: secondary
+    tickets: [MUT-774]
+    paths:
+      - src/hosted/components/ledger/ClientBalance.tsx
+    steps:
+      - Open Clients with one client in credit, one owing in ILS and USD, one settled and one with no movement
+      - Open Clients in Arabic
+    expect:
+      - One Balance column; the owing client shows two lines (ILS and USD); the client in credit reads "Client in credit" without a minus; the settled one "Settled"; the one with no movement "—"; the column comes from GET /v1/customer-balances
+      - The column reads «الرصيد», right to left, with no horizontal scroll
+  - id: ledger-empty
+    title: A client with no movements opens to the ledger-empty scene (MUT-774)
+    tier: secondary
+    tickets: [MUT-774]
+    paths:
+      - src/hosted/components/ledger/LedgerCard.tsx
+    steps:
+      - Open a client that has no movements yet
+    expect:
+      - The ledger card shows the ledger-empty scene and "No movements yet"
   - id: client-business
     title: A client's VAT or company number and address, filled from the companies registry by its number (MUT-642)
     tier: secondary

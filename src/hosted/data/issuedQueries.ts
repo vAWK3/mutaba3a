@@ -1,3 +1,4 @@
+import { BILLING_KEY } from './billingQueries';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api, type IssueDocumentRequest, type IssuedDocType, type IssuedDocument } from '../api/client';
 import { profileKey } from '../session/me';
@@ -59,6 +60,8 @@ export function useIssueDocument(profileId: string) {
       queryClient.setQueryData(issuedKey(profileId, 'doc', doc.id), doc);
       for (const scope of ['issued', 'documents-due', 'receivables', 'receivable', 'payments', 'payment', 'summary', 'directory', 'customer']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
       void queryClient.invalidateQueries({ queryKey: setupKey(profileId) });
+      // The plan's document meter, and the pilot's first invoice (its milestone, MUT-758).
+      void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
     },
   });
 }
