@@ -28,6 +28,111 @@
 
 ---
 
+## 2026-11-28 · MUT-703 (portal half): offers on Solo, Business and Firm
+
+### Added
+- The Subscribe step with plans on sale reads the per-plan launch: `data/billingView.ts` `planLaunchOf`, `planOfferFor`, `planComebackOf`; `data/billingPlans.ts` `useOfferLine` feeds `PlanRow`'s `offerNote` ("First year ₪195.00 or $60.00", Yearly only). Yearly opens when the chosen plan has a launch and the person is eligible; Continue sends the plan offer's id as `expectedOffer`; the shared OFFER_ENDED banner is unchanged.
+- The plan's come-back price (monthly only; its yearly pair is null) shows on the chosen plan.
+- The change pane says which running offer an upgrade ends (`offerEnds` `stay`/`comeback`): `hosted.billing.change.offerEnds.*` (ar + en).
+- QA: `portal.plans.plan-launch-yearly` (FakeApi `starter.plans.launch`).
+
+### Changed
+- `eligibleOfferOf` counts a plan sold in the currency, not only the legacy catalog; `renewalPriceOf` reads a plan subscription's own plan catalog.
+
+### Files
+`src/hosted/data/billingView.ts`, `billingPlans.ts`, `components/BillingDrawer.tsx`, `ChangePlan.tsx`, `i18n/{ar,en}.json`, tests `BillingDrawer.mut703.test.tsx`, `planOffers.test.ts`, `qa/features/portal/plans.yaml`, `qa/specs/portal/plans.spec.ts`, `qa/support/portalApi.ts`.
+
+## [Unreleased] - 2026-11-28 — TD-371: the self-service QA API runs Starter and open sign-up
+
+### Changed
+- `qa/support/selfservice-live.mjs`: `STARTER_PLAN` and `OPEN_SIGNUP` on (every switch of the production target but INVOICING_FOR_ALL and ACCOUNTANT_PLAN).
+- Re-specced flows: `signup.create`, `signup.375` (Home, no trial), `signup.webmail-starter` (was review-webmail: opens at once on Starter), `operator.signups-history` and `-arabic` (were signups-approve / -decline: the MUT-737 history, no Approve or Decline, the Webmail chip), `operator.step-up-passkey` (on Sign out everywhere), `mail.mail-directional-art` (the account-closing mail's mirrored bin), `malafat-delegation.first-sign-in` / `link-existing` and `passkeys.suggest-first-sign-in` (no trial step). `signup.review-declined` retired.
+- Portal (MUT-737 follow-ups found by it): the operator console and You › Account's Operator link open on Accounts with open sign-up; a Starter profile's billing source reads "Starter" on the operator's account page (`hosted.operator.accounts.billingSource.STARTER`).
+
+## [Unreleased] - 2026-11-28 — MUT-775 (portal): a known vendor's last category fills the receipt review
+
+### Added
+- `ReceiptReview` fills `vendorDefaults.categoryId` into an empty, untouched category (at mount and late), with "Last used for this vendor" under it and the `motion-autofill` underline (`.hp-autofill-scope`). `vendorDefaultFills` takes the category. i18n `hosted.receipts.review.fromVendor` (ar + en). FakeApi's receipt detail sends the vendor's last category.
+
+### Technical
+- Tests: `lib/__tests__/vendorDefaults.test.ts`, two cases in `pages/__tests__/Receipts.test.tsx`. QA: `portal.receipts.vendor-category`.
+
+## [Unreleased] - 2026-11-27 — MUT-737 (UI): open sign-up in the operator console, the first-run events, the privacy drafts
+
+### Added
+- `SignupHistory` (wireframe mut-737 A): with `openSignup`, Accounts has an All / Signups filter (`?view=signups`) showing every reviewed sign-up read-only (address, day, domain chips, outcome); the Signups tab is gone; `/operator/signups` shows the same history. API client `operatorSignupHistory` (`state=decided`).
+- The operator account page shows the sign-up's domain class chip (`signupDomain`).
+- `SoloTrialStep` sends `onboarding_plan_shown` and `onboarding_plan_chosen { choice }`.
+- i18n `hosted.operator.history.*` (ar + en).
+
+### Changed
+- `docs/analytics/events.json` 2.14.0 (one bump for the lane's stack: MUT-705/733/734/737), sha256 02120d99df27fd9aef24661a3fdc277528d1b0a32be22cb372c792fe8b831aff, pinned in `analytics-taxonomy.test.ts`. The Flutter copy follows (phone lane).
+- `docs/legal/drafts/privacy-policy-2026-11-25.{ar,en}.json`: no sign-up review or its mails (AC7).
+- `ChipBadge` is exported from `OperatorSignupsPage.tsx` for the history and the account page.
+
+### Technical
+- Tests: `pages/operator/__tests__/OperatorSignupHistory.test.tsx`, an onboarding analytics case in `session/__tests__/AuthGate.soloTrial.test.tsx`, the 2.14.0 shape test in `analytics-taxonomy.test.ts`.
+
+## [Unreleased] - 2026-11-27 — MUT-733 (UI): paid plans' monthly limits, the gift and the hard cap
+
+### Added
+- `GiftNotice` (in `PlanLimitNotice`): the gift in the banner slot with the `gift-month` scene and its celebration; Continue records it (`useAcceptGift`, POST /v1/billing/over-cap-gift) and re-sends the held invoice or re-uploads the held receipts. Known before typing from `usage.gift.available` (`giftBeforeTyping`).
+- The hard cap after the gift: the `gift-used` still, "Limit reached", the reset day, Upgrade to the next plan.
+- `usePlanUsage` (Billing's usage on any limited plan); the Issue drawer's paid documents line (80% plain, 90% butter with Upgrade, gift "No limit until").
+- API client `acceptOverCapGift`; analytics `plan_gift_shown`, `plan_gift_accepted`; i18n `hosted.planLimit.gift.*` (ar + en). FakeApi `paid` answers the gift.
+
+### Changed
+- `planLimitOf` reads `gift` and keeps a null `nextPlan` (Firm).
+
+### Technical
+- Tests: `data/__tests__/usePlanUsage.test.ts`, gift cases in `planUsage.test.ts`. QA: `portal.paid-caps.paid-cap-gift`, `paid-cap-hard`, `paid-scan-gift`, `paid-usage-nudge`.
+
+## [Unreleased] - 2026-11-27 — MUT-734 (UI): change plan from Billing
+
+### Added
+- Billing's Change plan step (`?step=change`, wireframe mut-734 A): the plans with the current one marked, the picked plan's preview ("Charged now" or "<plan> from <date>") and Pay / Confirm; the businesses kept on a downgrade (`BusinessChecklist`). `ChangePlan.tsx` (`ChangePlanBody`, `ChangePlanFooter`, `ChangeDoneBody`, `ScheduledChangeLine`), `data/planChangeQueries.ts` (`useChangePlan`, `useUndoPlanChange`, `useScheduledToast`, `changeTargetsOf`).
+- The upgrade's done pane with the `plan-upgraded` scene and its motion; the scheduled line with the `change-scheduled` scene and Undo; the undo toast motion (`Toast` `motion: 'undo'`); `Scene` motions `plan-upgraded` and `gift-month` (CSS from the 2026-11-27 specs).
+- Cancel plan's confirm: Move to Starter (`InPlaceConfirm extraAction`), opening Change plan on Starter.
+- Operator account page: Plan history (`OperatorPlanHistory`).
+- API client `previewPlanChange`, `changePlan`, `undoPlanChange`; analytics `plan_change_previewed/confirmed/undone`; i18n `hosted.billing.change.*`, `hosted.operator.planHistory.*` (ar + en).
+
+### Changed
+- A subscriber's Upgrade to <plan> (Billing meters, Home, cap notices) opens Change plan on that plan (`openChangePlan`).
+- FakeApi `paid` seed answers the preview, the change, Undo and the retention read.
+
+### Technical
+- Tests: `BillingDrawer.mut734.test.tsx`, a Plan history case in `OperatorAccountPage.test.tsx`. QA: `portal.change-plan.upgrade-now`, `downgrade-scheduled`, `cancel-to-starter`, `operator-plan-history` (manual).
+
+## [Unreleased] - 2026-11-27 — MUT-750 slice A (UI): price, VAT and total before Checkout
+
+### Added
+- `PriceLinesCard` (wireframe mut-750a A) under the billing address on the plan Subscribe step: Price, VAT 18% and Total for an Israeli address, the price alone elsewhere, announced when the country or interval changes. `priceLinesOf` / `vatRateOf` in `data/billingPlans.ts` (the rate from `GET /v1/billing.vatRate`; Stripe's half-up rounding).
+- i18n `hosted.billing.vat.{price,line,total}` (ar + en). FakeApi sends `vatRate` with plans on sale.
+
+### Technical
+- Tests: `data/__tests__/billingPlans.vat.test.ts`, two cases in `BillingDrawer.plans.test.tsx`. QA: `portal.plans.vat-lines-israel`, `portal.plans.no-vat-abroad`.
+
+## [Unreleased] - 2026-11-27 — MUT-705: the three-plan picker, plan-aware billing, cap prompts and usage (portal)
+
+Why: Billing named one plan ("Freelancer") and only Starter had meters or cap prompts. Now every surface reads the person's own plan from `GET /v1/billing` / `/v1/me` (server halves MUT-702, 731, 733, 734 already on main).
+
+### Added
+- Subscribe opens on the plan an Upgrade asked for (`?billingPlan=`, `useAccountDrawers().openUpgrade(plan)`), else on the smallest plan whose business count covers the businesses owned (`recommendedPlanOf`, from `usage.businesses.used`). Firm's line ends "Staff: coming soon".
+- `PlanMeters` (wireframe mut-733 A, shared with MUT-733/754): a paid plan's documents and scans this month, a thin bar each, butter from 90% with "Upgrade to <next plan>" (never on Firm, never while the gift runs), "Limit reached", "No limit until <date>" (`graceUntil`). Motion per `docs/design/motion/2026-11-27/usage-meter`: fill grows from inline-start (600 ms spring), tone follows 250 ms later (350 ms) only when crossing 90%; reduced motion shows the final pose.
+- `BusinessChecklist` / `PickActiveBusinesses` / `ReadOnlyBusinesses` (wireframe mut-734 "keep" A, shared with MUT-734): checkboxes with an "N of N" counter; Billing lists a paid plan's read-only businesses with the reason ("Business includes 3 businesses") and "Choose which businesses stay active".
+- Home's quiet usage line on Solo/Business/Firm from 80%, with Upgrade to the next plan from 90%.
+- FakeApi `paid` seed (`qa/support/portalApi.ts`): a Solo/Business/Firm subscriber's billing, /v1/me plan, entitlements and the server's PLAN_LIMIT refusals (gift-aware for MUT-733).
+
+### Changed
+- `hosted.billing.headline.active` is "{plan}, renews {date}" (`hosted.plan.name.freelancer`: Freelancer / الخطة السابقة for legacy payers).
+- `PlanLimitNotice`: a paid plan's refusal names the plan and its count ("Solo includes 1 business", "Limit reached: 50 of 50 documents"), the next plan and its price, and `UpgradeTo` it (`UpgradeToSolo` is now `UpgradeTo plan="solo"`). A subscriber's Upgrade opens Billing (MUT-734's Change plan), never a second Checkout. New profile shows the paid plan's business count before the person types.
+- `planUsage.ts`: `planUsageOf` (any limited plan, `graceUntil`, `giftAvailable`), `nextPlanOf`, `sellablePlanOf`, `recommendedPlanOf`, `meterWarns`; `starterUsageOf` reads through it.
+- MUT-703 seams (offers plan §11): `PlanRow` takes `offerNote`; the Subscribe step's opening interval is decided once in `openingIntervalOf(billing, plan)`.
+- Analytics contract: `plan_upgrade_chosen` from/to every plan; `plan_cap_reached` gains `plan`; `billing_checkout_started.plan` lists solo/business/firm (the drawer already sent them).
+
+### Technical
+- Tests: `components/__tests__/BillingDrawer.mut705.test.tsx`, `data/__tests__/planUsage.test.ts`; `StarterPlan.test.tsx`'s no-plan case is now legacy Freelancer. QA: `portal.plans.plan-recommended`, `paid-billing`, `paid-read-only`, `paid-cap-prompts`.
+- Files: `src/hosted/components/{BillingDrawer,BillingPlanPicker,PlanLimitNotice,PlanMeters,BusinessChecklist,UsageNotice,ProfileCreateDrawer}.tsx`, `src/hosted/data/{planUsage,filters}.ts`, `src/hosted/shell/AccountDrawers.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{ar,en}.json`, `docs/analytics/events.json`, `qa/support/portalApi.ts`.
 ## [Unreleased] - 2026-11-28 — MUT-771 + MUT-772: the accountant channel's tests, release QA and release steps (epic MUT-762)
 
 ### Added

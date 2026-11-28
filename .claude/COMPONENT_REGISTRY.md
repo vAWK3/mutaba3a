@@ -2619,6 +2619,15 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `server/src/jurisdictions/il/documents.ts` | `IL_DOCUMENT_TYPES`, `IL_DOC_TYPE_CODES` | the uniform file, tests |
 | `server/src/issuing/issuer-pack.ts` | `issuerPackOf(store, organizationId)` | documents-due and customers routes, cancel |
 
+## MUT-705 — the three-plan picker and plan-aware billing (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/planUsage.ts` | `planUsageOf`, `PlanUsage`, `LIMITED_PLANS`, `nextPlanOf`, `sellablePlanOf`, `recommendedPlanOf`, `meterWarns` | Billing drawer, `PlanMeters`, `UsageNotice`, `PlanLimitNotice`, New profile |
+| `src/hosted/components/PlanMeters.tsx` | `PlanMeters` (a paid plan's meter rows, usage-meter motion) | Billing drawer (MUT-733/754 reuse it) |
+| `src/hosted/components/BusinessChecklist.tsx` | `BusinessChecklist` (checkboxes + N of N), `PickActiveBusinesses` (save pane), `ReadOnlyBusinesses` (Billing section) | Billing drawer; MUT-734's downgrade preview |
+| `src/hosted/components/PlanLimitNotice.tsx` | `PlanLimitNotice` (any plan, next plan + price), `UpgradeTo({ plan })`, `UpgradeToSolo` | as MUT-731, plus `PlanMeters`, Home's paid line |
+| `src/hosted/shell/AccountDrawers.tsx` | `openUpgrade(plan)` (`?billing=true&step=subscribe&billingPlan=`) | `UpgradeTo` |
 ## MUT-753 — the Pilot panel (ADR-330)
 
 - `PlanUsageLines` (`src/hosted/components/PilotBilling.tsx`): a paid plan's usage lines from `usageLinesOf(billing)` (`src/hosted/data/usageLines.ts`): "12 of 250 documents" with a bar, the number and bar butter from 90% (`data-attention`), partners per business, the reset day. Shared: use it for any paid plan's meters (MUT-754, MUT-733) instead of a second meter row. Starter keeps `UsageMeter` (its "left" line and 80% rule).
@@ -2649,3 +2658,37 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/client-books/DeskActivating.tsx` | `DeskActivating({ rows, marks, poll, onClose })`: MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer sent to Stripe | `ClientBooksPage` |
 | `src/hosted/data/claimedSeen.ts` | `hasSeenClaimed`, `markClaimedSeen` (localStorage): the `claimed-spot` Scene once per client | `CustomerDrawer` |
 | `CodeReveal` (MUT-770) | `<CodeReveal code labelledBy />`, used by the two drawers | `AddCustomerDrawer`, `CustomerDrawer` |
+
+## MUT-750 slice A — price lines before Checkout (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/billingPlans.ts` | `priceLinesOf`, `vatRateOf`, `PriceLines`, `VatRate` | Subscribe step |
+| `src/hosted/components/PriceLinesCard.tsx` | `PriceLinesCard` | Subscribe step (plan mode) |
+
+## MUT-734 — change plan (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/planChangeQueries.ts` | `useChangePlan`, `useUndoPlanChange`, `useScheduledToast`, `changeTargetsOf`, `scheduledChangeOf`, `pendingChangeOf`, `planChangePreviewQuery`, `changeFailureOf` | Billing drawer, `ChangePlan` |
+| `src/hosted/components/ChangePlan.tsx` | `ChangePlanBody`, `ChangePlanFooter`, `ChangeDoneBody`, `ScheduledChangeLine` | Billing drawer |
+| `src/hosted/components/InPlaceConfirm.tsx` | `extraAction` (a third button) | cancel flow's Move to Starter |
+| `src/hosted/components/Toast.tsx` | option `motion: 'undo'` (undo-toast spec) | scheduled plan change |
+| `src/hosted/components/Scene.tsx` | motions `plan-upgraded`, `gift-month` | done pane, MUT-733's gift notice |
+| `src/hosted/pages/operator/OperatorPlanHistory.tsx` | `OperatorPlanHistory` | operator account page |
+
+## MUT-733 — the gift and paid hard caps (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/usePlanUsage.ts` | `usePlanUsage`, `giftBeforeTyping`, `useAcceptGift` | Issue drawer, `useReceiptFiles` |
+| `src/hosted/components/PlanLimitNotice.tsx` | `GiftNotice`; `PlanLimitNotice` `onContinue` / `continuing` (the gift), the `gift-used` still on a paid hard cap | Issue drawer, receipts gallery, Home drop zone |
+
+## MUT-737 — open sign-up in the operator console (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/pages/operator/SignupHistory.tsx` | `SignupHistory` | Accounts' Signups filter, `/operator/signups` with open sign-up |
+| `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |
+| `src/hosted/data/billingPlans.ts` | `useOfferLine` (MUT-703) | Subscribe step's `PlanRow` `offerNote` |
+| `src/hosted/data/billingView.ts` | `planLaunchOf`, `planOfferFor`, `planComebackOf` (MUT-703) | Subscribe step, opening interval |

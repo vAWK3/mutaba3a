@@ -130,3 +130,12 @@ New ADR (supersedes ADR-178 d1 review branch, d2 PENDING_REVIEW outcome, d4, d5;
 6. **Terraform** also validates `open_signup` needs `starter_plan`, matching the boot refusal.
 7. **Left for the UI half:** the operator Signups page read-only and its nav move, the domain chip, the two PostHog events and `docs/analytics/events.json`, the legal-draft edits (AC7; MUT-732's drafts branch is open in another session), and the four QA flows.
 
+
+## Build decisions (UI half, 2026-11-27, wireframe mut-737 variant A)
+
+1. **Sign-up history is a filter of Accounts** (`?view=signups`, a segmented All / Signups control) once `GET /v1/self-service.openSignup` is true; the Signups tab leaves the operator's tabs then, and an old `/operator/signups` link shows the same read-only history. With the flag off nothing changes (the review queue and its tab stay). The wireframe's Pilot chip is not built here (no pilot list on main to filter).
+2. **History rows** (`SignupHistory`): the address (LTR), the day, the screen's chips (the domain class as a risk signal, `reviewChips`) and the outcome (Approved / Declined, or Waiting for one the release script hasn't reached), newest first, from `state=decided` plus the pending list. No Approve or Decline.
+3. **The domain chip** on the operator's account page reads `signupDomain` (the server's audit metadata) through the same chips.
+4. **Analytics** (contract 2.14.0, sha256 02120d99df27fd9aef24661a3fdc277528d1b0a32be22cb372c792fe8b831aff): `onboarding_plan_shown` (no properties: `surface` is shared) once when the first-run step shows, `onboarding_plan_chosen { choice: solo | starter }`; emitters portal, ios, android. The bump was made once for the lane's stack (on the MUT-705 branch) so every branch's contract is pinned.
+5. **AC7, the privacy drafts**: the review sentence is replaced by "We keep the result of these checks … with your account" (the class is kept on the audit entry), and the review mails are gone from the list of account mails; terms drafts had no review wording.
+6. **QA**: the open-sign-up flows need `OPEN_SIGNUP` on the self-service QA API, which TD-371 turns on with the re-specced review flows; they are built and recorded there.

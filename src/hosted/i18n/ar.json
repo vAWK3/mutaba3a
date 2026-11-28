@@ -1210,7 +1210,8 @@
           "title": "هذا الإيصال غير موجود",
           "body": "ربما حُذف، أو أنه يخص ملفًا آخر."
         },
-        "vatRead": "يُظهر الإيصال ضريبة قدرها {amount}"
+        "vatRead": "يُظهر الإيصال ضريبة قدرها {amount}",
+        "fromVendor": "آخر فئة لهذا المورّد"
       },
       "preview": {
         "label": "الإيصال {name}",
@@ -1355,7 +1356,7 @@
         },
         "trialEnded": "انتهت تجربتك المجانية",
         "locked": "انتهت تجربتك المجانية",
-        "active": "المستقل، يتجدد في {date}",
+        "active": "{plan}، يتجدد في {date}",
         "ending": "ينتهي اشتراكك في {date}",
         "grace": "لم نتمكن من تحصيل دفعتك الأخيرة",
         "unpaid": "لم تنجح دفعتك الأخيرة",
@@ -1604,7 +1605,14 @@
         },
         "documentsUsedUp": "لم يبقَ مستندات هذا الشهر",
         "scansUsedUp": "لم يبقَ مسوح هذا الشهر",
-        "hide": "إخفاء"
+        "hide": "إخفاء",
+        "meter": {
+          "documents": "المستندات هذا الشهر",
+          "scans": "المسوح هذا الشهر"
+        },
+        "ofCap": "{used} من {cap}",
+        "limitReached": "بلغت الحد",
+        "graceUntil": "بلا حد حتى {date}"
       },
       "starter": {
         "activeBusiness": "الملف التجاري الفعّال",
@@ -1654,7 +1662,9 @@
           "other": "{count} مسح"
         },
         "aMonth": "شهريًا",
-        "aYear": "سنويًا"
+        "aYear": "سنويًا",
+        "staffSoon": "الموظفون: قريبًا",
+        "firstYear": "السنة الأولى {price}"
       },
       "address": {
         "title": "عنوان الفوترة",
@@ -1691,6 +1701,46 @@
         },
         "writeToUs": "راسلنا",
         "mailSubject": "تجربة متابعة"
+      },
+      "keep": {
+        "title": "الأنشطة الفعّالة",
+        "count": "{chosen} من {cap}",
+        "choose": "اختر الأنشطة التي تبقى فعّالة"
+      },
+      "vat": {
+        "price": "السعر",
+        "line": "ضريبة القيمة المضافة {percent}%",
+        "total": "المجموع"
+      },
+      "change": {
+        "title": "تغيير الخطة",
+        "free": "مجانية",
+        "perYear": "{price} سنويًا",
+        "current": "الحالية",
+        "chargedNow": "يُخصم الآن",
+        "offerEnds": {
+          "stay": "ينتهي عرض البقاء",
+          "comeback": "ينتهي سعر العودة"
+        },
+        "fromDate": "{plan} من {date}",
+        "readOnlyFrom": "للقراءة فقط من {date}",
+        "pay": "ادفع {amount}",
+        "confirm": "تأكيد",
+        "pending": "بانتظار الدفع · {plan}",
+        "completePayment": "إكمال الدفع",
+        "otherCard": "الدفع ببطاقة أخرى",
+        "upgraded": "أنت الآن على خطة {plan}",
+        "done": "تم",
+        "scheduled": "مُجدول",
+        "undo": "تراجع",
+        "undone": "{plan} يتجدد في {date}",
+        "moveToStarter": "الانتقال إلى البداية",
+        "failure": {
+          "declined": "رُفضت البطاقة",
+          "changed": "تحدّث المبلغ",
+          "chooseBusinesses": "اختر الأنشطة التي تبقى فعّالة",
+          "failed": "تعذّر تغيير الخطة"
+        }
       }
     },
     "selfService": {
@@ -2349,7 +2399,8 @@
           "OPERATOR": "منحة",
           "STRIPE": "مدفوع",
           "TRIAL": "تجربة",
-          "NONE": "بلا خطة"
+          "NONE": "بلا خطة",
+          "STARTER": "البداية"
         },
         "billingUntil": "حتى {date}",
         "noProfiles": "لا ملفات.",
@@ -2573,6 +2624,32 @@
         "watched": "وافق على المشاهدة · {date}",
         "notWatched": "لم يوافق على المشاهدة",
         "consentLabel": "وافق المختبِر على مشاهدة جلساته وتسجيلها"
+      },
+      "planHistory": {
+        "title": "سجل الخطة",
+        "none": "لا تغييرات",
+        "on": "في {date}",
+        "kind": {
+          "UPGRADE": "ترقية",
+          "DOWNGRADE": "تخفيض",
+          "TO_STARTER": "إلى البداية"
+        },
+        "state": {
+          "APPLIED": "مُطبّق",
+          "SCHEDULED": "مُجدول",
+          "PENDING": "معلّق",
+          "UNDONE": "أُلغي",
+          "FAILED": "فشل"
+        }
+      },
+      "history": {
+        "empty": "لا سجل",
+        "listLabel": "التسجيلات",
+        "filterLabel": "عرض",
+        "all": "الكل",
+        "approved": "قُبل",
+        "declined": "رُفض",
+        "waiting": "بانتظار المراجعة"
       }
     },
     "welcome": {
@@ -3876,7 +3953,8 @@
         "solo": "مستقل",
         "business": "تجاري",
         "firm": "مؤسسة",
-        "starter": "البداية"
+        "starter": "البداية",
+        "freelancer": "الخطة السابقة"
       },
       "starter": {
         "includes": "ملف تجاري واحد وملفك الشخصي",
@@ -3900,6 +3978,20 @@
       },
       "businesses": {
         "title": "تشمل خطة البداية ملفًا تجاريًا واحدًا"
+      },
+      "upgradeTo": "الترقية إلى {plan}",
+      "includes": "تشمل خطة {plan} {items}",
+      "reached": "بلغت الحد: {usage}",
+      "gift": {
+        "documents": {
+          "title": "مبروك: {count} فاتورة هذا الشهر.",
+          "body": "هذا الشهر أصدر ما تحتاج. من {date} يعود الحد إلى {count}، وبعده تحتاج خطة أكبر."
+        },
+        "scans": {
+          "title": "مبروك: {count} مسحًا هذا الشهر.",
+          "body": "هذا الشهر امسح ما تحتاج. من {date} يعود الحد إلى {count}، وبعده تحتاج خطة أكبر."
+        },
+        "continue": "متابعة"
       }
     },
     "onboarding": {

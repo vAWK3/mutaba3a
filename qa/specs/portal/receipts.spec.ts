@@ -455,3 +455,41 @@ test('On a firm, a receipt that read a known vendor opens in its currency and VA
     expect(api.last('POST', new RegExp(`^/v1/receipts/${first}/approve$`))?.body).toMatchObject({ currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } });
   });
 });
+
+test('A receipt from a known vendor opens with its last category filled in, underlined for a moment, and a category chosen by hand stays (MUT-775)', { tag: '@portal.receipts.vendor-category' }, async ({ page, step }) => {
+  const egged = { readerVersion: 'qa', vendorName: { value: 'Egged', source: 'ocr', confidence: 0.9 } };
+  const api = new FakeApi({
+    profiles: [{ ...office(OFFICE_A, 'Nour Studio'), role: 'OWNER' }],
+    categories: [groceries, travel],
+    vendors: [{ name: 'Egged', categoryId: travel.id, currency: 'ILS' }],
+    receipts: [libraryReceipt(1, { filename: 'egged.jpg', mimeType: 'image/jpeg', suggested: egged }), libraryReceipt(2, { filename: 'egged-2.jpg', mimeType: 'image/jpeg', suggested: egged })],
+  });
+  const first = libraryReceipt(1).id;
+
+  await step('Open a receipt from the vendor Egged, last filed under Travel', async () => {
+    await api.open(page, `${BASE}/receipts`);
+    await page.getByRole('link', { name: 'Open egged.jpg' }).click();
+    await expect(page.getByLabel('Category')).toHaveValue(travel.id);
+    await expect(page.getByText('Last used for this vendor')).toBeVisible();
+    await expect(page.locator('.hp-autofill-scope')).toHaveAttribute('data-autofill', 'category');
+  });
+
+  await step('Approve and file it', async () => {
+    await page.getByLabel('Amount').fill('12.50');
+    await page.getByRole('button', { name: 'Approve and file' }).click();
+    await expect(page).toHaveURL(new RegExp(`${BASE}/receipts$`));
+    expect(api.last('POST', new RegExp(`^/v1/receipts/${first}/approve$`))?.body).toMatchObject({ categoryId: travel.id });
+  });
+
+  await step('Open a receipt from Egged in Arabic, choose another category', async () => {
+    await api.open(page, `${BASE}/receipts`, 'ar');
+    await page.getByRole('link', { name: /egged-2\.jpg/ }).click();
+    const category = page.getByLabel(/الفئة/);
+    await expect(category).toHaveValue(travel.id);
+    await expect(page.getByText('آخر فئة لهذا المورّد')).toBeVisible();
+    await category.selectOption(groceries.id);
+    await expect(category).toHaveValue(groceries.id);
+    await expect(page.getByText('آخر فئة لهذا المورّد')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  });
+});

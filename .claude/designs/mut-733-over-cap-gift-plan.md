@@ -166,3 +166,13 @@ New ADR "Paid plans' monthly caps are hard after one gift per account" (supersed
 6. **Partner (Q3)**: `organizationId` in the body names the business; the caller must be a member; its owner's gift is taken.
 7. **Not built here:** the portal and phone gift message and usage lines (UI half, MUT-706), analytics events, `serverErrorCodes.ts` / `errors.dart` entries for GIFT_USED and GIFT_NOT_AVAILABLE, COMPONENT_REGISTRY, the privacy-draft line about the gift marker (MUT-732), and the QA flows. Tests for the scans path and a partner taking the gift were added after review (no bug found).
 
+
+## Build decisions (UI half, 2026-11-27, wireframe mut-733 variant A)
+
+1. **Meters in Billing** are MUT-705's `PlanMeters` (row + thin bar, butter from 90% with "Upgrade to <next plan>", "Limit reached", "No limit until <date>" from `graceUntil` in Asia/Jerusalem), with `motion-usage-meter` in CSS. MUT-754's pilot rows reuse the same component when that lane lands; nothing pilot-specific is built here.
+2. **The gift** sits in the drawer's banner slot (`GiftNotice`): the `gift-month` scene (96 px) with `motion-gift-month` built from the spec's table (overshoot on the leaves, the nuqta's pop and the confetti; individual transform properties so the art's own rotations stay; reduced motion: the still with a 150 ms fade), the approved short copy (Q5 default), and Continue. In the Issue drawer Continue stands in Issue's place (the footer); on the receipt upload it is inside the notice.
+3. **Known before typing**: with the meter at its cap and `usage.gift.available`, the Issue drawer opens on the gift and the upload holds its files (`giftBeforeTyping`). The portal never pre-refuses a paid plan otherwise: it can't see `PAID_HARD_CAPS`, so a hard cap shows only from the server's 409.
+4. **Retry**: Continue posts `/v1/billing/over-cap-gift` (with the profile as `organizationId`, so a partner takes the owner's gift, Q3), refetches Billing, then re-sends the held invoice (the same idempotency key; the server released it) or re-uploads the held files. A 409 GIFT_USED from another tab counts as taken.
+5. **The hard cap after the gift** shows the `gift-used` still in the notice's icon place, "Limit reached: 50 of 50 documents", the reset day and Upgrade to <next plan> (Billing's Change plan for a subscriber).
+6. **80% on a paid plan is a plain line**, butter only from 90% (the wireframe; Starter keeps its MUT-731 butter-from-80%).
+7. Analytics: `plan_gift_shown { limit }` (once per page view), `plan_gift_accepted { limit }`; `plan_cap_reached` gained `plan` in MUT-705. GIFT_USED / GIFT_NOT_AVAILABLE were already in `serverErrorCodes.ts`.

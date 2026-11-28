@@ -1,0 +1,56 @@
+app: portal
+area: paid-caps
+title: Paid plans' monthly limits, the once-ever gift and the hard cap after it, stubbed API
+tier: secondary
+# MUT-733 (wireframe mut-733 A; server half ADR-293, dark behind PAID_HARD_CAPS). The FakeApi's `paid` seed refuses at
+# Solo's and Business's caps with `gift: available` until the gift is taken, as the server does with the flag on.
+paths:
+  - src/hosted/data/usePlanUsage.ts
+  - src/hosted/components/PlanLimitNotice.tsx
+features:
+  - id: paid-cap-gift
+    title: On Solo at 50 of 50 invoices, the Issue drawer opens with the gift; Continue takes it and the invoice issues
+    tier: secondary
+    tickets: [MUT-733]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+      - src/hosted/components/Scene.tsx
+      - src/hosted/hosted.css
+    steps:
+      - As a Solo subscriber who issued 50 documents this month, open Issue a document
+      - Choose Continue
+      - Issue a tax invoice to Client 1
+    expect:
+      - The banner slot shows the gift-month scene, "Congratulations: 50 invoices this month." and the line with the reset day; Continue stands in Issue's place
+      - The gift is recorded and the footer says "No limit until …"; Issue is back
+      - Tax invoice 51 is issued
+  - id: paid-cap-hard
+    title: Once the gift is used, the 51st invoice is refused with the gift-used scene, the reset day and Upgrade to Business
+    tier: secondary
+    tickets: [MUT-733]
+    steps:
+      - As a Solo subscriber whose gift is used, with 50 documents this month, issue a tax invoice
+    expect:
+      - The notice shows the gift-used scene, "Limit reached: 50 of 50 documents", the reset day, and Upgrade to Business in the footer
+  - id: paid-scan-gift
+    title: On Solo at 100 of 100 scans, an upload shows the gift; Continue takes it and the receipt uploads
+    tier: secondary
+    tickets: [MUT-733]
+    paths:
+      - src/hosted/data/useReceiptFiles.ts
+      - src/hosted/pages/views/ReceiptsGallery.tsx
+      - src/hosted/pages/home/ReceiptDropZone.tsx
+    steps:
+      - As a Solo subscriber who used 100 scans this month, upload a receipt in Expenses › Receipts
+      - Choose Continue
+    expect:
+      - The gift notice says "Congratulations: 100 scans this month." with Continue; nothing was uploaded
+      - The gift is recorded and the held receipt uploads
+  - id: paid-usage-nudge
+    title: On Solo at 46 of 50, the Issue drawer's footer says so in butter with Upgrade to Business
+    tier: secondary
+    tickets: [MUT-733]
+    steps:
+      - As a Solo subscriber who issued 46 documents this month, open Issue a document
+    expect:
+      - The footer reads "46 of 50 documents this month · Upgrade to Business"

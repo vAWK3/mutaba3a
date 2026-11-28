@@ -72,6 +72,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/CodeReveal.tsx': { ltr: 1 }, // MUT-770: the claim code, LTR in both languages (codes are LTR)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
   'src/hosted/components/ManualAllocationPanel.tsx': { ltr: 2 }, // MUT-711: the invoice facts to copy (number, date, amount, VAT id) and the 9-digit number field (B)
+  'src/hosted/pages/operator/SignupHistory.tsx': { ltr: 1 }, // MUT-737: the sign-up's email address
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
   'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)
@@ -104,6 +105,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/operator/OperatorSignupsPage.tsx': { ltr: 4 }, // MUT-460: the signup's email (row and kept row), its domain, an unknown reason code
   'src/hosted/pages/operator/OperatorUsagePage.tsx': { ltr: 5, auto: 1 }, // MUT-735: counts (event count, used / limit, used with no cap), the person's email and the route template; the person's name
   'src/hosted/pages/operator/OperatorUsageSection.tsx': { auto: 1 }, // MUT-735: the profile's name
+  'src/hosted/components/BusinessChecklist.tsx': { auto: 2 }, // MUT-705: a business's name in the checklist and in the read-only list
   'src/hosted/components/PasskeysDrawer.tsx': { ltr: 1, auto: 3 }, // the step-up password; passkey names in the list and the rename field (MUT-115 DR11)
   'src/hosted/twoFactor/TwoFactorDrawer.tsx': { ltr: 4 }, // MUT-710: the password, the app's key, the code fields, the recovery codes
   'src/hosted/twoFactor/TwoFactorFields.tsx': { ltr: 2 }, // MUT-710: the code and the recovery code

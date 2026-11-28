@@ -32,10 +32,18 @@ export interface ToastOptions {
   icon?: ReactNode;
   /** MUT-722: one quieter line under the message (what the action is for), read with it. */
   detail?: string;
+  /**
+   * MUT-734 (`docs/design/motion/2026-11-27/undo-toast`): the toast rises 14 px and fades in (420 ms spring, 240 ms
+   * fade); its action fades it out in 150 ms before it goes. Info toasts only.
+   */
+  motion?: 'undo';
 }
 export type ShowToast = (message: string, options?: ToastOptions) => void;
 
 const ToastContext = createContext<ShowToast>(() => {});
+
+/** MUT-734 (undo-toast spec): the dismiss fade. */
+const TOAST_LEAVE_MS = 150;
 
 interface ToastState {
   message: string;
@@ -44,6 +52,9 @@ interface ToastState {
   secondaryAction?: ToastAction;
   icon?: ReactNode;
   detail?: string;
+  motion?: 'undo';
+  /** MUT-734: fading out after its action (150 ms), then gone. */
+  leaving?: boolean;
   /** Bumped on every show, so an identical second message re-renders and is announced again. */
   id: number;
 }
@@ -66,6 +77,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         secondaryAction: options?.secondaryAction,
         icon: options?.icon,
         detail: options?.detail,
+        motion: options?.motion,
         id: (current?.id ?? 0) + 1,
       }));
       startTimer();
@@ -83,7 +95,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       type="button"
       className={quiet ? 'hp-link-button press hp-toast-action hp-toast-action--quiet' : 'hp-link-button press hp-toast-action'}
       onClick={() => {
-        setToast(null);
+        if (toast?.motion) {
+          // MUT-734: the undo toast's 150 ms fade before it goes (reduced motion: the same fade, nothing moves).
+          clearTimeout(timer.current);
+          setToast((current) => (current ? { ...current, leaving: true } : current));
+          timer.current = setTimeout(() => setToast(null), TOAST_LEAVE_MS);
+        } else setToast(null);
         action.onAction();
       }}
     >
@@ -108,7 +125,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {actionButton(toast)}
         </div>
       )}
-      <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live" {...hold}>
+      <div className={info ? ['hp-toast hp-toast-info', info.motion ? 'hp-toast--rise' : null, info.leaving ? 'hp-toast--leaving' : null].filter(Boolean).join(' ') : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live" {...hold}>
         {info && (
           <>
             {/* Keyed by show, so a second save inside the window replays its icon (MUT-338) */}

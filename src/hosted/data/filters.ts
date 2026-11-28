@@ -346,7 +346,9 @@ export interface ProfileDrawerSearch {
    * MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it).
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
    */
-  step?: 'subscribe' | 'welcome' | 'switch' | 'cancel';
+  step?: 'subscribe' | 'welcome' | 'switch' | 'cancel' | 'change';
+  /** MUT-705 / MUT-734: the plan an Upgrade asked for: the Subscribe step or the Change plan pane opens on it. */
+  billingPlan?: 'starter' | 'solo' | 'business' | 'firm';
   /** MUT-362: how the person came back from Stripe Checkout (its success_url / cancel_url). */
   checkout?: 'success' | 'cancelled';
   /**
@@ -355,7 +357,7 @@ export interface ProfileDrawerSearch {
    */
   portal?: 'returned' | 'card';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'pilotWelcome', 'step', 'checkout', 'portal'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'pilotWelcome', 'step', 'billingPlan', 'checkout', 'portal'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -384,7 +386,8 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     connectedApps: flag(raw.connectedApps),
     twoFactor: flag(raw.twoFactor),
     pilotWelcome: flag(raw.pilotWelcome),
-    step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' ? raw.step : undefined,
+    step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' || raw.step === 'change' ? raw.step : undefined,
+    billingPlan: raw.billingPlan === 'starter' || raw.billingPlan === 'solo' || raw.billingPlan === 'business' || raw.billingPlan === 'firm' ? raw.billingPlan : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
     portal: raw.portal === 'returned' || raw.portal === 'card' ? raw.portal : undefined,
   });

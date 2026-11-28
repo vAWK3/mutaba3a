@@ -229,6 +229,11 @@ export type BillingEntitlement = NonNullable<HostedProfile['billing']>;
 export type BillingYearlySwitch = Schemas['BillingYearlySwitch'];
 export type YearlySwitchPreview = Schemas['YearlySwitchPreview'];
 export type YearlySwitchResult = Schemas['YearlySwitchResult'];
+/** MUT-734: change plan (up now, down at the period end, to Starter). */
+export type PlanChangeTarget = Schemas['PlanChangeTarget'];
+export type PlanChangePreview = Schemas['PlanChangePreview'];
+export type PlanChangeResult = Schemas['PlanChangeResult'];
+export type PlanChange = Schemas['PlanChange'];
 export type BillingRetention = Schemas['BillingRetention'];
 export type PauseResult = Schemas['PauseResult'];
 export type PauseEndResult = Schemas['PauseEndResult'];
@@ -681,6 +686,9 @@ export const api = {
    */
   operatorSignupReviews: (signal?: AbortSignal) =>
     request<OperatorSignupReviewList>('GET', '/v1/operator/signup-reviews', { query: { state: 'pending', limit: OPERATOR_LIST_LIMIT }, signal }),
+  /** MUT-737: the decided signups (the history once open sign-up retires the review), newest page the server gives. */
+  operatorSignupHistory: (signal?: AbortSignal) =>
+    request<OperatorSignupReviewList>('GET', '/v1/operator/signup-reviews', { query: { state: 'decided', limit: OPERATOR_LIST_LIMIT }, signal }),
   /** MUT-460: approve, decline, or mail an approved signup again. The server keys each mail; 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
   decideSignupReview: (userId: string, verb: SignupReviewVerb) =>
     request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),
@@ -840,6 +848,14 @@ export const api = {
   pilotWelcomeSeen: () => request<Schemas['PilotWelcomeSeen']>('POST', '/v1/billing/pilot-welcome'),
   /** MUT-777 (ADR-333): the tester's one yes to watched sessions; idempotent, the first yes is kept. */
   pilotWatchConsent: () => request<Schemas['PilotWatchConsent']>('POST', '/v1/billing/pilot-watch-consent'),
+  /** MUT-734: what a change to `plan` would do (the amount charged now, or the date and the businesses to keep). */
+  previewPlanChange: (plan: Schemas['PlanChangeTarget']) => request<Schemas['PlanChangePreview']>('POST', '/v1/billing/plan-change/preview', { body: { plan } }),
+  /** MUT-734: change plan at the preview's `prorationAt` and amount; past the target's business count, the ones kept. */
+  changePlan: (body: Schemas['PlanChangeRequest']) => request<Schemas['PlanChangeResult']>('POST', '/v1/billing/plan-change', { body }),
+  /** MUT-733: take the once-ever over-cap gift for a meter at its cap (a partner names the business: the owner's gift). */
+  acceptOverCapGift: (body: Schemas['OverCapGiftRequest']) => request<Schemas['OverCapGift']>('POST', '/v1/billing/over-cap-gift', { body }),
+  /** MUT-734: take a scheduled change back before its day. */
+  undoPlanChange: () => request<{ change: Schemas['PlanChange'] }>('DELETE', '/v1/billing/plan-change'),
   /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */
   soloTrialOffered: () => request<Schemas['SoloTrialOffer']>('POST', '/v1/billing/solo-trial/offered'),
 

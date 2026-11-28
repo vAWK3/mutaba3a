@@ -5052,6 +5052,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Route | `__tests__/billing-pilot.test.ts` | `pilot.startedAt`, `firstScanAt` (first of several), `firstInvoiceAt` null until the first document |
 | Client | with MUT-753/755/756 | each event fires once in a production-gate test and never in dev or QA |
 
+## MUT-705 — plan picker, plan-aware billing, cap prompts and usage (portal, 2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/data/__tests__/planUsage.test.ts` | `nextPlanOf` along the ladder and off it; `sellablePlanOf`; `recommendedPlanOf` 0/1/2/4/9 businesses and none on offer; `planUsageOf` on a paid plan (gift, `graceUntil`) and null on Freelancer/Malafat |
+| Portal | `src/hosted/components/__tests__/BillingDrawer.mut705.test.tsx` | Subscribe opens on Business for two businesses and on `?billingPlan=firm` (Staff: coming soon); headline "Business, renews"; meters butter at 90% with Upgrade to Firm, none on scans; Firm with the gift (no upgrade, "No limit until"); read-only businesses, checklist 3 of 3 → 2 of 3, disabled past the cap, Save sends the pick; New profile on Solo names Business and its price; Home's line on Solo at 46/50 |
+| QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.plan-recommended`, `paid-billing` (en + ar at 375 px), `paid-read-only`, `paid-cap-prompts` |
 ## MUT-753 — the Pilot panel and its end state (2026-11-27, ADR-330)
 
 | Level | File | What |
@@ -5165,3 +5172,49 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unclaimed unpaid removed at day 60, reminders, clock injected | `routes-accountant-sweep.test.ts` |
 | Portal: add, spoken code, change email, take card, claimed meanwhile, a11y | `qa/specs/portal/accountant-desk.spec.ts` (`portal.accountant-desk.*`) |
 | Portal: claim with the code, wrong and locked code, dead accountant's link | `qa/specs/portal/setup.spec.ts` (`portal.setup.claim-*`) |
+## MUT-750 slice A (UI) — price, VAT and total before Checkout (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/data/__tests__/billingPlans.vat.test.ts` | 3900 → 702 / 4602; yearly 39000 → 7020; half-up 8925 → 1607; Jordan, no rate, no country → price alone; `vatRateOf` |
+| Portal | `BillingDrawer.plans.test.tsx` | Israel monthly and yearly lines; Jordan price only |
+| QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.vat-lines-israel` (en + ar), `portal.plans.no-vat-abroad` |
+
+## MUT-734 (UI) — change plan (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Portal | `src/hosted/components/__tests__/BillingDrawer.mut734.test.tsx` | Change plan from Billing, Solo current and disabled, Business preview ₪31.40, Pay sends prorationAt + expectedAmountDue, done pane with the plan-upgraded scene; declined card → Pay with another card; 202 pending → Complete payment; downgrade: date as main figure, checklist 0 of 1 → Confirm on, activeBusinessIds sent, scheduled line with the change-scheduled scene and the rising undo toast; Undo on the line (DELETE, collapse, "Business renews"); cancel confirm → Move to Starter → Change plan on Starter |
+| Operator | `OperatorAccountPage.test.tsx` | Plan history rows: from → to, kind, date, state, charge |
+| QA | `qa/specs/portal/change-plan.spec.ts` | `portal.change-plan.upgrade-now`, `downgrade-scheduled`, `cancel-to-starter`; `operator-plan-history` manual |
+
+## MUT-733 (UI) — the gift and paid hard caps (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `data/__tests__/usePlanUsage.test.ts` | `giftBeforeTyping` on Solo/Business at the cap (next plan), none below, used, running, Firm, Starter |
+| Pure | `data/__tests__/planUsage.test.ts` | `planLimitOf` with and without `gift`; Firm's null next plan |
+| Portal | `BillingDrawer.mut705.test.tsx` | the meters' butter, Upgrade, and the gift's "No limit until" |
+| QA | `qa/specs/portal/paid-caps.spec.ts` | `portal.paid-caps.paid-cap-gift`, `paid-cap-hard`, `paid-scan-gift`, `paid-usage-nudge` |
+
+## MUT-737 (UI) — open sign-up (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Portal | `pages/operator/__tests__/OperatorSignupHistory.test.tsx` | open sign-up: no Signups tab, Accounts › Signups (`?view=signups`) lists the history newest first with class and outcome, no actions; flag off: the tab stays, no filter |
+| Portal | `session/__tests__/AuthGate.soloTrial.test.tsx` | `onboarding_plan_shown` once, `onboarding_plan_chosen { choice: starter }` |
+| Contract | `scripts/__tests__/analytics-taxonomy.test.ts` | 2.14.0 pinned; the new events' emitters and properties |
+| QA | with TD-371 | `portal-selfservice.signup.webmail-starter`, `portal-selfservice.operator.signups-history` |
+
+## MUT-775 (portal) — the vendor's last category on the receipt review (2026-11-28)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/lib/__tests__/vendorDefaults.test.ts` | fills an empty untouched category; never a chosen or touched one; none without a category |
+| Portal | `src/hosted/pages/__tests__/Receipts.test.tsx` | the fill, its hint and the autofill scope; a person's change removes both |
+| QA | `qa/specs/portal/receipts.spec.ts` | `portal.receipts.vendor-category` (en, then ar with a hand-picked category) |
+
+## MUT-703 (portal half) — offers on the three plans (2026-11-28)
+- `data/__tests__/planOffers.test.ts`: `planLaunchOf`, `planOfferFor`, `planComebackOf`, `eligibleOfferOf` with plans only, `renewalPriceOf` on a plan.
+- `components/__tests__/BillingDrawer.mut703.test.tsx`: first-year lines on Yearly, none on Monthly or when ineligible, `expectedOffer` sent, the plan's come-back price.
+- QA `portal.plans.plan-launch-yearly` (spec written, not recorded; recording waits for the epics).

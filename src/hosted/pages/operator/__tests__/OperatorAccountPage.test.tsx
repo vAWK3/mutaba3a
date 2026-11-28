@@ -208,6 +208,25 @@ describe('the account page (design 5A, 4A)', () => {
     expect(profiles.getByText('Personal')).toBeInTheDocument();
   });
 
+  it('MUT-734 (AC12): Plan history lists each change: from → to, the day, the kind, its state and an upgrade’s charge', async () => {
+    portal({
+      view: account({
+        planHistory: [
+          { id: 'aaaaaaaa-0000-4000-8000-000000000001', kind: 'DOWNGRADE', state: 'SCHEDULED', fromPlan: 'BUSINESS', toPlan: 'SOLO', effectiveAt: '2026-12-01T00:00:00.000Z', amountMinor: null, currency: null, createdAt: '2026-10-26T09:00:00.000Z' },
+          { id: 'aaaaaaaa-0000-4000-8000-000000000002', kind: 'UPGRADE', state: 'APPLIED', fromPlan: 'SOLO', toPlan: 'BUSINESS', effectiveAt: '2026-10-20T09:00:00.000Z', amountMinor: 3140, currency: 'ILS', createdAt: '2026-10-20T09:00:00.000Z' },
+        ],
+      }),
+    });
+    const history = within(await screen.findByRole('region', { name: 'Plan history' }));
+    const rows = history.getAllByTestId('plan-history-row');
+    expect(rows[0]).toHaveTextContent('Business → Solo');
+    expect(rows[0]).toHaveTextContent(/Downgrade · on Dec 1, 2026/);
+    expect(rows[0]).toHaveTextContent('Scheduled');
+    expect(rows[1]).toHaveTextContent('Solo → Business');
+    expect(rows[1]).toHaveTextContent('₪31.40');
+    expect(rows[1]).toHaveTextContent('Applied');
+  });
+
   it('a disabled account says so and offers only Enable', async () => {
     portal({ view: account({ status: 'DISABLED' }) });
     expect(await screen.findByText(/This account is disabled/)).toBeInTheDocument();

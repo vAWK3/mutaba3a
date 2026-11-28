@@ -17,6 +17,8 @@ export interface StarterMeter {
   level: UsageLevel;
   /** What is left this month (never below 0). */
   left: number;
+  /** MUT-733: the over-cap gift lifts this meter's cap until this instant (absent or null otherwise). */
+  graceUntil?: string | null;
 }
 
 export interface StarterUsage {
@@ -24,6 +26,42 @@ export interface StarterUsage {
   resetsOn: string;
   documents: StarterMeter;
   scans: StarterMeter;
+}
+
+/** MUT-705: the plans with monthly limits, in rank order (ADR-275). Legacy Freelancer and Malafat have none. */
+export const LIMITED_PLANS = ['starter', 'solo', 'business', 'firm'] as const;
+export type LimitedPlan = (typeof LIMITED_PLANS)[number];
+export type SellablePlan = Exclude<LimitedPlan, 'starter'>;
+
+/** One plan's month: Starter's or a paid plan's meters (MUT-705 / MUT-733), and whether the once-ever gift is left. */
+export interface PlanUsage extends StarterUsage {
+  plan: LimitedPlan;
+  giftAvailable: boolean;
+}
+
+/** The next plan up the ladder (Starter → Solo → Business → Firm), or null at the top or off the ladder. */
+export function nextPlanOf(plan: string | null | undefined): SellablePlan | null {
+  const i = LIMITED_PLANS.indexOf(plan as LimitedPlan);
+  return i < 0 || i === LIMITED_PLANS.length - 1 ? null : (LIMITED_PLANS[i + 1] as SellablePlan);
+}
+
+/** Butter from 90% (nudge and at the cap), never while the gift runs (wireframe mut-733 A). */
+export function meterWarns(meter: Pick<StarterMeter, 'level' | 'graceUntil'>): boolean {
+  return !meter.graceUntil && (meter.level === 'nudge' || meter.level === 'at_cap');
+}
+
+/** A plan the ladder knows (the URL's `billingPlan`, a 409's `nextPlan`), or null. */
+export function sellablePlanOf(value: unknown): SellablePlan | null {
+  return value === 'solo' || value === 'business' || value === 'firm' ? value : null;
+}
+
+/**
+ * MUT-705: the plan the Subscribe step opens on: the smallest on offer whose business count covers the businesses
+ * the person owns; the largest when none does; null with nothing on offer.
+ */
+export function recommendedPlanOf<P extends { plan: string; limits: { businesses: number } }>(plans: readonly P[], ownedBusinesses: number): P | null {
+  const ranked = [...plans].sort((a, b) => LIMITED_PLANS.indexOf(a.plan as LimitedPlan) - LIMITED_PLANS.indexOf(b.plan as LimitedPlan));
+  return ranked.find((p) => p.limits.businesses >= ownedBusinesses) ?? ranked[ranked.length - 1] ?? null;
 }
 
 export type PlanLimitKind = 'documents' | 'scans' | 'businesses' | 'partners' | 'taxAuthority';
@@ -36,6 +74,8 @@ export interface PlanLimit {
   resetsOn?: string;
   nextPlan: string | null;
   canUpgrade: boolean;
+  /** MUT-733: the first refusal on a paid plan carries the once-ever gift (`details.gift: 'available'`). */
+  gift?: boolean;
 }
 
 const LEVELS: readonly UsageLevel[] = ['ok', 'near', 'nudge', 'at_cap'];
@@ -62,26 +102,46 @@ export function activeBusinessesOf(billing: Pick<BillingOverview, 'activeBusines
   return (billing?.activeBusinesses as ActiveBusinesses | null | undefined) ?? null;
 }
 
-/** This month's Starter meters, or null when the person isn't on Starter (or the server is older than MUT-731). */
-export function starterUsageOf(billing: Pick<BillingOverview, 'usage'> | null | undefined): StarterUsage | null {
+/**
+ * MUT-705: this month's meters on any plan with limits (Starter, Solo, Business, Firm), or null where the plan has none
+ * (legacy Freelancer, Malafat, no plan) or the server is older than MUT-731.
+ */
+export function planUsageOf(billing: Pick<BillingOverview, 'usage'> | null | undefined): PlanUsage | null {
   const usage = billing?.usage;
-  if (!usage || usage.plan !== 'starter') return null;
+  if (!usage || !LIMITED_PLANS.includes(usage.plan as LimitedPlan)) return null;
   const meter = (key: MeterKey): StarterMeter | null => {
     const m = usage.meters.find((x) => x.meter === key);
     if (!m || m.limit === null) return null;
-    return { meter: key, used: m.used, limit: m.limit, level: m.level, left: Math.max(0, m.limit - m.used) };
+    return { meter: key, used: m.used, limit: m.limit, level: m.level, left: Math.max(0, m.limit - m.used), graceUntil: m.graceUntil ?? null };
   };
   const documents = meter('documents');
   const scans = meter('scans');
-  return documents && scans ? { resetsOn: usage.resetsOn, documents, scans } : null;
+  if (!documents || !scans) return null;
+  return { plan: usage.plan as LimitedPlan, resetsOn: usage.resetsOn, documents, scans, giftAvailable: usage.gift?.available === true };
+}
+
+/** This month's Starter meters, or null when the person isn't on Starter (or the server is older than MUT-731). */
+export function starterUsageOf(billing: Pick<BillingOverview, 'usage'> | null | undefined): StarterUsage | null {
+  const usage = planUsageOf(billing);
+  if (!usage || usage.plan !== 'starter') return null;
+  const strip = (m: StarterMeter): StarterMeter => ({ meter: m.meter, used: m.used, limit: m.limit, level: m.level, left: m.left });
+  return { resetsOn: usage.resetsOn, documents: strip(usage.documents), scans: strip(usage.scans) };
 }
 
 /** The details of a 409 PLAN_LIMIT, or null for any other answer. */
 export function planLimitOf(error: unknown): PlanLimit | null {
   if (!(error instanceof ApiError) || error.code !== 'PLAN_LIMIT') return null;
-  const details = (error.details ?? {}) as Partial<PlanLimit>;
+  const details = (error.details ?? {}) as Partial<Omit<PlanLimit, 'gift'>> & { gift?: unknown };
   if (!details.limit) return null;
-  return { limit: details.limit, used: details.used, cap: details.cap, resetsOn: details.resetsOn, nextPlan: details.nextPlan ?? 'solo', canUpgrade: details.canUpgrade === true };
+  return {
+    limit: details.limit,
+    used: details.used,
+    cap: details.cap,
+    resetsOn: details.resetsOn,
+    nextPlan: details.nextPlan === undefined ? 'solo' : details.nextPlan,
+    canUpgrade: details.canUpgrade === true,
+    ...(details.gift === 'available' ? { gift: true } : {}),
+  };
 }
 
 /**

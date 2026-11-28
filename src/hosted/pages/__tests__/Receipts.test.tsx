@@ -658,6 +658,38 @@ describe('a known vendor’s currency and VAT on review (MUT-303)', () => {
     expect(seen.body).toMatchObject({ currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } });
   });
 
+  it('MUT-775: a registration-no. match fills the vendor’s last category with its hint and the autofill underline; approving sends it', async () => {
+    const seen: { body?: unknown } = {};
+    portal(`${BASE}/${R1}`, {
+      receipts: [receipt(R1, { suggested: vendorOnly })],
+      firm: false,
+      routes: {
+        [`GET /v1/receipts/${R1}`]: () => ok({ ...plain(receipt(R1, { suggested: vendorOnly })), vendorDefaults: { ...bezeq, vat: null, categoryId: GROCERIES } }),
+        [`POST /v1/receipts/${R1}/approve`]: ({ body }: { body: unknown }) => {
+          seen.body = body;
+          return ok({ expense: { id: E1, occurredOn: '2026-10-24', amount: '116.00', currency: 'EUR', title: null, vendor: 'Bezeq', categoryId: GROCERIES, customerId: null, projectId: null, notes: null, createdByUserId: null, version: 1, createdAt: '', updatedAt: '', vat: null }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201);
+        },
+      },
+    });
+    await screen.findByLabelText(/Amount/);
+    await waitFor(() => expect((screen.getByLabelText(/Category/) as HTMLSelectElement).value).toBe(GROCERIES));
+    expect(screen.getByText('Last used for this vendor')).toBeInTheDocument();
+    expect(document.querySelector('.hp-autofill-scope')).toHaveAttribute('data-autofill', 'category');
+  });
+
+  it('MUT-775: a category the person chose is never replaced, and the hint goes when they change it', async () => {
+    const { user } = portal(`${BASE}/${R1}`, {
+      receipts: [receipt(R1, { suggested: vendorOnly })],
+      firm: false,
+      routes: { [`GET /v1/receipts/${R1}`]: () => ok({ ...plain(receipt(R1, { suggested: vendorOnly })), vendorDefaults: { ...bezeq, vat: null, categoryId: GROCERIES } }) },
+    });
+    await screen.findByLabelText(/Amount/);
+    await waitFor(() => expect((screen.getByLabelText(/Category/) as HTMLSelectElement).value).toBe(GROCERIES));
+    await user.selectOptions(screen.getByLabelText(/Category/), '');
+    expect(screen.queryByText('Last used for this vendor')).toBeNull();
+    expect(document.querySelector('.hp-autofill-scope')).not.toHaveAttribute('data-autofill');
+  });
+
   it('R5/R6: what the receipt read stays: its currency and amount win over the vendor’s; the VAT still fills', async () => {
     open(suggested, true);
     await screen.findByLabelText(/Amount/);

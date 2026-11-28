@@ -283,10 +283,7 @@ test('After signup, a Not now on the setup step means Home does not ask again ri
   await step('MUT-619: the setup page offers a passkey first; press Not now', async () => {
     await skipSetupPasskey(page);
   });
-  await step('The free trial’s first-run step, then Home: no passkey card, the offer was just answered', async () => {
-    const trial = page.getByRole('dialog', { name: 'Your free trial' });
-    await expect(trial.getByRole('heading', { name: 'Your 14-day free trial has started' })).toBeVisible();
-    await trial.getByRole('button', { name: 'Continue', exact: true }).click();
+  await step('Home on Starter (no trial step, TD-371): no passkey card, the offer was just answered', async () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page).toHaveURL(HOME);
     await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();

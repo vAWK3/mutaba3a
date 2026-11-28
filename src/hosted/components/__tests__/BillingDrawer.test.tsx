@@ -183,7 +183,7 @@ describe('Billing drawer: back from Stripe (eng review D4)', () => {
     portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? overview() : active) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
     expect(await within(dialog).findByRole('heading', { name: 'Confirming your payment…' })).toHaveFocus();
-    const headline = await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ }, { timeout: 4000 });
+    const headline = await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ }, { timeout: 4000 });
     expect(headline).toHaveFocus();
     expect(within(dialog).getAllByRole('status').map((n) => n.textContent)).toEqual(["You're subscribed. Thank you."]);
   });
@@ -237,7 +237,7 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
       entitlement: ent('ACTIVE', 'STRIPE', iso(30)),
     });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ })).toBeInTheDocument();
     expect(await within(dialog).findByRole('heading', { name: /^Your plan ends on/ }, { timeout: 4000 })).toBeInTheDocument();
   });
 
@@ -252,7 +252,7 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
       entitlement: ent('ACTIVE', 'STRIPE', iso(30)),
     });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ });
+    await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ });
     await vi.advanceTimersByTimeAsync(32_000);
     const settled = calls;
     expect(settled).toBeGreaterThan(1);
@@ -280,7 +280,7 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     let calls = 0;
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(++calls === 1 ? subscribed() : subscribed({ cancelAtPeriodEnd: true })), entitlement: ent('ACTIVE', 'STRIPE', iso(30)) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ })).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 2_500));
     expect(calls).toBe(1);
   });
@@ -312,7 +312,7 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
       routes: { 'POST /v1/billing/card-retry': () => ok({ outcome: 'paid', hostedInvoiceUrl: null }) },
     });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ }, { timeout: 4000 })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ }, { timeout: 4000 })).toBeInTheDocument();
     expect(api.calls.filter((c) => c.url.pathname === '/v1/billing/card-retry')).toHaveLength(1);
   });
 
@@ -663,7 +663,7 @@ describe('MUT-531: switch to yearly in the drawer (AC1–AC3, D1, R2)', () => {
   it('no line when the server sends none (before the 2nd payment)', async () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(monthly({ yearlySwitch: null })), entitlement: paid });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ });
+    await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ });
     expect(within(dialog).queryByRole('button', { name: 'Switch to yearly' })).toBeNull();
   });
 
@@ -855,7 +855,7 @@ describe('MUT-532: pause instead of cancel, the stay offer and MTB3A’s own can
   it('a founder price has no Cancel plan in MTB3A (Stripe won’t cancel a schedule this way)', async () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(plan({ renewsAtListPrice: false })), entitlement: paid });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ });
+    await within(dialog).findByRole('heading', { name: /^Previous plan, renews/ });
     expect(within(dialog).queryByRole('button', { name: 'Cancel plan' })).toBeNull();
   });
 

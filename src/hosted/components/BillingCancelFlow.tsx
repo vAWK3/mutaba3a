@@ -18,7 +18,7 @@ import { CANCEL_COMMENT_MAX, CANCEL_REASONS, type CancelFlow, type PauseMonths }
  * step's choices sit in the pinned footer, except Confirm, whose destructive confirm stands in its place.
  */
 
-export function CancelBody({ flow, onBack }: { flow: CancelFlow; onBack: () => void }) {
+export function CancelBody({ flow, onBack, onMoveToStarter }: { flow: CancelFlow; onBack: () => void; onMoveToStarter?: () => void }) {
   const t = useT();
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), [flow.phase]);
@@ -31,7 +31,7 @@ export function CancelBody({ flow, onBack }: { flow: CancelFlow; onBack: () => v
       {flow.phase === 'why' && <WhyStep flow={flow} headingRef={heading} />}
       {flow.phase === 'pause' && <PauseStep flow={flow} headingRef={heading} />}
       {flow.phase === 'stay' && <StayStep flow={flow} headingRef={heading} />}
-      {flow.phase === 'confirm' && <ConfirmStep flow={flow} headingRef={heading} onKeep={onBack} />}
+      {flow.phase === 'confirm' && <ConfirmStep flow={flow} headingRef={heading} onKeep={onBack} onMoveToStarter={onMoveToStarter} />}
     </div>
   );
 }
@@ -118,7 +118,7 @@ function StayStep({ flow, headingRef }: { flow: CancelFlow; headingRef: HeadingR
   );
 }
 
-function ConfirmStep({ flow, headingRef, onKeep }: { flow: CancelFlow; headingRef: HeadingRef; onKeep: () => void }) {
+function ConfirmStep({ flow, headingRef, onKeep, onMoveToStarter }: { flow: CancelFlow; headingRef: HeadingRef; onKeep: () => void; onMoveToStarter?: () => void }) {
   const t = useT();
   const { language } = useLanguage();
   const endsOn = flow.retention?.endsOn;
@@ -135,6 +135,14 @@ function ConfirmStep({ flow, headingRef, onKeep }: { flow: CancelFlow; headingRe
         cancelWhileBusy={false}
         onCancel={onKeep}
         onConfirm={flow.cancel}
+        extraAction={
+          // MUT-734 (wireframe "cancel" A, AC8): the free plan instead, in the same footer (Change plan, on Starter).
+          onMoveToStarter && (
+            <Button type="button" variant="primary" onClick={onMoveToStarter} disabled={flow.busy} data-testid="move-to-starter">
+              {t('hosted.billing.change.moveToStarter')}
+            </Button>
+          )
+        }
       />
     </>
   );

@@ -8,7 +8,7 @@ import { useLanguage, useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
 import { trackPortal } from '../analytics/portalAnalytics';
-import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type PauseEndResult, type YearlySwitchResult } from '../api/client';
+import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type PauseEndResult, type PlanChangeResult, type YearlySwitchResult } from '../api/client';
 import {
   assertStripeUrl,
   billingQuery,
@@ -31,6 +31,10 @@ import {
   daysLeft,
   comebackOfferOf,
   eligibleOfferOf,
+  planComebackOf,
+  planLaunchOf,
+  planOfferFor,
+  type ComebackOffer,
   firstChargeOf,
   isConfirmed,
   isSellable,
@@ -63,9 +67,15 @@ import { useCancelFlow, type CancelOutcome } from './useCancelFlow';
 import { Drawer } from './Drawer';
 import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { OfferTopLine } from './OfferTopLine';
-import { activeBusinessesOf, billingStarterOf, starterUsageOf } from '../data/planUsage';
+import { activeBusinessesOf, billingStarterOf, planUsageOf, recommendedPlanOf, starterUsageOf } from '../data/planUsage';
+import { PickActiveBusinesses, ReadOnlyBusinesses } from './BusinessChecklist';
+import { PlanMeters } from './PlanMeters';
+import { ChangeDoneBody, ChangePlanBody, ChangePlanFooter, ScheduledChangeLine } from './ChangePlan';
+import { changeTargetsOf, useChangePlan, useScheduledToast } from '../data/planChangeQueries';
+import { useAccountDrawers } from '../shell/AccountDrawers';
 import { BillingAddressFields, PlanRow } from './BillingPlanPicker';
-import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, savedAddressOf, type AddressDraft, type PlanName } from '../data/billingPlans';
+import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, priceLinesOf, savedAddressOf, useOfferLine, vatRateOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
+import { PriceLinesCard } from './PriceLinesCard';
 import { ContinueFreeOnStarter, PickActiveBusiness, StarterBilling } from './StarterPlan';
 import { billingPilotOf } from '../data/pilot';
 import { usageLinesOf } from '../data/usageLines';
@@ -81,20 +91,22 @@ import { Scene } from './Scene';
  * and skippable; adding one goes to Subscribe, which carries the rest of the trial into Stripe (ADR-170 R-D2).
  */
 
-export type BillingStep = 'subscribe' | 'welcome' | 'switch' | 'cancel';
+export type BillingStep = 'subscribe' | 'welcome' | 'switch' | 'cancel' | 'change';
 
 /** ADR-160 D3: the free trial's length, for the welcome's "has started" wording (the server's TRIAL_DAYS). */
 const TRIAL_LENGTH_DAYS = 14;
 
 export interface BillingDrawerProps {
   step: BillingStep | undefined;
+  /** MUT-705 / MUT-734: the plan an Upgrade asked for (`?billingPlan=`); the Subscribe step or Change plan opens on it. */
+  wantedPlan?: PlanName | 'starter';
   checkout: 'success' | 'cancelled' | undefined;
   /** Back from the Customer Portal (`?portal=returned`). */
   portalReturned?: boolean;
   /** MUT-533 (D5): back from its card form (`?portal=card`): pay the past-due invoice on the new card, once. */
   cardUpdated?: boolean;
   /** `replace`: the new step takes this one's history entry (the welcome never comes back on Back). */
-  onStep: (step: 'subscribe' | 'switch' | 'cancel' | undefined, replace?: boolean) => void;
+  onStep: (step: 'subscribe' | 'switch' | 'cancel' | 'change' | undefined, replace?: boolean) => void;
   onClose: () => void;
 }
 
@@ -105,13 +117,13 @@ type Failure = 'needsHelp' | 'alreadySubscribed' | 'tooMany' | 'changed' | 'sess
 type Awaiting = 'pause' | 'noPause' | 'cancel' | 'noCancel';
 
 /** One drawer frame for every state: switching loading → content, or status → Subscribe, swaps its body, never the frame. */
-export function BillingDrawer({ step, checkout, portalReturned = false, cardUpdated = false, onStep, onClose }: BillingDrawerProps) {
+export function BillingDrawer({ step, wantedPlan, checkout, portalReturned = false, cardUpdated = false, onStep, onClose }: BillingDrawerProps) {
   const t = useT();
   const billing = useQuery(billingQuery);
   const phase = useCheckoutReturn(checkout, billing.data);
   usePortalReturn(portalReturned, billing.data);
   useCardRetryOnReturn(cardUpdated);
-  const subscribe = useSubscribeForm(billing.data);
+  const subscribe = useSubscribeForm(billing.data, wantedPlan);
   const subscribing = step === 'subscribe' && billing.data !== undefined;
   const welcome = useTrialWelcome(step === 'welcome', billing.data, onStep, onClose);
   const welcomeTitle = step === 'welcome' && (billing.isPending || welcome.open);
@@ -146,10 +158,28 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
   // Render-time adjustment, not an effect (react-hooks v7): the poll ends once the mirror shows the change.
   if (awaiting !== null && billing.data && mirrored(awaiting, billing.data)) setAwaiting(null);
   usePollBilling(awaiting !== null, useCallback(() => setAwaiting(null), []));
+  // MUT-734: Change plan, its own step: the list and the preview, then the done pane (an upgrade) or back to Billing
+  // with the undo toast (a scheduled change).
+  const changing = step === 'change' && billing.data !== undefined;
+  const scheduledToast = useScheduledToast();
+  const changeFlow = useChangePlan(
+    changing ? billing.data : undefined,
+    wantedPlan,
+    useCallback(
+      (result: PlanChangeResult) => {
+        scheduledToast(result);
+        onStep(undefined);
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- the toast closes over the language only
+      [onStep],
+    ),
+  );
+  const changeDone = changing && changeFlow.confirm.data && changeFlow.confirm.data.state !== 'scheduled' ? changeFlow.confirm.data : null;
   // MUT-731: Billing's Change pane (the pick list), and the drawer's See plans on Starter (wireframe 1).
   const [picking, setPicking] = useState(false);
   const pickTitleId = useId();
   const me = useMe();
+  const drawers = useAccountDrawers();
   const activeBusinesses = activeBusinessesOf(billing.data);
   const pickable = activeBusinesses ? me.profiles.filter((p) => activeBusinesses.active.includes(p.id) || activeBusinesses.readOnly.includes(p.id)) : [];
   const onStarter = billing.data?.currentPlan === 'starter' && step === undefined && !picking;
@@ -165,6 +195,8 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
         ? t('hosted.billing.switch.title')
         : step === 'cancel'
           ? t('hosted.billing.cancel.action')
+          : step === 'change'
+            ? t('hosted.billing.change.title')
           : welcomeTitle
             ? t('hosted.billing.welcome.title')
             : t('hosted.billing.title');
@@ -194,8 +226,18 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
     body = <WelcomeBody welcome={welcome} />;
   } else if (switching) {
     body = <SwitchBody step={switchStep} />;
+  } else if (changeDone) {
+    body = <ChangeDoneBody result={changeDone} />;
+  } else if (changing) {
+    body = <ChangePlanBody billing={billing.data} flow={changeFlow} />;
   } else if (cancelling) {
-    body = <CancelBody flow={cancelFlow} onBack={() => onStep(undefined)} />;
+    body = (
+      <CancelBody
+        flow={cancelFlow}
+        onBack={() => onStep(undefined)}
+        onMoveToStarter={changeTargetsOf(billing.data).includes('starter') ? () => drawers.openChangePlan('starter') : undefined}
+      />
+    );
   } else if (subscribing) {
     body = <SubscribeBody billing={billing.data} title={title} form={subscribe} onBack={() => onStep(undefined)} />;
   } else if (picking) {
@@ -205,7 +247,12 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
         <h3 id={pickTitleId} className="hp-billing-headline">
           {t('hosted.billing.pickActive.title')}
         </h3>
-        <PickActiveBusiness businesses={pickable} titleId={pickTitleId} onDone={() => setPicking(false)} />
+        {activeBusinesses && activeBusinesses.cap > 1 ? (
+          // MUT-705: a paid plan keeps more than one: checkboxes and a counter.
+          <PickActiveBusinesses businesses={pickable} cap={activeBusinesses.cap} initial={activeBusinesses.active} onDone={() => setPicking(false)} />
+        ) : (
+          <PickActiveBusiness businesses={pickable} titleId={pickTitleId} onDone={() => setPicking(false)} />
+        )}
       </div>
     );
   } else {
@@ -224,6 +271,7 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
         }}
         onAwait={setAwaiting}
         onChangeActive={() => setPicking(true)}
+        onChangePlan={() => onStep('change')}
       />
     );
   }
@@ -238,6 +286,12 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
           <WelcomeFooter welcome={welcome} />
         ) : subscribing ? (
           <SubscribeFooter form={subscribe} />
+        ) : changeDone ? (
+          <div className="drawer-footer-right">
+            <Button onClick={() => onStep(undefined)}>{t('hosted.billing.change.done')}</Button>
+          </div>
+        ) : changing ? (
+          <ChangePlanFooter flow={changeFlow} onBack={() => onStep(undefined)} />
         ) : switching ? (
           <SwitchFooter step={switchStep} onBack={() => onStep(undefined)} />
         ) : cancelling ? (
@@ -352,6 +406,7 @@ function StatusView({
   onCancelPlan,
   onAwait,
   onChangeActive,
+  onChangePlan,
 }: {
   billing: BillingOverview;
   phase: Phase;
@@ -363,8 +418,10 @@ function StatusView({
   onCancelPlan: () => void;
   onAwait: (awaiting: Awaiting) => void;
   onChangeActive: () => void;
+  onChangePlan: () => void;
 }) {
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const me = useMe();
   const { pathname } = useLocation();
@@ -383,6 +440,10 @@ function StatusView({
   const starterUsage = starterUsageOf(billing);
   const pilot = billingPilotOf(billing);
   const onStarter = view.panel.kind === 'starter' || (view.panel.kind === 'pilotEnded' && view.panel.onStarter);
+  // MUT-705: a paid plan's month (Solo, Business, Firm); Starter and the pilot keep their own bodies below.
+  const paidUsage = planUsageOf(billing);
+  const paid = paidUsage && paidUsage.plan !== 'starter' && view.panel.kind !== 'pilot' && !onStarter ? paidUsage : null;
+  const paidActive = paid ? activeBusinessesOf(billing) : null;
   // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
   // MUT-534: only the launch offer says so here; a come-back Checkout (or a server older than 1.99.0) reads by its kind.
   const subscribed = billing.subscription?.offer && billing.subscription.offer.kind !== 'comeback' ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
@@ -426,8 +487,10 @@ function StatusView({
           </h3>
         </div>
       ) : (
-        <PanelStatus panel={view.panel} renewal={renewalPriceOf(billing)} language={language} headlineRef={headline} />
+        <PanelStatus panel={view.panel} plan={billing.currentPlan} renewal={renewalPriceOf(billing)} language={language} headlineRef={headline} />
       )}
+      {/* MUT-734 (wireframe "sched" A): a scheduled change under the plan, with Undo; or an upgrade waiting for the bank. */}
+      {settled && <ScheduledChangeLine billing={billing} />}
 
       {/* MUT-525 DD10c: the offer line in the context, right above Subscribe. */}
       {settled && view.action === 'subscribe' && !view.openSoon && offer && <OfferTopLine offer={offer} place="drawer" />}
@@ -437,6 +500,14 @@ function StatusView({
 
       {/* MUT-531 (AC2): the switch line under Manage billing, from the 2nd paid invoice of a monthly list price. */}
       {settled && !switched && switchLine && <SwitchLine yearlySwitch={switchLine} language={language} onSwitch={onSwitch} />}
+      {/* MUT-734: Change plan, while the server offers a move (none while one is scheduled, paused or past due). */}
+      {settled && changeTargetsOf(billing).length > 0 && (
+        <div>
+          <Button variant="secondary" onClick={onChangePlan}>
+            {t('hosted.billing.change.title')}
+          </Button>
+        </div>
+      )}
       {/* MUT-532: the plan's own changes, in MTB3A: undo a pause or resume, take a cancel back, or cancel. */}
       {settled && <PlanChanges billing={billing} panel={view.panel} onCancelPlan={onCancelPlan} onAwait={onAwait} />}
       {/* MUT-731 (wireframe 4): read-only after a cancel offers the free plan beside Subscribe. */}
@@ -451,6 +522,14 @@ function StatusView({
       {onStarter && starterUsage && (
         <StarterBilling usage={starterUsage} activeBusinesses={activeBusinessesOf(billing)} canUpgrade={isSellable(billing)} onChangeActive={onChangeActive} />
       )}
+      {paid && <PlanMeters usage={paid} canUpgrade={isSellable(billing)} />}
+      {paid && paidActive && paidActive.readOnly.length > 0 && (
+        <ReadOnlyBusinesses
+          names={paidActive.readOnly.map((id) => me.profiles.find((p) => p.id === id)?.name ?? '')}
+          planLine={t('hosted.planLimit.includes', { plan: t(`hosted.plan.name.${paid.plan}`), items: tp('hosted.billing.plans.businesses', paidActive.cap) })}
+          onChoose={onChangeActive}
+        />
+      )}
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
       {list.length > 0 && !onStarter && view.panel.kind !== 'pilot' && <ProfilesList profiles={list} />}
     </div>
@@ -459,11 +538,14 @@ function StatusView({
 
 function PanelStatus({
   panel,
+  plan,
   renewal,
   language,
   headlineRef,
 }: {
   panel: BillingPanel;
+  /** MUT-705: the plan the headline names (GET /v1/billing `currentPlan`). */
+  plan: BillingOverview['currentPlan'];
   renewal: ReturnType<typeof renewalPriceOf>;
   language: Language;
   headlineRef: React.RefObject<HTMLHeadingElement | null>;
@@ -472,7 +554,7 @@ function PanelStatus({
   const tp = useTp();
   const day = (iso: string | null) => (iso ? formatInstant(iso, language, browserTimezone()) : '');
   const longDay = (iso: string | null) => (iso ? formatLongDay(iso, language, browserTimezone()) : '');
-  const copy = panelCopy(panel, t, tp, day, longDay);
+  const copy = panelCopy(panel, t, tp, day, longDay, planNameOf(plan, t));
   const { chip, tone, headline } = copy;
   // MUT-525 DD3: a list-price plan says what it renews at (founder prices and a plan that ends keep today's line).
   const context: ReactNode =
@@ -494,6 +576,11 @@ type Translate = ReturnType<typeof useT>;
 type PluralTranslate = ReturnType<typeof useTp>;
 
 /** DR1 + DR8: each panel's chip (colour by meaning), where the person stands, and one line of context. */
+/** MUT-705: the person's own plan by name; legacy Freelancer (and a server older than MUT-702) reads as the previous plan. */
+function planNameOf(plan: BillingOverview['currentPlan'] | undefined, t: Translate): string {
+  return t(`hosted.plan.name.${plan === 'solo' || plan === 'business' || plan === 'firm' || plan === 'starter' ? plan : 'freelancer'}`);
+}
+
 function panelCopy(
   panel: BillingPanel,
   t: Translate,
@@ -501,6 +588,8 @@ function panelCopy(
   day: (iso: string | null) => string,
   /** MUT-753: the pilot's dates in words ("27 January 2027", design review). */
   longDay: (iso: string | null) => string = day,
+  /** MUT-705: the plan the headline names. */
+  planName = t('hosted.plan.name.freelancer'),
 ): { chip: string; tone: Tone; headline: string; context: string | null } {
   const k = (key: string, vars?: Record<string, string>) => t(`hosted.billing.${key}`, vars);
   switch (panel.kind) {
@@ -529,7 +618,7 @@ function panelCopy(
       return {
         chip: k('chip.active'),
         tone: 'mint',
-        headline: k('headline.active', { date: day(panel.renewsAt) }),
+        headline: k('headline.active', { plan: planName, date: day(panel.renewsAt) }),
         // DR6: the Stripe note sits under Manage billing; the context is the plan's own line.
         context: panel.interval === 'month' ? k('context.activeMonth') : panel.interval === 'year' ? k('context.activeYear') : null,
       };
@@ -899,14 +988,16 @@ function entitlementPanel(profile: BillingProfile): BillingPanel {
  * else Monthly), by a render-time adjustment; refetches never change it, only the person's tap does. DD4: an offer the
  * server says has ended is never shown or sent again in this drawer.
  */
-function useSubscribeForm(billing: BillingOverview | undefined) {
+function useSubscribeForm(billing: BillingOverview | undefined, wantedPlan?: PlanName | 'starter') {
   const { pathname } = useLocation();
   const { language } = useLanguage();
   const [legacyCountry, setCountry] = useState('');
   // MUT-702 Part B (ADR-288): with plans on sale, a plan row and the billing address (prefilled once from the last one).
   const onOffer = plansOnOffer(billing);
   const [chosenPlan, setPlan] = useState<PlanName | null>(null);
-  const plan = onOffer.find((p) => p.plan === chosenPlan) ?? onOffer[0] ?? null;
+  // MUT-705: the plan asked for, else the smallest that covers the businesses the person owns.
+  const openingPlan = onOffer.find((p) => p.plan === wantedPlan) ?? recommendedPlanOf(onOffer, billing?.usage?.businesses.used ?? 0);
+  const plan = onOffer.find((p) => p.plan === chosenPlan) ?? openingPlan ?? null;
   const [draft, setDraft] = useState<AddressDraft | null>(null);
   if (draft === null && billing) setDraft(draftOf(savedAddressOf(billing), language));
   const address = draft ?? EMPTY_ADDRESS;
@@ -919,19 +1010,20 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   const [refusedOffer, setRefusedOffer] = useState<string | null>(null);
   // Render-time adjustment, not an effect (react-hooks v7): set once, on the first render with billing data.
   if (chosen === null && billing) {
-    // MUT-703 makes the offers per plan; until then a plan Checkout carries none.
-    const opening = plansOnOffer(billing).length > 0 ? null : eligibleOfferOf(billing);
-    setBillingInterval(opening ? 'year' : 'month');
-    setOpenedWith(opening?.id ?? null);
+    const opening = openingIntervalOf(billing, plan);
+    setBillingInterval(opening.interval);
+    setOpenedWith(opening.offerId);
   }
   const interval = chosen ?? 'month';
   const checkout = useStartCheckout();
   const route = billing ? checkoutRouteOf(country || null, buyer, billing.countries) : null;
   const currency = country ? currencyOfCountry(country) : null;
   const pair = billing && currency ? (plan ? plan.catalog[currency] : billing.catalog[currency]) : null;
-  const eligible = billing && !plan ? eligibleOfferOf(billing) : null;
-  const activeOffer = eligible && eligible.id !== refusedOffer ? eligible : null;
-  const offer = billing && activeOffer ? offerFor(billing, currency, new Date()) : null;
+  // MUT-703: with plans on sale the launch is per plan (its own first year); the legacy one reads the legacy catalog.
+  const eligible = billing ? (onOffer.length > 0 ? planLaunchOf(billing) : eligibleOfferOf(billing)) : null;
+  const launchId = plan?.launch?.id ?? eligible?.id ?? null;
+  const activeOffer = eligible && launchId !== refusedOffer ? eligible : null;
+  const offer = billing && activeOffer ? (plan ? planOfferFor(billing, plan, currency, new Date()) : offerFor(billing, currency, new Date())) : null;
   /** The offer is on screen: before a country is picked, or in the chosen currency. */
   const offerShown = activeOffer !== null && (currency === null || offer !== null);
   /** The offer this Continue would carry: Yearly, in the chosen currency. */
@@ -940,11 +1032,11 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
    * MUT-534 (D14): the come-back price for the chosen interval and currency, when the server says the person may have it
    * and the launch offer isn't what this Continue carries. Its amounts come from the server (ADR-004).
    */
-  const offeredBack = plan ? null : comebackOfferOf(billing);
+  const offeredBack: ComebackOffer | null = plan ? planComebackOf(plan) : comebackOfferOf(billing);
   const comeback = offeredBack && offeredBack.id !== refusedOffer && !applied ? offeredBack : null;
   const comebackPrice =
     comeback && currency
-      ? { first: (interval === 'year' ? comeback.firstYear : comeback.firstMonth)[currency], list: (interval === 'year' ? comeback.listYear : comeback.listMonth)[currency] }
+      ? { first: (interval === 'year' ? comeback.firstYear : comeback.firstMonth)?.[currency] ?? null, list: (interval === 'year' ? comeback.listYear : comeback.listMonth)?.[currency] ?? null }
       : null;
   const comebackShown = comeback !== null && comebackPrice !== null && comebackPrice.first !== null && comebackPrice.list !== null;
   const comebackEnded = refusedOffer !== null && refusedOffer === offeredBack?.id;
@@ -999,6 +1091,16 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   };
 }
 
+/**
+ * MUT-525 DD5 / MUT-705: the interval the Subscribe step opens on, decided in this one place: Yearly while the person
+ * gets the launch offer, else Monthly. It takes the plan, so MUT-703 (offers per plan, plan §11.3) makes it Yearly when
+ * that plan has an eligible launch; until then a plan Checkout carries no offer.
+ */
+function openingIntervalOf(billing: BillingOverview, plan: BillingPlan | null): { interval: 'month' | 'year'; offerId: string | null } {
+  const offer = plan ? (plan.launch ? planLaunchOf(billing) : null) : plansOnOffer(billing).length > 0 ? null : eligibleOfferOf(billing);
+  return { interval: offer ? 'year' : 'month', offerId: offer ? (plan?.launch?.id ?? offer.id) : null };
+}
+
 type SubscribeForm = ReturnType<typeof useSubscribeForm>;
 
 function SubscribeFooter({ form }: { form: SubscribeForm }) {
@@ -1027,6 +1129,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
   const tp = useTp();
   const { language } = useLanguage();
   const ids = useId();
+  const offerLine = useOfferLine();
   const body = useRef<HTMLDivElement>(null);
   const { country, buyer, interval, route, currency, pair, activeOffer, offerShown, applied } = form;
   const firstCharge = firstChargeOf(billing, new Date());
@@ -1082,7 +1185,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
       {form.plan ? (
         <>
           {/* MUT-702 Part B (wireframes v3): the plan, then the billing address; its country sets the currency and VAT. */}
-          <PlanRow idPrefix={ids} plans={form.plans} value={form.plan.plan} country={form.address.country} onChange={form.setPlan} />
+          <PlanRow idPrefix={ids} plans={form.plans} value={form.plan.plan} country={form.address.country} onChange={form.setPlan} offerNote={(p) => offerLine(billing, p, interval, form.address.country)} />
           <BillingAddressFields idPrefix={ids} draft={form.address} onChange={form.setAddress} />
         </>
       ) : (
@@ -1133,6 +1236,9 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
           />
           <ContactUs />
         </div>
+      ) : form.plan && pair && currency && !applied ? (
+        // MUT-750 slice A (wireframe mut-750a A): the price, VAT and total under the address that decides them.
+        <PriceLinesCard lines={priceLinesOf(pair[interval], form.address.country, vatRateOf(billing))} currency={currency} interval={interval} />
       ) : (
         pair &&
         currency && (

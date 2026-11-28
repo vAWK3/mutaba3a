@@ -1,5 +1,5 @@
 import type { Schemas } from '../api/client';
-import type { BillingEntitlement, BillingOffer, BillingOverview, BillingYearlySwitch } from '../api/client';
+import type { BillingEntitlement, BillingOffer, BillingOverview, BillingPlan, BillingYearlySwitch } from '../api/client';
 import type { Language } from '../../lib/i18n/types';
 import { formatInstant, todayInZone } from '../format/dates';
 import { billingPilotEndedOf, billingPilotOf, PILOT_LAST_DAYS } from './pilot';
@@ -271,11 +271,12 @@ export function comebackOfferOf(billing: Partial<Pick<BillingOverview, 'comeback
   return ((billing?.comeback ?? null) as Schemas['BillingComeback'] | null) ?? null;
 }
 
-export function eligibleOfferOf(billing: Pick<BillingOverview, 'offer' | 'catalog'>): BillingOffer | null {
+export function eligibleOfferOf(billing: Pick<BillingOverview, 'offer' | 'catalog'> & Partial<Pick<BillingOverview, 'plans'>>): BillingOffer | null {
   // The generated type is `BillingOffer | unknown` (a nullable union); a server older than MUT-525 sends nothing.
   const offer = (billing.offer ?? null) as BillingOffer | null;
   if (!offer?.eligible || offer.interval !== 'year') return null;
-  const takeable = (['ILS', 'USD'] as const).some((c) => offer.firstYear[c] !== null && billing.catalog[c] !== null);
+  // MUT-703: with plans on sale the legacy catalog may be empty; a plan sold in the currency makes the offer takeable.
+  const takeable = (['ILS', 'USD'] as const).some((c) => offer.firstYear[c] !== null && (billing.catalog[c] !== null || (billing.plans ?? []).some((p) => p.launch && p.catalog[c] !== null)));
   return takeable ? offer : null;
 }
 
@@ -299,6 +300,47 @@ export function offerFor(billing: BillingOverview, currency: 'ILS' | 'USD' | nul
   };
 }
 
+/**
+ * MUT-703 (offers plan §3.4, §11): the launch offer while plans are on sale. GET /v1/billing `offer` describes the
+ * plans' launch (priced on Solo); eligibility is person-level there, and each plan's own first year is `plans[].launch`.
+ * Null unless the person is eligible and some plan has a launch.
+ */
+export function planLaunchOf(billing: Pick<BillingOverview, 'offer' | 'plans'>): BillingOffer | null {
+  const offer = (billing.offer ?? null) as BillingOffer | null;
+  if (!offer?.eligible || offer.interval !== 'year') return null;
+  return (billing.plans ?? []).some((p) => p.launch) ? offer : null;
+}
+
+/** The launch offer on one plan in `currency`: its first year from the plan's own `launch`, its list from the plan's catalog. */
+export function planOfferFor(billing: BillingOverview, plan: BillingPlan, currency: 'ILS' | 'USD' | null, now: Date): OfferView | null {
+  const offer = planLaunchOf(billing);
+  if (!offer || !plan.launch || !currency) return null;
+  const list = plan.catalog[currency]?.year;
+  const firstYear = plan.launch.firstYear[currency];
+  if (list === undefined || firstYear === null) return null;
+  const firstChargeAt = firstChargeOf(billing, now);
+  return {
+    id: plan.launch.id,
+    percentOff: offer.percentOff,
+    list,
+    firstYear,
+    endsAt: offer.endsAt,
+    renewsOn: aYearAfter(firstChargeAt ?? now.toISOString()),
+    firstChargeAt,
+    endsToday: offerEndsToday(offer.endsAt, now),
+  };
+}
+
+/** The come-back offer on a plan (monthly only; the yearly pair is null), in the shape of the legacy one. */
+export type ComebackOffer = Pick<Schemas['BillingComeback'], 'id' | 'firstMonth' | 'listMonth'> & {
+  firstYear: Schemas['BillingComeback']['firstYear'] | null;
+  listYear: Schemas['BillingComeback']['listYear'] | null;
+};
+
+export function planComebackOf(plan: BillingPlan): ComebackOffer | null {
+  return plan.comeback ?? null;
+}
+
 /** DD10d: the offer's end falls on today's Jerusalem calendar day. */
 export function offerEndsToday(endsAt: string, now: Date): boolean {
   return todayInZone(OFFER_TIME_ZONE, now) === todayInZone(OFFER_TIME_ZONE, new Date(endsAt));
@@ -319,7 +361,9 @@ export function renewalPriceOf(billing: BillingOverview): { minor: number; curre
   const sub = billing.subscription;
   if (!sub?.renewsAtListPrice || sub.cancelAtPeriodEnd || !sub.interval) return null;
   if (sub.currency !== 'ILS' && sub.currency !== 'USD') return null;
-  const pair = billing.catalog[sub.currency];
+  // MUT-703: a plan subscription renews at its own plan's list price (the legacy catalog is Freelancer's).
+  const ownPlan = billing.plans?.find((p) => p.plan === billing.currentPlan);
+  const pair = ownPlan ? ownPlan.catalog[sub.currency] : billing.catalog[sub.currency];
   return pair ? { minor: pair[sub.interval], currency: sub.currency } : null;
 }
 

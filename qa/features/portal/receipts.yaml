@@ -166,3 +166,18 @@ features:
     expect:
       - Currency EUR and VAT 16% come from Bezeq
       - Approve sends EUR and the 16 % rate
+  - id: vendor-category
+    title: A receipt from a known vendor opens with its last category filled in, underlined for a moment, and a category chosen by hand stays (MUT-775)
+    tier: secondary
+    tickets: [MUT-775]
+    paths:
+      - src/hosted/lib/vendorDefaults.ts
+      - src/hosted/components/expenseForm/HostedExpenseFields.tsx
+    steps:
+      - Open a receipt from the vendor Egged, last filed under Travel
+      - Approve and file it
+      - Open a receipt from Egged in Arabic, choose another category
+    expect:
+      - Category is Travel with "Last used for this vendor" under it and the peach autofill underline
+      - Approve sends Travel
+      - The chosen category stays and the line goes

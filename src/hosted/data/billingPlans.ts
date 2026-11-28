@@ -3,6 +3,7 @@ import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
 import type { BillingAddress, BillingOverview, BillingPlan } from '../api/client';
 import { formatMinor } from '../components/billingText';
+import { planLaunchOf } from './billingView';
 import { countryName } from './countries';
 
 /**
@@ -72,6 +73,27 @@ export function usePlanPrice(): (plan: BillingPlan, country: string | null) => s
   };
 }
 
+/**
+ * MUT-703 (offers plan §11.1): the first-year line under a plan row, from the plan's own `launch` (Stripe's amount, never
+ * computed here). Only on Yearly, only while the person is eligible; both currencies before a country is known.
+ */
+export function useOfferLine(): (billing: BillingOverview | undefined, plan: BillingPlan, interval: 'month' | 'year', country: string | null) => string | null {
+  const t = useT();
+  const { language } = useLanguage();
+  return (billing, plan, interval, country) => {
+    if (interval !== 'year' || !billing || !plan.launch || !planLaunchOf(billing)) return null;
+    const { ILS, USD } = plan.launch.firstYear;
+    if (!country) {
+      if (ILS !== null && USD !== null) return t('hosted.billing.plans.firstYear', { price: `${formatMinor(ILS, 'ILS', language)} ${t('hosted.billing.plan.or')} ${formatMinor(USD, 'USD', language)}` });
+      const only = ILS !== null ? formatMinor(ILS, 'ILS', language) : USD !== null ? formatMinor(USD, 'USD', language) : null;
+      return only ? t('hosted.billing.plans.firstYear', { price: only }) : null;
+    }
+    const currency = country === ISRAEL ? 'ILS' : 'USD';
+    const minor = plan.launch.firstYear[currency];
+    return minor === null ? null : t('hosted.billing.plans.firstYear', { price: formatMinor(minor, currency, language) });
+  };
+}
+
 /** Basel Q5 (2026-11-26): one short limits line under each plan. */
 export function useLimitsLine(): (limits: BillingPlan['limits']) => string {
   const t = useT();
@@ -82,4 +104,32 @@ export function useLimitsLine(): (limits: BillingPlan['limits']) => string {
       documents: tp('hosted.billing.plans.documents', limits.documentsPerMonth),
       scans: tp('hosted.billing.plans.scans', limits.scansPerMonth),
     });
+}
+
+/** MUT-750 slice A: GET /v1/billing `vatRate` (a nullable union the generator types loosely). */
+export interface VatRate {
+  country: 'IL';
+  percent: number;
+}
+
+export function vatRateOf(billing: Pick<BillingOverview, 'vatRate'> | undefined): VatRate | null {
+  const rate = billing?.vatRate as VatRate | null | undefined;
+  return rate && typeof rate.percent === 'number' ? rate : null;
+}
+
+/** The lines before Checkout (wireframe mut-750a A): the price, and for the VAT country its VAT and the total. */
+export interface PriceLines {
+  price: number;
+  vat: { percent: number; amount: number } | null;
+  total: number;
+}
+
+/**
+ * MUT-750 slice A: what Checkout will charge, from the catalog amount (minor units) and the server's VAT rate (never a
+ * rate written here). Stripe rounds a line's tax half-up in minor units, so the same here: 3900 at 18% is 702.
+ */
+export function priceLinesOf(amount: number, country: string | null, rate: VatRate | null): PriceLines {
+  if (!rate || country !== rate.country) return { price: amount, vat: null, total: amount };
+  const vat = Math.round((amount * rate.percent) / 100);
+  return { price: amount, vat: { percent: rate.percent, amount: vat }, total: amount + vat };
 }

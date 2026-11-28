@@ -195,8 +195,8 @@ describe('Home: the 80% heads-up and the 90% nudge (wireframe 7, 13554 #1 and #5
     expect(within(line).queryByRole('button', { name: 'Hide' })).toBeNull();
   });
 
-  it('not on Starter: nothing, and Billing isn’t read for it', async () => {
-    const { api } = portal(`/p/${ORG_B}`, { plan: { current: 'solo', businesses: null, soloTrialOffer: false } });
+  it('on a plan with no limits (legacy Freelancer): nothing, and Billing isn’t read for it (MUT-705 reads it for Solo and up)', async () => {
+    const { api } = portal(`/p/${ORG_B}`, { plan: { current: 'freelancer', businesses: null, soloTrialOffer: false } });
     await screen.findByRole('heading', { level: 1, name: 'Home' });
     expect(screen.queryByTestId('usage-near')).toBeNull();
     expect(api.count('GET /v1/billing')).toBe(0);

@@ -35,7 +35,11 @@ export function useAccountDrawers() {
     open: () => go({ changePassword: true }, false),
     openYourData: () => go({ yourData: true }, false),
     /** MUT-362: Settings › Billing; the Subscribe step is its own history entry, so Back returns to the status view (DR2). */
-    openBilling: (step?: 'subscribe' | 'welcome' | 'switch' | 'cancel', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
+    openBilling: (step?: 'subscribe' | 'welcome' | 'switch' | 'cancel' | 'change', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
+    /** MUT-705: Upgrade to <plan>: the Subscribe step, opened on that plan. */
+    openUpgrade: (plan: 'solo' | 'business' | 'firm') => go({ billing: true, step: 'subscribe', billingPlan: plan }, false),
+    /** MUT-734: Billing's Change plan pane, opened on a plan (a subscriber's Upgrade, the cancel flow's Move to Starter). */
+    openChangePlan: (plan?: 'starter' | 'solo' | 'business' | 'firm') => go(plan ? { billing: true, step: 'change', billingPlan: plan } : { billing: true, step: 'change' }, false),
     /** The step's own Back replaces its entry: browser Back afterwards never reopens the step (review). */
     leaveBillingStep: () => go({ billing: true }, true),
     /** MUT-333: Close my account. */
@@ -75,7 +79,7 @@ export function AccountDrawers() {
   // MUT-755: an account's, on a pilot (the drawer closes itself otherwise).
   if (drawers.state.pilotWelcome && !local) return <PilotWelcomeDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
-    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
+    return <BillingDrawer step={drawers.state.step} wantedPlan={drawers.state.billingPlan} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }
   return null;
 }

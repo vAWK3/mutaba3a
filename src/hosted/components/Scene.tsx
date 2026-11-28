@@ -34,8 +34,12 @@ export const SCENE_NAMES: readonly DrawnScene[] = (Object.keys(SCENE_ART) as Sce
 
 export const PLACEHOLDER_SCENE: SceneArtName = 'empty-state';
 
-/** `drop-in`: the empty states' one-shot (minimal tier, under a second): the nuqta drops onto the art. */
-export type SceneMotion = 'drop-in' | 'none';
+/**
+ * `drop-in`: the empty states' one-shot (minimal tier, under a second): the nuqta drops onto the art.
+ * `plan-upgraded` (MUT-734) and `gift-month` (MUT-733): the 2026-11-27 moments, each built in CSS from its spec in
+ * `docs/design/motion/2026-11-27/<moment>/`; they play once on mount and reduced motion shows the still (the art).
+ */
+export type SceneMotion = 'drop-in' | 'plan-upgraded' | 'gift-month' | 'none';
 
 function isDrawn(name: string): name is SceneArtName {
   return Object.hasOwn(SCENE_ART, name);
@@ -56,7 +60,7 @@ export function sceneArtFor(name: SceneName, direction: Direction = 'ltr'): { na
 export function Scene({ name, size, motion = 'none', className }: { name: SceneName; size?: number; motion?: SceneMotion; className?: string }) {
   const art = sceneArtFor(name, useOptionalDirection());
   const Art = SCENE_ART[art.name];
-  const classes = ['hp-scene', motion === 'drop-in' ? 'hp-scene--drop-in' : null, className].filter(Boolean).join(' ');
+  const classes = ['hp-scene', motion === 'none' ? null : `hp-scene--${motion}`, className].filter(Boolean).join(' ');
   return (
     <span className={classes} aria-hidden="true" data-scene={name} data-scene-art={art.name} data-placeholder={art.placeholder || undefined}>
       <Art size={size} />

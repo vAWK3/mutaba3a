@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Input';
 import { useT } from '../../lib/i18n/core';
-import type { CreateProfileRequest, HostedProfile } from '../api/client';
+import type { CreateProfileRequest, HostedProfile, Me } from '../api/client';
 import { canCreateProfile } from '../data/profileRules';
 import { useCreateProfile, useProfileCreateAttempt } from '../data/profileQueries';
 import { DEFAULT_HOSTED_CURRENCY, HOSTED_CURRENCIES } from '../format/currencies';
@@ -16,7 +16,7 @@ import { ME_KEY, useMe } from '../session/me';
 import { Drawer } from './Drawer';
 import { ProfileBanner } from './ProfileBanner';
 import { PlanLimitNotice } from './PlanLimitNotice';
-import type { PlanLimit } from '../data/planUsage';
+import { nextPlanOf, type PlanLimit } from '../data/planUsage';
 import { useStarterUsage } from '../data/useStarterUsage';
 import { ProfileTypeCards } from './ProfileTypeCards';
 import { mapProfileError, type ProfileBanner as Banner } from './profileApiErrors';
@@ -60,7 +60,7 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
   const zone = useMemo(browserTimezone, []);
   const atCap = capReached || !canCreateProfile(me);
   const capBanner: Banner = { tone: 'info', key: 'hosted.profiles.errors.limit', count: me.limits.maxOwnedProfiles };
-  const planLimit: PlanLimit | null = serverLimit ?? (me.plan?.current === 'starter' ? { limit: 'businesses', cap: 1, nextPlan: 'solo', canUpgrade: starter.canUpgrade } : null);
+  const planLimit: PlanLimit | null = serverLimit ?? businessLimitOf(me, starter.canUpgrade);
 
   const form = useForm<CreateProfileFormValues>({
     resolver: zodResolver(createProfileSchema) as never,
@@ -217,4 +217,16 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
       </form>
     </Drawer>
   );
+}
+
+/**
+ * MUT-731 / MUT-705: the business count's notice before the person types: Starter's one business, or a paid plan's
+ * count (/v1/me publishes the personal profile + the plan's businesses) with the next plan up. Null off the ladder.
+ */
+function businessLimitOf(me: Me, starterCanUpgrade: boolean): PlanLimit | null {
+  const current = me.plan?.current;
+  if (current === 'starter') return { limit: 'businesses', cap: 1, nextPlan: 'solo', canUpgrade: starterCanUpgrade };
+  if (current !== 'solo' && current !== 'business' && current !== 'firm') return null;
+  const next = nextPlanOf(current);
+  return { limit: 'businesses', cap: Math.max(0, me.limits.maxOwnedProfiles - 1), nextPlan: next, canUpgrade: next !== null };
 }

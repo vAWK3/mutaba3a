@@ -86,6 +86,28 @@ describe('Subscribe with plans on sale (MUT-702 Part B)', () => {
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test_9'));
   });
 
+  it('MUT-750 slice A: an Israeli address shows the price, VAT 18% and the total before Continue; yearly too', async () => {
+    const { user } = portal(() => ok(overview({ vatRate: { country: 'IL', percent: 18 } })));
+    const step = await screen.findByRole('dialog', { name: 'Subscribe' });
+    await user.type(within(step).getByRole('combobox', { name: 'Country' }), 'Israel');
+    const lines = within(step).getByTestId('price-lines');
+    expect(lines).toHaveTextContent('Price₪39.00');
+    expect(lines).toHaveTextContent('VAT 18%₪7.02');
+    expect(lines).toHaveTextContent('Total a month₪46.02');
+    await user.click(within(step).getByRole('radio', { name: /^Yearly/ }));
+    expect(lines).toHaveTextContent('VAT 18%₪70.20');
+    expect(lines).toHaveTextContent('Total a year₪460.20');
+  });
+
+  it('MUT-750 slice A: a Jordanian address shows the price alone', async () => {
+    const { user } = portal(() => ok(overview({ vatRate: { country: 'IL', percent: 18 } })));
+    const step = await screen.findByRole('dialog', { name: 'Subscribe' });
+    await user.type(within(step).getByRole('combobox', { name: 'Country' }), 'Jordan');
+    const lines = within(step).getByTestId('price-lines');
+    expect(lines).toHaveTextContent('Price a month$12.00');
+    expect(lines).not.toHaveTextContent('VAT');
+  });
+
   it('a country that matches nothing says so and keeps Continue off', async () => {
     const { user } = portal(() => ok(overview()));
     const step = await screen.findByRole('dialog', { name: 'Subscribe' });

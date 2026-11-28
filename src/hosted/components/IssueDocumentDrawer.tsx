@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
 import { Input, Select } from '../../components/ui/Input';
@@ -20,9 +20,11 @@ import { Drawer } from './Drawer';
 import { Skeleton } from './QueryView';
 import { useToast } from './Toast';
 import { TwoFactorIssuingPrompt } from '../twoFactor/TwoFactorIssuingPrompt';
-import { documentRefusedNow, limitFromUsage, planLimitOf, upgradeOffered, type StarterMeter } from '../data/planUsage';
+import { documentRefusedNow, limitFromUsage, meterWarns, nextPlanOf, planLimitOf, sellablePlanOf, upgradeOffered, type PlanUsage, type StarterMeter } from '../data/planUsage';
 import { useStarterUsage } from '../data/useStarterUsage';
-import { PlanLimitNotice, UpgradeToSolo } from './PlanLimitNotice';
+import { giftBeforeTyping, useAcceptGift, usePlanUsage } from '../data/usePlanUsage';
+import { formatInstant } from '../format/dates';
+import { PlanLimitNotice, UpgradeTo, UpgradeToSolo } from './PlanLimitNotice';
 import { LeftLine } from './StarterPlan';
 import { isTwoFactorRefusal } from '../twoFactor/twoFactor';
 
@@ -196,7 +198,14 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   // server's PLAN_LIMIT shows the same notice if it races. A receipt paying an issued document is never refused.
   const starter = useStarterUsage();
   const knownLimit = starter.usage && documentRefusedNow(starter.usage, docType, start.appliesToDocumentId) && starter.billing ? limitFromUsage(starter.usage, 'documents', starter.billing) : null;
-  const planLimit = planLimitOf(issue.error) ?? knownLimit;
+  // MUT-733: a paid plan's meters; at the cap with the gift unused, the gift shows before the person types, and the
+  // server's first refusal carries it too. Continue records it and sends the held invoice again.
+  const paid = usePlanUsage();
+  const paidUsage = paid.usage && paid.usage.plan !== 'starter' ? paid.usage : null;
+  const knownGift = start.appliesToDocumentId && docType === 'RECEIPT' ? null : giftBeforeTyping(paidUsage, 'documents');
+  const planLimit = planLimitOf(issue.error) ?? knownLimit ?? knownGift;
+  const acceptGift = useAcceptGift(profile.id);
+  const held = useRef<IssueDocumentRequest | null>(null);
   // MUT-710 (D10): the two-step refusal is the prompt at the top, never the general failure.
   const refusalText = isTwoFactorRefusal(refusal) || planLimitOf(refusal) ? null : refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
 
@@ -214,6 +223,11 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
     if (!body || awaitingAllocation || awaitingPaidChoice) return;
     const chosen = withPaidPart(body);
     const sent: IssueDocumentRequest = manual && allocationNumber ? { ...chosen, manualAllocation: { number: allocationNumber, forNumber: manual.nextNumber } } : chosen;
+    send(sent);
+  };
+
+  const send = (sent: IssueDocumentRequest) => {
+    held.current = sent;
     setIssuedFor(serialized);
     issue.mutate(
       { body: sent, key: attempt.keyFor(sent) },
@@ -266,12 +280,37 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
             <p className="hp-issue-final">{t('hosted.issue.final')}</p>
             {/* Refused, the footer's own Upgrade to Solo button is the one offer; the line doesn't repeat it as a link. */}
             {starter.usage && <DocumentsLeftLine meter={starter.usage.documents} canUpgrade={starter.canUpgrade && !planLimit} />}
-            {planLimit ? (
+            {paidUsage && !planLimit && <PaidDocumentsLine usage={paidUsage} canUpgrade={paid.canUpgrade} />}
+            {planLimit?.gift ? (
+              // MUT-733 (wireframe A): Continue in Issue's place records the gift, then sends the held invoice again.
               <div className="drawer-footer-right">
                 <Button type="button" variant="secondary" onClick={onClose}>
                   {t('common.cancel')}
                 </Button>
-                {upgradeOffered(planLimit) && <UpgradeToSolo />}
+                <Button
+                  type="button"
+                  isLoading={acceptGift.isPending || issue.isPending}
+                  keepLabelWhileLoading
+                  data-testid="gift-continue"
+                  onClick={() =>
+                    acceptGift.mutate('documents', {
+                      onSuccess: () => {
+                        const again = issue.error ? held.current : null;
+                        issue.reset();
+                        if (again) send(again);
+                      },
+                    })
+                  }
+                >
+                  {t('hosted.planLimit.gift.continue')}
+                </Button>
+              </div>
+            ) : planLimit ? (
+              <div className="drawer-footer-right">
+                <Button type="button" variant="secondary" onClick={onClose}>
+                  {t('common.cancel')}
+                </Button>
+                {upgradeOffered(planLimit) && (sellablePlanOf(planLimit.nextPlan) ? <UpgradeTo plan={sellablePlanOf(planLimit.nextPlan)!} /> : null)}
               </div>
             ) : (
             <div className="drawer-footer-right">
@@ -553,6 +592,35 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
   ];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');
+}
+
+/**
+ * MUT-733 (wireframe mut-733 "use" A): a paid plan's documents line by Issue: nothing below 80%; "41 of 50 documents
+ * this month" from 80%; butter with Upgrade to <next plan> from 90% (none on Firm); during the gift "No limit until …".
+ */
+function PaidDocumentsLine({ usage, canUpgrade }: { usage: PlanUsage; canUpgrade: boolean }) {
+  const { t, language } = useLanguage();
+  const meter = usage.documents;
+  if (meter.graceUntil) {
+    return (
+      <p className="hp-issue-usage" data-paid="" data-level="grace" data-testid="issue-usage">
+        {t('hosted.billing.usage.graceUntil', { date: formatInstant(meter.graceUntil, language, 'Asia/Jerusalem') })}
+      </p>
+    );
+  }
+  if (meter.level === 'ok') return null;
+  const next = canUpgrade ? nextPlanOf(usage.plan) : null;
+  return (
+    <p className="hp-issue-usage" data-paid="" data-level={meter.level} data-testid="issue-usage">
+      {t('hosted.billing.usage.thisMonth', { usage: t('hosted.billing.usage.documents', { used: String(meter.used), cap: String(meter.limit) }) })}
+      {meterWarns(meter) && next && (
+        <>
+          {' · '}
+          <UpgradeTo plan={next} asLink />
+        </>
+      )}
+    </p>
+  );
 }
 
 /**

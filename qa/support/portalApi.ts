@@ -502,6 +502,12 @@ export interface FakeApiSeed {
    * limits (409 PLAN_LIMIT, as the server does); Continue free and the active business answer. Overrides `billing`.
    */
   starter?: StarterSeed;
+  /**
+   * MUT-705: the person pays for Solo, Business or Firm (monthly, ILS). GET /v1/billing, /v1/me `plan` and every owned
+   * profile's billing follow it; issuing, library scans and New profile refuse at the plan's limits (409 PLAN_LIMIT, as
+   * the server does with PAID_HARD_CAPS / PAID_BUSINESS_CAPS on). Overrides `billing` and `starter`.
+   */
+  paid?: PaidSeed;
   /** MUT-175: each profile's money for GET /v1/summaries/activity; a profile not named reads the shared payments and expenses. */
   reports?: Record<string, StubReportRecords>;
   /**
@@ -806,8 +812,36 @@ export interface StarterSeed {
    * MUT-702 Part B: Solo, Business and Firm on sale (PLAN_CHECKOUT on): GET /v1/billing lists them, with this saved
    * billing address for the prefill, and Checkout answers a Stripe URL. Absent: none on sale (the Freelancer step).
    */
-  plans?: { billingAddress?: { country: string; line1: string; city: string; postalCode: string } | null };
+  plans?: { billingAddress?: { country: string; line1: string; city: string; postalCode: string } | null; /** MUT-703: the launch offer is open on every plan (50% off the first year). */ launch?: boolean };
 }
+
+/** MUT-705: a paying person's plan and month, as the fake server holds them. */
+export interface PaidSeed {
+  plan: 'solo' | 'business' | 'firm';
+  /** Documents issued and scans finished this month. */
+  documents?: number;
+  scans?: number;
+  /** The businesses over the plan's count: which stay active and which are read-only. */
+  businesses?: { active: string[]; readOnly: string[] };
+  /** MUT-733: the once-ever over-cap gift; default unused. `running` names the meter it lifts this month. */
+  gift?: { used?: boolean; running?: 'documents' | 'scans' };
+  /** MUT-734: a change already scheduled for the period end. */
+  scheduled?: { plan: 'starter' | 'solo' | 'business'; kind: 'DOWNGRADE' | 'TO_STARTER' };
+}
+
+/** MUT-734: the ladder the fake's plan changes rank by (ADR-275 RANK). */
+const PLAN_RANK = { starter: 0, solo: 1, business: 2, firm: 3 } as const;
+/** MUT-734: the fake's proration for any upgrade (Stripe's preview amount, minor units). */
+const QA_PRORATION = 3140;
+
+const PAID_CAPS = {
+  solo: { documents: 50, scans: 100, businesses: 1 },
+  business: { documents: 250, scans: 500, businesses: 3 },
+  firm: { documents: 1000, scans: 2000, businesses: 6 },
+} as const;
+const NEXT_PLAN = { solo: 'business', business: 'firm', firm: null } as const;
+/** The billing period's end the fake subscription renews on: 20 days from now. */
+const PAID_PERIOD_END = () => new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString();
 
 /** MUT-702 Part B: the catalog script's prices (minor units, before tax) and each plan's limits. */
 const QA_PLANS = [
@@ -816,7 +850,14 @@ const QA_PLANS = [
   { plan: 'firm', catalog: { ILS: { month: 24900, year: 249000 }, USD: { month: 7500, year: 75000 } }, limits: { businesses: 6, partners: 2, documentsPerMonth: 1000, scansPerMonth: 2000 } },
 ];
 
+/** MUT-703: GET /v1/billing `offer` and `plans[].launch` for the plans' launch, half the yearly list in the first year. */
+const QA_LAUNCH_ID = 'launch-plans-2026';
+const QA_PLANS_LAUNCH = QA_PLANS.map((p) => ({ ...p, launch: { id: QA_LAUNCH_ID, firstYear: { ILS: p.catalog.ILS.year / 2, USD: p.catalog.USD.year / 2 } } }));
+const QA_LAUNCH_OFFER = { id: QA_LAUNCH_ID, percentOff: 50, endsAt: '2027-02-21T22:59:00.000Z', interval: 'year', eligible: true, firstYear: { ILS: 19500, USD: 6000 } };
+
 const STARTER_CAPS = { documents: 3, scans: 12 } as const;
+/** MUT-750 slice A: `billing-countries.json` `vatRates.IL`, as GET /v1/billing `vatRate` sends it. */
+const QA_VAT_RATE = { country: 'IL', percent: 18 } as const;
 
 /** The server's levelOf (usage/caps.ts): at least two steps and one step before the cap, else 80% and 90%. */
 function starterLevel(used: number, cap: number): 'ok' | 'near' | 'nudge' | 'at_cap' {
@@ -858,6 +899,8 @@ export class FakeApi {
   private readonly billingOverview: Json | null;
   /** MUT-731: the Starter state (null: the person isn't on Starter). */
   starter: (StarterSeed & { documents: number; scans: number }) | null;
+  /** MUT-705: the paid plan's state (null: the person isn't on Solo, Business or Firm). */
+  paid: (PaidSeed & { documents: number; scans: number; periodEnd: string }) | null;
   private profiles: ProfileState[];
   private readonly customers;
   private readonly projects;
@@ -928,9 +971,10 @@ export class FakeApi {
     this.verdicts = { ...(seed.verdicts ?? {}) };
     this.signedIn = seed.signedIn ?? true;
     // MUT-731: Starter runs with the lapse gate on (a business over the count is READ_ONLY), so /v1/me has a verdict.
-    this.billingStanding = seed.billingStanding ?? (seed.starter ? 'open' : null);
+    this.billingStanding = seed.billingStanding ?? (seed.starter || seed.paid ? 'open' : null);
     this.billingOverview = seed.billing ?? null;
-    this.starter = seed.starter ? { ...seed.starter, documents: seed.starter.documents ?? 0, scans: seed.starter.scans ?? 0 } : null;
+    this.starter = seed.starter && !seed.paid ? { ...seed.starter, documents: seed.starter.documents ?? 0, scans: seed.starter.scans ?? 0 } : null;
+    this.paid = seed.paid ? { ...seed.paid, documents: seed.paid.documents ?? 0, scans: seed.paid.scans ?? 0, periodEnd: PAID_PERIOD_END() } : null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
     this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => ({ ...customer(i), ...(seed.clientPreference ? { documentsPreference: seed.clientPreference } : {}) }));
     this.projects = [...(seed.projects ?? [])];
@@ -1086,11 +1130,13 @@ export class FakeApi {
       ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
       ...(this.starter ? { plan: this.starterPlan() } : {}),
+      ...(this.paid ? { plan: this.paidPlan(), limits: { ...body.limits, maxOwnedProfiles: PAID_CAPS[this.paid.plan].businesses + 1 } } : {}),
       // MUT-731: the server publishes Starter's one business plus the personal profile as the owned-profile cap (me.ts).
       ...(this.starter && !this.starter.cancelled ? { limits: { ...body.limits, maxOwnedProfiles: Math.min(body.limits.maxOwnedProfiles, 2) } } : {}),
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
         const withState = state ? { ...p, defaultCurrency: state.defaultCurrency, version: state.version } : p;
+        if (this.paid && withState.owned) return { ...withState, billing: this.paidBilling(withState.id) };
         return this.starter && withState.owned ? { ...withState, billing: this.starterBilling(withState.id) } : withState;
       }),
     };
@@ -1125,11 +1171,11 @@ export class FakeApi {
         catalog: s.sellable === false ? { ILS: null, USD: null } : { ILS: { month: 2900, year: 29000 }, USD: null },
         coveredProfileIds: this.profiles.filter((p) => p.stub.owned).map((p) => p.stub.id),
         currentPlan: plan.current,
-        usage: { month: nextMonthStart().slice(0, 7), resetsOn: nextMonthStart(), plan: s.cancelled ? 'none' : 'starter', meters, businesses: { used: 1, limit: 1 }, partners: { limit: 0 } },
+        usage: { month: nextMonthStart().slice(0, 7), resetsOn: nextMonthStart(), plan: s.cancelled ? 'none' : 'starter', meters, businesses: { used: Math.max(1, this.profiles.filter((p) => p.stub.owned && p.stub.type === 'BUSINESS').length), limit: 1 }, partners: { limit: 0 } },
         starter: { chosenAt: null, canContinueFree: s.cancelled === true },
         activeBusinesses: plan.businesses,
         countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
-        ...(s.plans ? { plans: QA_PLANS, billingAddress: s.plans.billingAddress ?? null } : {}),
+        ...(s.plans ? { plans: s.plans.launch ? QA_PLANS_LAUNCH : QA_PLANS, ...(s.plans.launch ? { offer: QA_LAUNCH_OFFER } : {}), billingAddress: s.plans.billingAddress ?? null, vatRate: QA_VAT_RATE } : {}),
       });
     }
     // MUT-702 Part B: Stripe's side is not driven here; the spec stubs checkout.stripe.com.
@@ -1146,6 +1192,147 @@ export class FakeApi {
       return json({ cap: 1, active: s.businesses.active, readOnly: s.businesses.readOnly, mustChoose: false });
     }
     if (e.method === 'POST' && id === 'solo-trial' && sub === 'offered') return json({ offeredAt: new Date().toISOString() });
+    return null;
+  }
+
+  /** MUT-705: /v1/me `plan` on a paid plan. */
+  private paidPlan() {
+    const p = this.paid!;
+    const cap = PAID_CAPS[p.plan].businesses;
+    const b = p.businesses;
+    const businesses = b && b.active.length + b.readOnly.length > cap ? { cap, active: b.active, readOnly: b.readOnly, mustChoose: b.active.length === 0 } : null;
+    return { current: p.plan, businesses, soloTrialOffer: false };
+  }
+
+  /** MUT-705: each owned profile's entitlement: the Stripe plan, or read-only past the plan's business count. */
+  private paidBilling(profileId: string) {
+    const p = this.paid!;
+    const tier = p.plan.toUpperCase();
+    if (p.businesses?.readOnly.includes(profileId)) return { state: 'READ_ONLY', source: 'STRIPE', tier, until: p.periodEnd, paused: false, planLimit: true };
+    return { state: 'ACTIVE', source: 'STRIPE', tier, until: p.periodEnd, paused: false };
+  }
+
+  /** MUT-705 / MUT-733: the paid plan's meters as GET /v1/billing `usage` sends them. */
+  private paidUsage() {
+    const p = this.paid!;
+    const caps = PAID_CAPS[p.plan];
+    const graceUntil = new Date(`${nextMonthStart()}T00:00:00.000Z`).toISOString();
+    const meters = (['documents', 'scans'] as const).map((meter) => ({ meter, used: p[meter], limit: caps[meter], level: starterLevel(p[meter], caps[meter]), ...(p.gift?.running === meter ? { graceUntil } : {}) }));
+    const owned = this.profiles.filter((s) => s.stub.owned && s.stub.type === 'BUSINESS').length;
+    return { month: nextMonthStart().slice(0, 7), resetsOn: nextMonthStart(), plan: p.plan, meters, businesses: { used: owned, limit: caps.businesses }, partners: { limit: p.plan === 'solo' ? 0 : 2 }, gift: { available: !p.gift?.used && !p.gift?.running && p.plan !== 'firm' } };
+  }
+
+  /** MUT-705: GET /v1/billing and the active businesses for a paying person. */
+  private paidAnswer(e: Logged, id?: string, sub?: string) {
+    const p = this.paid!;
+    if (e.method === 'GET' && !id) {
+      const plan = this.paidPlan();
+      return json({
+        ...BILLING_OFF,
+        configured: true,
+        canManage: true,
+        subscription: { tier: p.plan.toUpperCase(), status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: p.periodEnd, cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: null, pause: null },
+        catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1200, year: 12000 } },
+        coveredProfileIds: this.profiles.filter((s) => s.stub.owned).map((s) => s.stub.id),
+        currentPlan: p.plan,
+        usage: this.paidUsage(),
+        starter: { chosenAt: null, canContinueFree: false },
+        activeBusinesses: plan.businesses,
+        countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
+        plans: QA_PLANS,
+        vatRate: QA_VAT_RATE,
+        billingAddress: { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' },
+        scheduledChange: p.scheduled ? { plan: p.scheduled.plan, at: p.periodEnd, kind: p.scheduled.kind } : null,
+        pendingChange: null,
+        planChange: p.scheduled
+          ? { canUpgradeTo: [], canDowngradeTo: [] }
+          : {
+              canUpgradeTo: (['business', 'firm'] as const).filter((x) => PLAN_RANK[x] > PLAN_RANK[p.plan]),
+              canDowngradeTo: (['starter', 'solo', 'business'] as const).filter((x) => PLAN_RANK[x] < PLAN_RANK[p.plan]),
+            },
+      });
+    }
+    // MUT-734: Change plan: the preview, the change (up applied now, down scheduled), and Undo.
+    if (e.method === 'POST' && id === 'plan-change' && sub === 'preview') return json(this.planChangePreview(((e.body ?? {}) as { plan: 'starter' | 'solo' | 'business' | 'firm' }).plan));
+    if (e.method === 'POST' && id === 'plan-change' && !sub) {
+      const body = (e.body ?? {}) as { plan: 'starter' | 'solo' | 'business' | 'firm'; activeBusinessIds?: string[] };
+      const from = p.plan;
+      const at = new Date().toISOString();
+      if (body.plan !== 'starter' && PLAN_RANK[body.plan] > PLAN_RANK[from]) {
+        p.plan = body.plan as PaidSeed['plan'];
+        return json({ state: 'applied', change: { id: 'aaaaaaaa-7340-4000-8000-000000000001', kind: 'UPGRADE', state: 'APPLIED', fromPlan: from.toUpperCase(), toPlan: body.plan.toUpperCase(), effectiveAt: at, amountMinor: QA_PRORATION, currency: 'ILS', createdAt: at }, hostedInvoiceUrl: null });
+      }
+      const kind = body.plan === 'starter' ? 'TO_STARTER' : 'DOWNGRADE';
+      p.scheduled = { plan: body.plan as 'starter' | 'solo' | 'business', kind };
+      return json({ state: 'scheduled', change: { id: 'aaaaaaaa-7340-4000-8000-000000000002', kind, state: 'SCHEDULED', fromPlan: from.toUpperCase(), toPlan: body.plan.toUpperCase(), effectiveAt: p.periodEnd, amountMinor: null, currency: null, createdAt: at }, hostedInvoiceUrl: null });
+    }
+    if (e.method === 'DELETE' && id === 'plan-change') {
+      if (!p.scheduled) return json({ error: { code: 'CONFLICT', message: 'nothing', details: { reason: 'NOTHING_SCHEDULED' } } }, 409);
+      const undone = p.scheduled;
+      p.scheduled = undefined;
+      const at = new Date().toISOString();
+      return json({ change: { id: 'aaaaaaaa-7340-4000-8000-000000000002', kind: undone.kind, state: 'UNDONE', fromPlan: p.plan.toUpperCase(), toPlan: undone.plan.toUpperCase(), effectiveAt: p.periodEnd, amountMinor: null, currency: null, createdAt: at } });
+    }
+    // MUT-733: the once-ever gift for a meter at its cap; then that meter has no cap until the 1st.
+    if (e.method === 'POST' && id === 'over-cap-gift') {
+      const meter = ((e.body ?? {}) as { meter?: 'documents' | 'scans' }).meter ?? 'documents';
+      if (p.gift?.running === meter) return json({ meter, until: new Date(`${nextMonthStart()}T00:00:00.000Z`).toISOString() });
+      if (p.gift?.used || p.gift?.running) return json({ error: { code: 'GIFT_USED', message: 'used' } }, 409);
+      if (p.plan === 'firm' || p[meter] < PAID_CAPS[p.plan][meter]) return json({ error: { code: 'GIFT_NOT_AVAILABLE', message: 'not available' } }, 409);
+      p.gift = { running: meter };
+      return json({ meter, until: new Date(`${nextMonthStart()}T00:00:00.000Z`).toISOString() });
+    }
+    // MUT-532's cancel flow on a paid plan: no pause or stay offer here, so Why? leads to the confirm.
+    if (e.method === 'GET' && id === 'retention') return json({ endsOn: p.periodEnd, pause: null, stayOffer: null });
+    if (e.method === 'PUT' && id === 'active-businesses' && p.businesses) {
+      const chosen = ((e.body ?? {}) as { organizationIds?: string[] }).organizationIds ?? [];
+      const all = [...p.businesses.active, ...p.businesses.readOnly];
+      if (chosen.some((c) => !all.includes(c))) return notFound();
+      p.businesses = { active: chosen, readOnly: all.filter((x) => !chosen.includes(x)) };
+      return json({ cap: PAID_CAPS[p.plan].businesses, active: p.businesses.active, readOnly: p.businesses.readOnly, mustChoose: false });
+    }
+    return null;
+  }
+
+  /** MUT-734: POST /v1/billing/plan-change/preview, as the server answers it (the proration fixed for QA). */
+  private planChangePreview(plan: 'starter' | 'solo' | 'business' | 'firm') {
+    const p = this.paid!;
+    const limitsOf = (x: typeof plan) => (x === 'starter' ? { businesses: 1, partners: 0, documentsPerMonth: 3, scansPerMonth: 12 } : QA_PLANS.find((q) => q.plan === x)!.limits);
+    if (plan !== 'starter' && PLAN_RANK[plan] > PLAN_RANK[p.plan]) {
+      return { kind: 'upgrade', plan, amountDue: QA_PRORATION, currency: 'ils', prorationAt: new Date().toISOString(), limits: limitsOf(plan) };
+    }
+    const cap = limitsOf(plan).businesses;
+    const owned = this.profiles.filter((s) => s.stub.owned && s.stub.type === 'BUSINESS').map((s) => ({ id: s.stub.id, name: s.stub.name }));
+    return { kind: plan === 'starter' ? 'to_starter' : 'downgrade', plan, effectiveAt: p.periodEnd, limits: limitsOf(plan), cap, businesses: owned, mustChoose: owned.length > cap };
+  }
+
+  /** MUT-705 / MUT-733: the server's 409 PLAN_LIMIT at a paid plan's doors, and the counters moving on success. */
+  private paidRefusal(e: Logged, resource?: string, id?: string) {
+    const p = this.paid!;
+    const caps = PAID_CAPS[p.plan];
+    const next = NEXT_PLAN[p.plan];
+    const limit = (kind: 'documents' | 'scans' | 'businesses') => {
+      const monthly = kind !== 'businesses';
+      const gift = monthly && !p.gift?.used && !p.gift?.running && p.plan !== 'firm' ? { gift: 'available' } : {};
+      const counts = monthly ? { used: p[kind], cap: caps[kind], resetsOn: nextMonthStart() } : { used: caps.businesses, cap: caps.businesses };
+      return json({ error: { code: 'PLAN_LIMIT', message: 'limit', details: { limit: kind, plan: p.plan, nextPlan: next, canUpgrade: next !== null, ...counts, ...gift } } }, 409);
+    };
+    // Firm is soft (MUT-733 Q2): counted, never refused.
+    const capped = (kind: 'documents' | 'scans') => p.plan !== 'firm' && p.gift?.running !== kind && p[kind] >= caps[kind];
+    if (resource === 'issued-documents' && e.method === 'POST' && !id) {
+      const body = (e.body ?? {}) as { docType?: string; appliesToDocumentId?: string };
+      const exempt = body.docType === 'RECEIPT' && Boolean(body.appliesToDocumentId);
+      if (!exempt && capped('documents')) return limit('documents');
+      p.documents += 1;
+    }
+    if (resource === 'receipts' && id === 'uploads' && e.method === 'POST') {
+      if (capped('scans')) return limit('scans');
+      p.scans += 1;
+    }
+    if (resource === 'profiles' && e.method === 'POST' && !id) {
+      const owned = this.profiles.filter((s) => s.stub.owned && s.stub.type === 'BUSINESS').length;
+      if (owned >= caps.businesses) return limit('businesses');
+    }
     return null;
   }
 
@@ -1272,9 +1459,13 @@ export class FakeApi {
       const answered = this.starterAnswer(e, id, sub);
       if (answered) return answered;
     }
+    if (resource === 'billing' && this.paid) {
+      const answered = this.paidAnswer(e, id, sub);
+      if (answered) return answered;
+    }
     if (resource === 'billing' && method === 'GET' && !id) return json(this.billingOverview ?? BILLING_OFF);
     // MUT-731: Starter's limits at their doors, as the server refuses them (409 PLAN_LIMIT; nothing done).
-    const refusal = this.starter ? this.starterRefusal(e, resource, id) : null;
+    const refusal = this.paid ? this.paidRefusal(e, resource, id) : this.starter ? this.starterRefusal(e, resource, id) : null;
     if (refusal) return refusal;
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
@@ -2216,7 +2407,9 @@ export class FakeApi {
     const vendor = key ? this.vendors.find((v) => v.keys.has(key)) : undefined;
     if (found.expenseId || !vendor) return null;
     const firm = this.profiles.find((p) => p.stub.id === profileId)?.stub.firm ?? false;
-    return { vendorId: vendor.id, currency: vendor.lastCurrency, vat: firm ? vendor.lastVat : null };
+    // MUT-775: the vendor's last category (the server gives it only for a registration-no. match; the fake's match on
+    // the read name stands in for it, and a vendor seeded without a category gives none).
+    return { vendorId: vendor.id, currency: vendor.lastCurrency, vat: firm ? vendor.lastVat : null, categoryId: vendor.lastCategoryId };
   }
 
   /** GET /v1/vendors: names containing the query (no fuzzy matching here), else the most recently used. */

@@ -57,3 +57,10 @@ No new error states.
    the vendor's name and Travel filled in.
 2. A receipt whose registration no. names no vendor opens with vendor and category as read (category empty).
 3. The same registration no. saved as a vendor on another profile fills nothing here.
+
+## Build decisions (portal half, 2026-11-28)
+
+1. **`vendorDefaultFills` gains the category** (`VendorDefaults.categoryId`, `locked.category`): it fills only an empty category the person hasn't touched (D4), at mount and when `vendorDefaults` lands late (`useLateVendorDefaults`, `changed('categoryId')`). The typeahead pick in `HostedExpenseFields` does not fill a category (the ticket scopes it to the receipt's registration-no. match).
+2. **The hint** "Last used for this vendor" / «آخر فئة لهذا المورّد» shows under the category while it still holds the vendor's value; a change removes it.
+3. **motion-autofill** in CSS from the spec's table: a 3 px `--m-peach-strong` underline under the category select draws from inline-start (160 ms spring, fading in over 80 ms), holds 1.2 s, fades (240 ms linear), via a registered `--hp-autofill-ink` colour and `background-size`; the RTL twin anchors it right. Reduced motion: shown at once, then the same fade. Keyed on the filled category so a late fill replays it.
+4. **QA**: `portal.receipts.vendor-category` (the FakeApi's read-name match stands in for the registration no.).

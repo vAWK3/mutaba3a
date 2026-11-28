@@ -1170,7 +1170,8 @@
           "title": "This receipt isn't here",
           "body": "It may have been deleted, or it belongs to another profile."
         },
-        "vatRead": "The receipt shows VAT of {amount}"
+        "vatRead": "The receipt shows VAT of {amount}",
+        "fromVendor": "Last used for this vendor"
       },
       "preview": {
         "label": "Receipt {name}",
@@ -1299,7 +1300,7 @@
         },
         "trialEnded": "Your free trial has ended",
         "locked": "Your free trial has ended",
-        "active": "Freelancer, renews {date}",
+        "active": "{plan}, renews {date}",
         "ending": "Your plan ends on {date}",
         "grace": "We couldn't take your last payment",
         "unpaid": "Your last payment didn't go through",
@@ -1528,7 +1529,14 @@
         },
         "documentsUsedUp": "No documents left this month",
         "scansUsedUp": "No scans left this month",
-        "hide": "Hide"
+        "hide": "Hide",
+        "meter": {
+          "documents": "Documents this month",
+          "scans": "Scans this month"
+        },
+        "ofCap": "{used} of {cap}",
+        "limitReached": "Limit reached",
+        "graceUntil": "No limit until {date}"
       },
       "starter": {
         "activeBusiness": "Active business",
@@ -1566,7 +1574,9 @@
           "other": "{count} scans"
         },
         "aMonth": "a month",
-        "aYear": "a year"
+        "aYear": "a year",
+        "staffSoon": "Staff: coming soon",
+        "firstYear": "First year {price}"
       },
       "address": {
         "title": "Billing address",
@@ -1595,6 +1605,46 @@
         },
         "writeToUs": "Write to us",
         "mailSubject": "MTB3A pilot"
+      },
+      "keep": {
+        "title": "Active businesses",
+        "count": "{chosen} of {cap}",
+        "choose": "Choose which businesses stay active"
+      },
+      "vat": {
+        "price": "Price",
+        "line": "VAT {percent}%",
+        "total": "Total"
+      },
+      "change": {
+        "title": "Change plan",
+        "free": "Free",
+        "perYear": "{price} a year",
+        "current": "Current",
+        "chargedNow": "Charged now",
+        "offerEnds": {
+          "stay": "The stay offer ends",
+          "comeback": "The come-back price ends"
+        },
+        "fromDate": "{plan} from {date}",
+        "readOnlyFrom": "Read-only from {date}",
+        "pay": "Pay {amount}",
+        "confirm": "Confirm",
+        "pending": "Waiting for the payment · {plan}",
+        "completePayment": "Complete payment",
+        "otherCard": "Pay with another card",
+        "upgraded": "You're on {plan}",
+        "done": "Done",
+        "scheduled": "Scheduled",
+        "undo": "Undo",
+        "undone": "{plan} renews {date}",
+        "moveToStarter": "Move to Starter",
+        "failure": {
+          "declined": "Card declined",
+          "changed": "Amount updated",
+          "chooseBusinesses": "Choose which businesses stay active",
+          "failed": "Couldn't change the plan"
+        }
       }
     },
     "selfService": {
@@ -2205,7 +2255,8 @@
           "OPERATOR": "Granted",
           "STRIPE": "Paid",
           "TRIAL": "Trial",
-          "NONE": "No plan"
+          "NONE": "No plan",
+          "STARTER": "Starter"
         },
         "billingUntil": "until {date}",
         "noProfiles": "No profiles.",
@@ -2421,6 +2472,32 @@
         "watched": "Agreed to watching · {date}",
         "notWatched": "Not agreed to watching",
         "consentLabel": "The tester agreed to watched and recorded sessions"
+      },
+      "planHistory": {
+        "title": "Plan history",
+        "none": "No changes",
+        "on": "on {date}",
+        "kind": {
+          "UPGRADE": "Upgrade",
+          "DOWNGRADE": "Downgrade",
+          "TO_STARTER": "To Starter"
+        },
+        "state": {
+          "APPLIED": "Applied",
+          "SCHEDULED": "Scheduled",
+          "PENDING": "Pending",
+          "UNDONE": "Undone",
+          "FAILED": "Failed"
+        }
+      },
+      "history": {
+        "empty": "No history",
+        "listLabel": "Signups",
+        "filterLabel": "Show",
+        "all": "All",
+        "approved": "Approved",
+        "declined": "Declined",
+        "waiting": "Waiting"
       }
     },
     "welcome": {
@@ -3609,7 +3686,8 @@
         "solo": "Solo",
         "business": "Business",
         "firm": "Firm",
-        "starter": "Starter"
+        "starter": "Starter",
+        "freelancer": "Previous plan"
       },
       "starter": {
         "includes": "1 business and your personal profile",
@@ -3633,6 +3711,20 @@
       },
       "businesses": {
         "title": "Starter includes one business"
+      },
+      "upgradeTo": "Upgrade to {plan}",
+      "includes": "{plan} includes {items}",
+      "reached": "Limit reached: {usage}",
+      "gift": {
+        "documents": {
+          "title": "Congratulations: {count} invoices this month.",
+          "body": "This month, issue as many as you need. From {date} the limit is {count}; past it, you'll need a bigger plan."
+        },
+        "scans": {
+          "title": "Congratulations: {count} scans this month.",
+          "body": "This month, scan as many as you need. From {date} the limit is {count}; past it, you'll need a bigger plan."
+        },
+        "continue": "Continue"
       }
     },
     "onboarding": {

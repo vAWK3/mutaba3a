@@ -48,3 +48,96 @@ features:
       - As a Starter person who paid before from Amman, open See plans
     expect:
       - Country, address, city and postal code are filled in, and Continue is on
+  - id: plan-recommended
+    title: See plans opens on the smallest plan that covers the businesses owned; Firm says staff is coming
+    tier: secondary
+    tickets: [MUT-705]
+    paths:
+      - src/hosted/data/planUsage.ts
+      - src/hosted/data/filters.ts
+    steps:
+      - As a Starter person who owns two businesses, open Billing and choose See plans
+    expect:
+      - Business is chosen; Firm's line ends "Staff: coming soon"
+  - id: paid-billing
+    title: On Business, Billing names the plan and shows this month's documents and scans; at 90% the meter turns butter with Upgrade to Firm
+    tier: secondary
+    tickets: [MUT-705, MUT-754]
+    paths:
+      - src/hosted/components/PlanMeters.tsx
+      - src/hosted/components/PlanLimitNotice.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+    steps:
+      - As a Business subscriber with 230 of 250 documents this month, open Billing
+      - In Arabic, open Billing
+    expect:
+      - The headline reads "Business, renews …"; Documents this month reads 230 of 250 in butter with Upgrade to Firm; Scans this month has no upgrade
+      - The same in Arabic, right to left, with no horizontal scroll at 375 px
+  - id: paid-read-only
+    title: On Business with four businesses, Billing lists the read-only one and why; Choose which businesses stay active counts to 3 and saves
+    tier: secondary
+    tickets: [MUT-705]
+    paths:
+      - src/hosted/components/BusinessChecklist.tsx
+    steps:
+      - As a Business subscriber with four businesses, one read-only, open Billing
+      - Choose "Choose which businesses stay active", untick one active business and tick the read-only one
+      - Choose Save
+    expect:
+      - The read-only section says "Business includes 3 businesses" and names the fourth
+      - The counter reads 3 of 3, then 2 of 3, then 3 of 3; past 3 the other rows take no tick
+      - Billing's read-only section now names the business that was unticked
+  - id: paid-cap-prompts
+    title: On Solo, a second business names Business and its price with Upgrade to Business; Home's line from 90% offers it too
+    tier: secondary
+    tickets: [MUT-705]
+    paths:
+      - src/hosted/components/UsageNotice.tsx
+      - src/hosted/components/ProfileCreateDrawer.tsx
+    steps:
+      - As a Solo subscriber with 46 of 50 documents, open Home
+      - Open New profile
+      - Choose Upgrade to Business
+    expect:
+      - One quiet line reads "46 of 50 documents this month" with Upgrade to Business
+      - The notice says "Solo includes 1 business" and "Business · ₪89.00 + VAT a month" with Upgrade to Business
+      - Billing opens
+  - id: vat-lines-israel
+    title: With an Israeli address the Subscribe step shows the price, VAT 18% and the total before Continue
+    tier: secondary
+    tickets: [MUT-750]
+    paths:
+      - src/hosted/components/PriceLinesCard.tsx
+    steps:
+      - As a Starter person on See plans, type Israel as the country
+      - Choose Yearly
+      - In Arabic, type «إسرائيل»
+    expect:
+      - Price ₪39.00, VAT 18% ₪7.02, Total a month ₪46.02
+      - Price ₪390.00, VAT 18% ₪70.20, Total a year ₪460.20
+      - The same three lines in Arabic, right to left
+  - id: no-vat-abroad
+    title: With a Jordanian address the Subscribe step shows the price alone
+    tier: secondary
+    tickets: [MUT-750]
+    steps:
+      - As a Starter person on See plans, type Jordan as the country
+    expect:
+      - One line, Price a month $12.00, and no VAT line
+  - id: plan-launch-yearly
+    title: With the launch open, Yearly opens with the first year under each plan, Monthly drops it, and Continue sends the offer
+    tier: secondary
+    tickets: [MUT-703]
+    paths:
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/data/billingView.ts
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+    steps:
+      - As a Starter person with the launch open, open Billing and choose See plans
+      - Choose Business and an Israeli address
+      - Switch to Monthly, then back to Yearly, and choose Continue to payment
+    expect:
+      - The step opens on Yearly and each plan says "First year" with half its yearly price
+      - Monthly shows no first-year line
+      - The portal sent plan business, interval year and the launch offer as expectedOffer

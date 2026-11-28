@@ -24,6 +24,14 @@ describe('vendorDefaultFills', () => {
     expect(vendorDefaultFills(eur16, blank, { currency: false, vat: true }, true)).toEqual({ currency: 'EUR' });
   });
 
+  it('MUT-775: the vendor’s last category fills an empty category nobody touched, never a chosen or touched one', () => {
+    const travel: VendorDefaults = { currency: null, vat: null, categoryId: 'cat-travel' };
+    expect(vendorDefaultFills(travel, { ...blank, categoryId: '' }, open, false)).toEqual({ categoryId: 'cat-travel' });
+    expect(vendorDefaultFills(travel, { ...blank, categoryId: 'cat-food' }, open, false)).toEqual({});
+    expect(vendorDefaultFills(travel, { ...blank, categoryId: '' }, { ...open, category: true }, false)).toEqual({});
+    expect(vendorDefaultFills({ currency: null, vat: null, categoryId: null }, { ...blank, categoryId: '' }, open, false)).toEqual({});
+  });
+
   it('a VAT row that already records VAT keeps it', () => {
     expect(vendorDefaultFills(eur16, { ...blank, vatTreatment: 'ZERO_RATED' }, open, true)).toEqual({ currency: 'EUR' });
   });

@@ -217,7 +217,8 @@ function SignupSummary({ review }: { review: SignupReview }) {
   );
 }
 
-function ChipBadge({ chip }: { chip: ReviewChip }) {
+/** One thing the sign-up screen noticed, as a chip (shared with MUT-737's history and the account's domain chip). */
+export function ChipBadge({ chip }: { chip: ReviewChip }) {
   const t = useT();
   const tp = useTp();
   if (chip.kind === 'raw') {

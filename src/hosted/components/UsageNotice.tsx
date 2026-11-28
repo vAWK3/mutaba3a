@@ -3,12 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useLanguage, useT } from '../../lib/i18n/core';
 import { billingQuery } from '../data/billingQueries';
 import { isSellable } from '../data/billingView';
-import { hideNudge, homeNoticeOf, nudgeHidden, nudgeHideKey, starterUsageOf, type StarterMeter } from '../data/planUsage';
+import { hideNudge, homeNoticeOf, meterWarns, nextPlanOf, nudgeHidden, nudgeHideKey, planUsageOf, starterUsageOf, type StarterMeter } from '../data/planUsage';
 import { formatDay } from '../format/dates';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { InfoIcon } from './Icons';
-import { UpgradeToSolo } from './PlanLimitNotice';
+import { UpgradeTo, UpgradeToSolo } from './PlanLimitNotice';
 import { LeftLine } from './StarterPlan';
 
 /**
@@ -20,8 +20,37 @@ import { LeftLine } from './StarterPlan';
 export function UsageNotice() {
   const me = useMe();
   const local = useIsLocalMode();
-  if (local || me.plan?.current !== 'starter') return null;
-  return <StarterUsageNotice />;
+  if (local) return null;
+  if (me.plan?.current === 'starter') return <StarterUsageNotice />;
+  // MUT-705 (wireframe mut-733 A): on a paid plan, one quiet line from 80%, with Upgrade to <next plan> from 90%.
+  if (me.plan?.current === 'solo' || me.plan?.current === 'business' || me.plan?.current === 'firm') return <PaidUsageNotice />;
+  return null;
+}
+
+function PaidUsageNotice() {
+  const t = useT();
+  const { language } = useLanguage();
+  const billing = useQuery(billingQuery);
+  const usage = planUsageOf(billing.data);
+  const meter = usage && usage.plan !== 'starter' ? homeNoticeOf(usage, () => false) : null;
+  if (!usage || !meter || !billing.data) return null;
+  const next = isSellable(billing.data) && !meter.graceUntil ? nextPlanOf(usage.plan) : null;
+  const counted = t('hosted.billing.usage.thisMonth', { usage: t(`hosted.billing.usage.${meter.meter}`, { used: String(meter.used), cap: String(meter.limit) }) });
+  const tail = meter.graceUntil ? null : t('hosted.billing.usage.resets', { date: formatDay(usage.resetsOn, language) });
+  return (
+    <section className="hp-usage-line" data-level={meter.graceUntil ? 'ok' : meter.level} aria-label={t('hosted.billing.usage.title')} data-testid={`usage-${meter.level}`}>
+      <p>
+        {counted}
+        {tail && ` · ${tail}`}
+        {next && meterWarns(meter) && (
+          <>
+            {' · '}
+            <UpgradeTo plan={next} asLink />
+          </>
+        )}
+      </p>
+    </section>
+  );
 }
 
 function StarterUsageNotice() {

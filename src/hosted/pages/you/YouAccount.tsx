@@ -12,6 +12,7 @@ import { useMe } from '../../session/me';
 import { useHasFeature, useIsOperator } from '../../session/features';
 import { useIsLocalMode } from '../../session/mode';
 import { useSignOut } from '../../session/useSignOut';
+import { useSelfServiceDoors } from '../../session/selfServiceDoors';
 import { useAccountDrawers } from '../../shell/AccountDrawers';
 import { passkeySupport } from '../../passkeys/webauthn';
 
@@ -23,6 +24,7 @@ import { passkeySupport } from '../../passkeys/webauthn';
  */
 export function YouAccount({ profile }: { profile: HostedProfile | null }) {
   const t = useT();
+  const openSignup = useSelfServiceDoors().openSignup;
   const local = useIsLocalMode();
   const drawers = useAccountDrawers();
   const navigate = useNavigate();
@@ -62,7 +64,8 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
       {/* MUT-460 (6A): the operator console's way in, for operators only */}
       {operator && (
         <RowGroup>
-          <RowNavLink label={t('hosted.operator.title')} to="/operator/signups" />
+          {/* MUT-737: with open sign-up the console opens on Accounts (no review queue). */}
+          <RowNavLink label={t('hosted.operator.title')} to={openSignup ? '/operator/accounts' : '/operator/signups'} />
         </RowGroup>
       )}
       <SignOutGroup />

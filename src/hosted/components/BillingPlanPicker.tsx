@@ -10,7 +10,22 @@ import { RadioCards } from './RadioCards';
  * onboarding Solo trial's address step. The address is free text; the country is typed and must match a country (it
  * sets the currency and the VAT). The helpers are in data/billingPlans.ts.
  */
-export function PlanRow({ idPrefix, plans, value, country, onChange }: { idPrefix: string; plans: BillingPlan[]; value: PlanName; country: string | null; onChange: (plan: PlanName) => void }) {
+export function PlanRow({
+  idPrefix,
+  plans,
+  value,
+  country,
+  onChange,
+  offerNote,
+}: {
+  idPrefix: string;
+  plans: BillingPlan[];
+  value: PlanName;
+  country: string | null;
+  onChange: (plan: PlanName) => void;
+  /** MUT-703's seam (offers plan §11.2): a first-year line under a plan's limits line; none today. */
+  offerNote?: (plan: BillingPlan) => string | null;
+}) {
   const t = useT();
   const price = usePlanPrice();
   const limits = useLimitsLine();
@@ -26,7 +41,11 @@ export function PlanRow({ idPrefix, plans, value, country, onChange }: { idPrefi
         onChange={onChange}
         options={plans.map((plan) => {
           const line = price(plan, country);
-          return { value: plan.plan, label: line ? `${t(`hosted.plan.name.${plan.plan}`)} · ${line}` : t(`hosted.plan.name.${plan.plan}`), note: limits(plan.limits) };
+          // MUT-705: Firm says its staff seats are coming (MUT-305/306).
+          const base = plan.plan === 'firm' ? `${limits(plan.limits)} · ${t('hosted.billing.plans.staffSoon')}` : limits(plan.limits);
+          const offer = offerNote?.(plan) ?? null;
+          const note = offer ? `${base} · ${offer}` : base;
+          return { value: plan.plan, label: line ? `${t(`hosted.plan.name.${plan.plan}`)} · ${line}` : t(`hosted.plan.name.${plan.plan}`), note };
         })}
       />
     </div>

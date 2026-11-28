@@ -127,3 +127,10 @@ ADR-288 amendment (the tax follows a country change via `retax`; tax rates on ev
 5. **Idempotency key** `mut750-retax-<sub>-<country>-<minute>` (the plan said `<sub>-<country>`; the minute lets IL→JO→IL within 24 h apply).
 6. **`vatRate`** is published whenever billing-countries.json sets one (not tied to `PLAN_CHECKOUT`); the portal decides when to show it.
 7. **Left for the UI half:** the price / VAT / total lines in `BillingPlanPicker` (AC4) and the QA flows.
+
+## Build decisions (slice A, UI half, 2026-11-27)
+
+1. **Wireframe mut-750a variant A**: a card under the address with Price, "VAT 18%" and "Total a month" for an Israeli address, one "Price a month" line elsewhere; it replaces the step's old "You'll pay" summary only on the plan step (the legacy Freelancer step and the launch-offer summary are unchanged).
+2. **The rate is the server's** (`GET /v1/billing.vatRate`, `vatRateOf`), never a literal; with none from the server, the price alone. `priceLinesOf` rounds half-up in minor units as Stripe does (3900 → 702).
+3. The plan row keeps its "+ VAT" (MUT-702 Part B) and the fine line "Prices exclude VAT" stays: the card is data, the row a label.
+4. QA: `portal.plans.vat-lines-israel`, `portal.plans.no-vat-abroad` (FakeApi sends `vatRate` with plans on sale).
