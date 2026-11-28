@@ -44,6 +44,8 @@ export const TEMPLATE_IDS = [
   'customer-setup',
   'customer-setup-cancelled',
   'accountant-unclaimed-digest',
+  'vat-period-client',
+  'vat-period-accountant-digest',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -192,6 +194,13 @@ export interface TemplateVars {
    * many of the unpaid ones are removed within a week. Counts only, never a customer's name or address.
    */
   'accountant-unclaimed-digest': { waiting: number; removingSoon: number; deskLink: string };
+  /**
+   * MUT-782 (ADR-341): to a client profile's owner when a VAT period ends (and again as a follow-up): are all receipts
+   * sent? `period` names the months; `dueOn` is the filing day, null where none is stated (a yearly period). No amount.
+   */
+  'vat-period-client': { businessName: string; period: { kind: 'MONTHLY' | 'BIMONTHLY' | 'YEARLY'; year: number; firstMonth: number; lastMonth: number }; dueOn: CalendarDay | null; link: string; reminder: boolean };
+  /** MUT-782: one mail a day at most to an accountant whose clients' VAT periods ended: how many. Counts only, never a client's name. */
+  'vat-period-accountant-digest': { ended: number; deskLink: string };
   /**
    * MUT-535 (ADR-259): the monthly summary. `month` is the month reported; `asOf` the day owed and overdue are read on;
    * one panel per profile (never empty); `yearly` (MUT-531's line) the saving in minor units of the subscription's
