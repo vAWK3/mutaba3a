@@ -83,3 +83,31 @@ export function useLimitsLine(): (limits: BillingPlan['limits']) => string {
       scans: tp('hosted.billing.plans.scans', limits.scansPerMonth),
     });
 }
+
+/** MUT-750 slice A: GET /v1/billing `vatRate` (a nullable union the generator types loosely). */
+export interface VatRate {
+  country: 'IL';
+  percent: number;
+}
+
+export function vatRateOf(billing: Pick<BillingOverview, 'vatRate'> | undefined): VatRate | null {
+  const rate = billing?.vatRate as VatRate | null | undefined;
+  return rate && typeof rate.percent === 'number' ? rate : null;
+}
+
+/** The lines before Checkout (wireframe mut-750a A): the price, and for the VAT country its VAT and the total. */
+export interface PriceLines {
+  price: number;
+  vat: { percent: number; amount: number } | null;
+  total: number;
+}
+
+/**
+ * MUT-750 slice A: what Checkout will charge, from the catalog amount (minor units) and the server's VAT rate (never a
+ * rate written here). Stripe rounds a line's tax half-up in minor units, so the same here: 3900 at 18% is 702.
+ */
+export function priceLinesOf(amount: number, country: string | null, rate: VatRate | null): PriceLines {
+  if (!rate || country !== rate.country) return { price: amount, vat: null, total: amount };
+  const vat = Math.round((amount * rate.percent) / 100);
+  return { price: amount, vat: { percent: rate.percent, amount: vat }, total: amount + vat };
+}

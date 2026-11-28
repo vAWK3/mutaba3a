@@ -5172,3 +5172,10 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unclaimed unpaid removed at day 60, reminders, clock injected | `routes-accountant-sweep.test.ts` |
 | Portal: add, spoken code, change email, take card, claimed meanwhile, a11y | `qa/specs/portal/accountant-desk.spec.ts` (`portal.accountant-desk.*`) |
 | Portal: claim with the code, wrong and locked code, dead accountant's link | `qa/specs/portal/setup.spec.ts` (`portal.setup.claim-*`) |
+## MUT-750 slice A (UI) — price, VAT and total before Checkout (2026-11-27)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/data/__tests__/billingPlans.vat.test.ts` | 3900 → 702 / 4602; yearly 39000 → 7020; half-up 8925 → 1607; Jordan, no rate, no country → price alone; `vatRateOf` |
+| Portal | `BillingDrawer.plans.test.tsx` | Israel monthly and yearly lines; Jordan price only |
+| QA | `qa/specs/portal/plans.spec.ts` | `portal.plans.vat-lines-israel` (en + ar), `portal.plans.no-vat-abroad` |

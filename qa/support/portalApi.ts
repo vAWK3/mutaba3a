@@ -844,6 +844,8 @@ const QA_PLANS = [
 ];
 
 const STARTER_CAPS = { documents: 3, scans: 12 } as const;
+/** MUT-750 slice A: `billing-countries.json` `vatRates.IL`, as GET /v1/billing `vatRate` sends it. */
+const QA_VAT_RATE = { country: 'IL', percent: 18 } as const;
 
 /** The server's levelOf (usage/caps.ts): at least two steps and one step before the cap, else 80% and 90%. */
 function starterLevel(used: number, cap: number): 'ok' | 'near' | 'nudge' | 'at_cap' {
@@ -1161,7 +1163,7 @@ export class FakeApi {
         starter: { chosenAt: null, canContinueFree: s.cancelled === true },
         activeBusinesses: plan.businesses,
         countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
-        ...(s.plans ? { plans: QA_PLANS, billingAddress: s.plans.billingAddress ?? null } : {}),
+        ...(s.plans ? { plans: QA_PLANS, billingAddress: s.plans.billingAddress ?? null, vatRate: QA_VAT_RATE } : {}),
       });
     }
     // MUT-702 Part B: Stripe's side is not driven here; the spec stubs checkout.stripe.com.
@@ -1226,6 +1228,7 @@ export class FakeApi {
         activeBusinesses: plan.businesses,
         countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
         plans: QA_PLANS,
+        vatRate: QA_VAT_RATE,
         billingAddress: { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' },
         scheduledChange: null,
         pendingChange: null,

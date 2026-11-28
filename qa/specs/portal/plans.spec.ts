@@ -208,3 +208,51 @@ test('On Solo, a second business names Business and its price with Upgrade to Bu
     await expect(page.getByRole('dialog', { name: 'Billing' })).toBeVisible();
   });
 });
+
+/* MUT-750 slice A (wireframe mut-750a A): the price, VAT and total before Checkout. */
+
+test('With an Israeli address the Subscribe step shows the price, VAT 18% and the total before Continue', { tag: '@portal.plans.vat-lines-israel' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), personal], starter: { plans: {} } });
+  let plans!: import('@playwright/test').Locator;
+
+  await step('As a Starter person on See plans, type Israel as the country', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    plans = await seePlans(page);
+    await plans.getByRole('combobox', { name: 'Country' }).fill('Israel');
+    const lines = plans.getByTestId('price-lines');
+    await expect(lines).toContainText('Price₪39.00');
+    await expect(lines).toContainText('VAT 18%₪7.02');
+    await expect(lines).toContainText('Total a month₪46.02');
+  });
+
+  await step('Choose Yearly', async () => {
+    await plans.getByRole('radio', { name: /^Yearly/ }).check();
+    const lines = plans.getByTestId('price-lines');
+    await expect(lines).toContainText('Price₪390.00');
+    await expect(lines).toContainText('VAT 18%₪70.20');
+    await expect(lines).toContainText('Total a year₪460.20');
+  });
+
+  await step('In Arabic, type «إسرائيل»', async () => {
+    await api.open(page, `/p/${OFFICE_A}`, 'ar');
+    const ar = await seePlans(page, 'ar');
+    await ar.getByRole('combobox', { name: 'البلد' }).fill('إسرائيل');
+    const lines = ar.getByTestId('price-lines');
+    await expect(lines).toContainText('ضريبة القيمة المضافة 18%');
+    await expect(lines).toContainText('المجموع');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  });
+});
+
+test('With a Jordanian address the Subscribe step shows the price alone', { tag: '@portal.plans.no-vat-abroad' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), personal], starter: { plans: {} } });
+
+  await step('As a Starter person on See plans, type Jordan as the country', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    const plans = await seePlans(page);
+    await plans.getByRole('combobox', { name: 'Country' }).fill('Jordan');
+    const lines = plans.getByTestId('price-lines');
+    await expect(lines).toContainText('Price a month$12.00');
+    await expect(lines).not.toContainText('VAT');
+  });
+});

@@ -2658,3 +2658,10 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/client-books/DeskActivating.tsx` | `DeskActivating({ rows, marks, poll, onClose })`: MUT-770's `useActivatingPoll` and `ActivatingStatus` per customer sent to Stripe | `ClientBooksPage` |
 | `src/hosted/data/claimedSeen.ts` | `hasSeenClaimed`, `markClaimedSeen` (localStorage): the `claimed-spot` Scene once per client | `CustomerDrawer` |
 | `CodeReveal` (MUT-770) | `<CodeReveal code labelledBy />`, used by the two drawers | `AddCustomerDrawer`, `CustomerDrawer` |
+
+## MUT-750 slice A — price lines before Checkout (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/billingPlans.ts` | `priceLinesOf`, `vatRateOf`, `PriceLines`, `VatRate` | Subscribe step |
+| `src/hosted/components/PriceLinesCard.tsx` | `PriceLinesCard` | Subscribe step (plan mode) |
