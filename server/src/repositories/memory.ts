@@ -4967,6 +4967,9 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
     // MUT-559: ON DELETE CASCADE, as in Postgres.
     for (const [key, grant] of this.accountantGrantMap) if (deleted.has(grant.organizationId)) this.accountantGrantMap.delete(key);
+    // MUT-782: ON DELETE CASCADE, the profile's VAT period choice and records.
+    for (const organizationId of deleted) this.vatKinds.delete(organizationId);
+    for (const [key, record] of this.vatRecords) if (deleted.has(record.organizationId)) this.vatRecords.delete(key);
     // MUT-560: ON DELETE CASCADE, links and then their viewers.
     for (const [key, link] of this.shareLinkMap) if (deleted.has(link.organizationId)) this.shareLinkMap.delete(key);
     for (const [key, viewer] of this.shareLinkViewerMap) if (!this.shareLinkMap.has(viewer.shareLinkId)) this.shareLinkViewerMap.delete(key);
@@ -5022,6 +5025,11 @@ export class MemoryLedgerStore implements LedgerStore {
       // Only an invite still PENDING to the address: one a colleague accepted is theirs, and stays (review C).
       if (grant.accountantUserId === id || (grant.status === 'PENDING' && grant.inviteEmail === person.email)) this.accountantGrantMap.delete(key);
       else if (grant.invitedByUserId === id) grant.invitedByUserId = null;
+    }
+    // MUT-782: who said Done or reviewed a VAT period on a profile that survives loses the name (PURGE_UNKEYED_USER_COLUMNS).
+    for (const record of this.vatRecords.values()) {
+      if (record.doneByUserId === id) record.doneByUserId = null;
+      if (record.reviewedByUserId === id) record.reviewedByUserId = null;
     }
     // MUT-560: links the person created on profiles that survive stay, revocable by the remaining owners (SET NULL).
     for (const link of this.shareLinkMap.values()) if (link.createdByUserId === id) link.createdByUserId = null;

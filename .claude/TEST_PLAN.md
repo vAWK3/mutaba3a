@@ -94,7 +94,8 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 - **Store contract** (`repositories/__tests__/store-contract-vat-periods.ts`, Memory and Postgres): announce once even raced; transitions and their refusals; Ask for more re-arms the follow-up; `viewsOf` in one call; `sweepTargets` pages by profile id.
 - **Sweep** (`vat-periods/__tests__/run.test.ts`): one ping per period, none mid-period, none for a stale one; monthly, 2-monthly, yearly (no day) and NONE; the accountant's choice beats the dealer type; unclaimed owners skipped; one digest for forty clients; follow-up once, stops at Done or Confirm, re-armed by Ask for more.
 - **Routes** (`__tests__/routes-vat-periods.test.ts`): the dark flag 404s everything (the job after its token); owner-only Done and read; an accountant credential on the profile reaches nothing; accountant routes need an ACTIVE grant (stranger, owner and revoked accountant get 404); confirm is final (409); the note limit; the desk read; the job through the app.
-- Not covered: the portal and phone screens (MUT-783, MUT-784) and release QA (the desk has no screen yet).
+- After review: the plan lock (402 on the period and review of a client past the free books; the desk list leaves it out), a kind change after an announcement mails nothing twice, an early scheduler still sends the follow-up, and a purged person's id is forgotten on the profile's records (Memory and Postgres).
+- Not covered: the sweep honouring the plan lock (TD-375), the portal and phone screens (MUT-783, MUT-784) and release QA (the desk has no screen yet).
 
 ## Unclaimed-account sweep (MUT-767, 2026-11-27)
 

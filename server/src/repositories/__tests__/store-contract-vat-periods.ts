@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GRACE_MS } from '../../accounts/closure.js';
 import type { AuditEventInput, CreateUserInput, LedgerStore } from '../ports.js';
 
 /**
@@ -152,6 +153,23 @@ export function describeLedgerStoreVatPeriodContract(name: string, makeStore: ()
         await store.vatPeriods.review({ organizationId: c.organizationId, periodKey: key, userId: c.ownerId, decision: 'CONFIRMED', note: null, at: at(120), followUpDueAt: null });
         expect((await store.vatPeriods.recordOf(c.organizationId, key))?.followUpDueAt).toBeNull();
       });
+    });
+
+    it('forgets who acted when that person is purged, keeping the profile\'s records', async () => {
+      const store = await makeStore();
+      const c = await client(store);
+      const { accountantId } = await accountantOn(store, c.organizationId, c.ownerId);
+      await store.vatPeriods.announce({ organizationId: c.organizationId, periodKey: '2026-B5', at: at(5), followUpDueAt: at(100) });
+      await store.vatPeriods.markDone({ organizationId: c.organizationId, periodKey: '2026-B5', userId: c.ownerId, at: at(10) });
+      await store.vatPeriods.review({ organizationId: c.organizationId, periodKey: '2026-B5', userId: accountantId, decision: 'CONFIRMED', note: null, at: at(12), followUpDueAt: null });
+      const closeAt = at(20);
+      const due = new Date(closeAt.getTime() + GRACE_MS + 1000);
+      const session = await store.sessions.create({ userId: accountantId, tokenDigest: `s-${unique()}${unique()}`, kind: 'cookie', at: closeAt, idleExpiresAt: due, absoluteExpiresAt: due, userAgent: null });
+      await store.users.requestClosure({ userId: accountantId, at: closeAt, deleteAfter: new Date(closeAt.getTime() + GRACE_MS), endedSubscriptionIds: [], exceptSessionId: session.id, audit: [] });
+      expect(await store.accountPurge.claim(accountantId, due)).not.toBeNull();
+      expect(await store.accountPurge.purge(accountantId, due)).not.toBeNull();
+      const record = await store.vatPeriods.recordOf(c.organizationId, '2026-B5');
+      expect(record).toMatchObject({ state: 'CONFIRMED', doneByUserId: c.ownerId, reviewedByUserId: null });
     });
 
     describe('sweepTargets', () => {

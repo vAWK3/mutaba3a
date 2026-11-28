@@ -24,12 +24,15 @@ export const VAT_PERIOD_POLICY = {
   announceWindowDays: 10,
   /** The client's reminder, in days after the announcement, and after each Ask for more. */
   followUpAfterDays: 5,
+  /** A scheduler that fires a little early on the day still sends it that day, not the next. */
+  followUpGraceMinutes: 60,
   batch: 200,
-  /** Safety cap: at most this many profiles looked at per run; `incomplete` says the next run continues. */
+  /** Safety cap: at most this many profiles looked at per run; `incomplete` says the run stopped at it and the profiles past it were not reached (TD-374: there is no resume cursor yet). */
   maxPerRun: 5000,
 } as const;
 
 const DAY_MS = 86_400_000;
+const MINUTE_MS = 60_000;
 
 export interface VatPeriodSweepSummary {
   looked: number;
@@ -79,6 +82,7 @@ export async function runVatPeriodSweep(options: VatPeriodSweepOptions): Promise
     after = targets[targets.length - 1]!.organizationId;
     if (targets.length < VAT_PERIOD_POLICY.batch) break;
   }
+  if (summary.incomplete) options.logger.warn({ event: 'vat_period_sweep_incomplete', looked: summary.looked }, 'VAT period sweep stopped at its cap; later profiles were not reached (TD-374)');
   for (const [accountantUserId, tally] of tallies) {
     if (tally.ended > 0 && (await mailDigest(options, accountantUserId, tally))) summary.digests += 1;
   }
@@ -92,7 +96,10 @@ async function sweepOne(options: VatPeriodSweepOptions, target: VatSweepTarget, 
   if (kind === 'NONE') return;
   const today = todayIn(target.timezone, now);
   const ended = periods.latestEnded(kind, today);
-  if (ended && daysBetween(ended.endDate, today) <= VAT_PERIOD_POLICY.announceWindowDays) {
+  // A period already announced that reaches this one's last day covers it: a kind changed right after an announcement
+  // (2-monthly to monthly) must not mail the same months again.
+  const covered = latest ? (periods.fromKey(latest.periodKey)?.endDate ?? '') >= (ended?.endDate ?? '9999-12-31') : false;
+  if (ended && !covered && daysBetween(ended.endDate, today) <= VAT_PERIOD_POLICY.announceWindowDays) {
     const followUpDueAt = new Date(now.getTime() + VAT_PERIOD_POLICY.followUpAfterDays * DAY_MS);
     const inserted = await store.vatPeriods.announce({ organizationId: target.organizationId, periodKey: ended.key, at: now, followUpDueAt, audit: [audit(target.organizationId, 'vat_period.announced', ended.key)] });
     if (inserted) {
@@ -106,7 +113,7 @@ async function sweepOne(options: VatPeriodSweepOptions, target: VatSweepTarget, 
       return;
     }
   }
-  if (!latest || (latest.state !== 'OPEN' && latest.state !== 'MORE_NEEDED') || latest.followUpDueAt === null || latest.followUpDueAt.getTime() > now.getTime() || latest.followUpSentAt !== null) return;
+  if (!latest || (latest.state !== 'OPEN' && latest.state !== 'MORE_NEEDED') || latest.followUpDueAt === null || latest.followUpDueAt.getTime() > now.getTime() + VAT_PERIOD_POLICY.followUpGraceMinutes * MINUTE_MS || latest.followUpSentAt !== null) return;
   const period = periods.fromKey(latest.periodKey);
   if (!period) return;
   // Each re-arm (Ask for more) has its own due instant, so each gets its own mail keys.

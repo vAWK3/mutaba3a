@@ -170,6 +170,17 @@ describe('runVatPeriodSweep: when each kind pings', () => {
     expect(await w.store.vatPeriods.recordOf(c.organizationId, '2026-B1')).toEqual(before);
   });
 
+  it('a kind changed right after an announcement does not mail the same months again', async () => {
+    const w = world();
+    const c = await client(w, { dealer: 'LICENSED' });
+    await w.sweep(at(2026, 5, 1));
+    expect(w.mail.of('vat-period-client', c.ownerEmail)).toHaveLength(1);
+    await w.store.vatPeriods.setKind({ organizationId: c.organizationId, kind: 'MONTHLY', userId: c.accountant.id, at: at(2026, 5, 3) });
+    expect(await w.sweep(at(2026, 5, 4))).toMatchObject({ announced: 0 });
+    expect(w.mail.of('vat-period-client', c.ownerEmail)).toHaveLength(1);
+    expect((await w.store.vatPeriods.latestOf([c.organizationId])).get(c.organizationId)?.periodKey).toBe('2026-B2');
+  });
+
   it('the accountant\'s chosen kind wins over the dealer type', async () => {
     const w = world();
     await client(w, { dealer: 'LICENSED', kind: 'MONTHLY' });
@@ -223,6 +234,14 @@ describe('runVatPeriodSweep: the follow-up', () => {
     expect(w.mail.of('vat-period-client', a.ownerEmail).map((m) => m.vars.reminder)).toEqual([false, true]);
     expect(w.mail.of('vat-period-client', b.ownerEmail)).toHaveLength(1);
     expect(await w.sweep(at(2026, 3, 7))).toMatchObject({ followUps: 0 });
+  });
+
+  it('a scheduler that fires a little early on day five still sends the follow-up that day', async () => {
+    const w = world();
+    await client(w, { dealer: 'LICENSED' });
+    await w.sweep(at(2026, 3, 1));
+    const early = new Date(at(2026, 3, 6).getTime() - 30 * 60_000);
+    expect(await w.sweep(early)).toMatchObject({ followUps: 1 });
   });
 
   it('Ask for more re-opens it: the client is reminded again five days after', async () => {

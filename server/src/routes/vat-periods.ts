@@ -1,6 +1,8 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import type { AppEnv } from '../auth/middleware.js';
+import { clientBooksOf } from '../accountants/grants.js';
+import { assertClientReadable, type AppEnv } from '../auth/middleware.js';
+import { ACCOUNTANT_PLAN_OFF, clientCapOf, resolveAccountantPlan, type AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { ApiError } from '../errors.js';
 import { ownedProfileOf } from '../personal-profile.js';
 import type { AuditEventInput, LedgerStore, VatClientView, VatPeriodRecord } from '../repositories/ports.js';
@@ -85,14 +87,24 @@ function audit(organizationId: string, actorId: string, action: string, periodKe
   return { organizationId, actorType: 'USER', actorId, action, entityType: 'vat_period', entityId: null, metadata: { ...(periodKey ? { periodKey } : {}), ...extra }, requestId };
 }
 
-export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<AppEnv> {
-  const { store } = options;
+/**
+ * `store` is the one routes get (beneath the principal guard for the caller's own acts); `baseStore` is the store under
+ * every guard, which the plan check reads (`countActiveBefore` is operator-only), as authenticate() does.
+ */
+export function vatPeriodRoutes(options: { store: LedgerStore; baseStore: LedgerStore; accountantPlan?: AccountantPlanConfig }): OpenAPIHono<AppEnv> {
+  const { store, baseStore } = options;
+  const planConfig = options.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
   const app = new OpenAPIHono<AppEnv>();
 
-  /** The accountant's ACTIVE grant on the profile; anything else is one 404, as if it did not exist. */
+  /**
+   * The accountant's ACTIVE grant on the profile, and readable under the Accountant plan (ADR-251: a client past the free
+   * ones of a lapsed accountant is 402, as on every profile-scoped read); anything else is one 404, as if it did not exist.
+   */
   async function assertActiveAccountant(c: Context<AppEnv>, profileId: string): Promise<string> {
     const { user } = c.get('identity');
-    if (!(await store.accountantGrants.findActive(user.id, profileId))) throw new ApiError('NOT_FOUND', 'Not found');
+    const grant = await store.accountantGrants.findActive(user.id, profileId);
+    if (!grant) throw new ApiError('NOT_FOUND', 'Not found');
+    await assertClientReadable(baseStore, planConfig, grant, user.id, c.get('now')());
     return user.id;
   }
 
@@ -169,7 +181,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       path: '/v1/clients/vat-periods',
       tags: ['VAT periods'],
       summary: 'Your active clients: how often each files VAT, and where its latest period stands',
-      description: 'MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended clients are not listed. Additive since 1.215.0-mut782.',
+      description: 'MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       responses: {
         200: { description: 'One item per active client', content: { 'application/json': { schema: ClientVatPeriodsResponseSchema } } },
@@ -178,13 +190,16 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
     }),
     async (c) => {
       const { user } = c.get('identity');
-      const grants = await store.accountantGrants.listActiveByAccountant(user.id);
-      const views = await store.vatPeriods.viewsOf(grants.map((g) => g.organizationId));
+      // The same rows as GET /v1/clients: active, not closing, and readable under the plan (ADR-249, ADR-251).
+      const plan = planConfig.on ? resolveAccountantPlan(user.id, await store.billing.factsFor({ ownerUserIds: [user.id], organizationIds: [] }), c.get('now')()) : null;
+      const books = await clientBooksOf(store, user.id, plan ? clientCapOf(plan, planConfig) : null);
+      const profileIds = books.rows.filter((r) => r.status === 'active' && !r.needsPlan).map((r) => r.profileId);
+      const views = await store.vatPeriods.viewsOf(profileIds);
       return c.json(
         {
-          items: grants.flatMap((g) => {
-            const view = views.get(g.organizationId);
-            return view ? [{ profileId: g.organizationId, kind: effectiveKind(view), chosenKind: view.chosenKind, period: view.latest ? periodView(view.latest, view.country) : null }] : [];
+          items: profileIds.flatMap((profileId) => {
+            const view = views.get(profileId);
+            return view ? [{ profileId, kind: effectiveKind(view), chosenKind: view.chosenKind, period: view.latest ? periodView(view.latest, view.country) : null }] : [];
           }),
         },
         200,
@@ -203,6 +218,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       request: { params: ProfileIdParamSchema, body: { required: true, content: { 'application/json': { schema: SetVatPeriodKindRequestSchema } } } },
       responses: {
         200: { description: 'The kind now chosen', content: { 'application/json': { schema: SetVatPeriodKindResponseSchema } } },
+        402: errorResponse('ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books'),
         404: errorResponse('Not one of your clients, or VAT period reminders are off on this server'),
       },
     }),
@@ -226,6 +242,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       request: { params: VatPeriodKeyParamSchema, body: { required: true, content: { 'application/json': { schema: ReviewVatPeriodRequestSchema } } } },
       responses: {
         200: { description: 'The period now', content: { 'application/json': { schema: VatPeriodViewSchema } } },
+        402: errorResponse('ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books'),
         404: errorResponse('Not one of your clients, no such period, or VAT period reminders are off on this server'),
         409: errorResponse('VAT_PERIOD_STATE: the period is already confirmed'),
       },

@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-375: The VAT period sweep ignores the Accountant plan lock (MUT-782, 2026-11-28)
+
+The routes honour ADR-251 (a client past the free books of a lapsed accountant is 402, and left off the desk list), but `vatPeriods.sweepTargets` still mails that client's owners and counts it in the lapsed accountant's digest. Dark while `VAT_PERIOD_REMINDERS` and `ACCOUNTANT_PLAN` are off (the plan is off until MUT-747). Before the plan goes on, give the sweep the same rule (`readableClientIds` per accountant) or drop locked grants from `accountants`.
+
+### TD-374: The VAT period sweep cannot resume past its per-run cap (MUT-782, 2026-11-28)
+
+`VAT_PERIOD_POLICY.maxPerRun` (5000 profiles) stops the run and logs `vat_period_sweep_incomplete`, but there is no cursor, so the next day starts again from the first profile id and the profiles past the cap are never reached. The unclaimed sweep (MUT-767) has the same shape. Far above today's volume; persist a cursor (or skip profiles with nothing due) before accountants reach that scale.
+
 ### TD-373: A VAT period's announcement mail is not retried (MUT-782, 2026-11-28)
 
 `announce` inserts the period before the mail goes, so a failed send is not retried that day; the client's follow-up 5 days later covers it, and the accountant's digest is its own mail. If real send failures show up, record the mail status on `vat_period_records` and retry the unsent ones in the next run.

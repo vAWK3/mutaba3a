@@ -153,4 +153,11 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
 };
 
 /** Columns that name a person with no foreign key (R14): anonymized the same way. */
-export const PURGE_UNKEYED_USER_COLUMNS = ['receivables.createdByUserId', 'usage_events.actorUserId'] as const;
+export const PURGE_UNKEYED_USER_COLUMNS = [
+  'receivables.createdByUserId',
+  'usage_events.actorUserId',
+  // MUT-782 (ADR-341): who chose a profile's VAT period, said Done, and reviewed a period; plain ids, no foreign key.
+  'vat_period_settings.setByUserId',
+  'vat_period_records.doneByUserId',
+  'vat_period_records.reviewedByUserId',
+] as const;

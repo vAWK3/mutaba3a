@@ -41,6 +41,7 @@
 ### Technical
 - Files: `server/src/{vat-periods,jurisdictions/il/vat-periods.ts,routes/vat-periods.ts,routes/vat-period-sweep.ts,repositories,auth/store-guard.ts,email,schemas.ts,app.ts,config.ts,index.ts,errors.ts}`, `server/prisma`, `server/openapi/openapi.yaml`, `server/infrastructure/terraform`.
 - Tests: pack (`il/__tests__/vat-periods.test.ts`), store contract (`store-contract-vat-periods.ts`, Memory and Postgres), sweep (`vat-periods/__tests__/run.test.ts`), routes (`routes-vat-periods.test.ts`), mail registries, store-guard pins.
+- After review (adversarial pass): the accountant routes and the desk read honour the Accountant plan lock (ADR-251); a kind changed right after an announcement no longer mails the same months twice; follow-ups tolerate a scheduler firing up to an hour early; who acted is forgotten on purge (`PURGE_UNKEYED_USER_COLUMNS`); the sweep cap is logged (TD-374; the sweep's plan lock is TD-375).
 - Why: accountants chased every client by hand each period for the receipts. The portal (MUT-783) and the phone (MUT-784) build on this.
 
 ## 2026-11-28 · MUT-703 (portal half): offers on Solo, Business and Firm

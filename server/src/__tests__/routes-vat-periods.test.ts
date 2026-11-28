@@ -166,6 +166,47 @@ describe('the accountant: choose the period, confirm, ask for more', () => {
   });
 });
 
+describe('the Accountant plan (ADR-251)', () => {
+  /** Free up to one client: the second is past it, and a lapsed accountant cannot read it. Both accept while the plan is off, then it is switched on. */
+  async function twoClients() {
+    const plan = { on: false, freeClients: 1, maxClients: 100 };
+    const h = accountantHarness({ vatPeriodReminders: true, accountantPlan: plan });
+    const ownerA = await person(h, { displayName: 'Owner A' });
+    const ownerB = await person(h, { displayName: 'Owner B' });
+    const first = await businessOf(h, ownerA, 'First');
+    const second = await businessOf(h, ownerB, 'Second');
+    const accountant = await shared(h, ownerA, first);
+    // The oldest accept is the free one: a minute apart so the order is not a tie.
+    h.setNow(new Date(h.now().getTime() + 60_000));
+    await shared(h, ownerB, second, accountant);
+    plan.on = true;
+    return { h, first, second, accountant };
+  }
+
+  it('lists only the clients the accountant may read', async () => {
+    const { h, first, accountant } = await twoClients();
+    const body = await read(await call(h, 'GET', '/v1/clients/vat-periods', accountant));
+    expect(body.items.map((i: { profileId: string }) => i.profileId)).toEqual([first]);
+  });
+
+  it('answers 402 ACCOUNTANT_PLAN_REQUIRED to the period and the review of a client past the free ones, and writes nothing', async () => {
+    const { h, second, accountant } = await twoClients();
+    await announce(h, second);
+    const put = await call(h, 'PUT', `/v1/clients/${second}/vat-period`, accountant, { kind: 'MONTHLY' });
+    expect(put.status).toBe(402);
+    expect((await read(put)).error.code).toBe('ACCOUNTANT_PLAN_REQUIRED');
+    const review = await call(h, 'POST', `/v1/clients/${second}/vat-periods/${KEY}/review`, accountant, { decision: 'CONFIRMED' });
+    expect(review.status).toBe(402);
+    expect(await h.store.vatPeriods.settingOf(second)).toBeNull();
+    expect((await h.store.vatPeriods.recordOf(second, KEY))?.state).toBe('OPEN');
+  });
+
+  it('the first client still works', async () => {
+    const { h, first, accountant } = await twoClients();
+    expect((await call(h, 'PUT', `/v1/clients/${first}/vat-period`, accountant, { kind: 'MONTHLY' })).status).toBe(200);
+  });
+});
+
 describe('GET /v1/clients/vat-periods', () => {
   it('lists the accountant\'s active clients with what each files and where its period stands', async () => {
     const { h, owner, profileId, accountant } = await setup();
