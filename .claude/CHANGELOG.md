@@ -49,6 +49,19 @@
 ### Files
 `scripts/prod-env.sh`, `docs/operations/before-release.md`.
 
+## 2026-11-28 · MUT-785: the invoice guide's art, from Claude Design (epic MUT-672)
+
+### Added
+- Nine scenes for the "Issue your first invoice" guide, imported from Claude Design's delivery and generated into `src/components/illustrations/generated/`: `guide-invoice-hero` (120 × 96) and `guide-invoice-1`, `-2`, `-3`, `-4` (160 × 160, subject inside the central 120 × 96), each with an `-rtl` drawing except `guide-invoice-2`, which Claude Design drew direction-neutral.
+- Checked before import: the repo's scene validator (9 of 9 valid), no script, image or external reference in any file, every step inside the safe area, and each `-rtl` drawing differs from its twin.
+
+### Notes for the guide's build (MUT-785)
+- `guide-invoice-2` has no `-rtl` twin by design: the guide content test's declared neutral-scene list (`NEUTRAL_SCENES` in `guides.test.ts`, added by MUT-679) must name it when `issue-first-invoice.json` lands.
+- The brief is `.claude/designs/guides-and-help/claude-design-brief-invoice-guide.md`; the copy is `copy-deck-first-three.md` §2.
+
+### Files
+`assets/illustrations/source/guide-invoice-*.svg`, `src/components/illustrations/generated/GuideInvoice*Scene.tsx` and `index.ts`, `DESIGN.md`.
+
 ## 2026-11-28 · MUT-674: the portal guide viewer and its one content format (epic MUT-672)
 
 ### Added
