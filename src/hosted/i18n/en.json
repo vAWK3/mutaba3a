@@ -2009,6 +2009,12 @@
       "copied": "Copied",
       "failed": "Couldn’t copy. Select the address and copy it yourself."
     },
+    "guide": {
+      "open": "Guide",
+      "done": "Done",
+      "needHelp": "Need help?",
+      "opensInNewTab": "opens in a new tab"
+    },
     "connect": {
       "title": "Connect Claude",
       "rowSub": "Let your own Claude read and add your records",

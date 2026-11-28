@@ -2,6 +2,7 @@ import type { Currency } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { PERIODS, type Period } from './reports';
 import { backOf } from '../shell/youRoutes';
+import { GUIDE_ID_SHAPE } from '../../content/guides/guideSchema';
 
 /**
  * One filters object per list view, kept in the URL's search params and updated
@@ -342,6 +343,8 @@ export interface ProfileDrawerSearch {
   twoFactor?: true;
   /** MUT-755: the pilot Welcome, opened once per account by the shell (signed in, on a pilot). */
   pilotWelcome?: true;
+  /** MUT-674: a guide in its drawer (`?guide=tax-authority`), on any page, signed in or out. The id is a guide file's name. */
+  guide?: string;
   /**
    * MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it).
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
@@ -357,7 +360,10 @@ export interface ProfileDrawerSearch {
    */
   portal?: 'returned' | 'card';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'pilotWelcome', 'step', 'billingPlan', 'checkout', 'portal'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'pilotWelcome', 'guide', 'step', 'billingPlan', 'checkout', 'portal'] as const;
+
+/** MUT-674: a guide id is a lower-case slug (a guide file's name). Whether a guide with that id exists is the drawer's to say. */
+const guideId = (value: unknown): string | undefined => (typeof value === 'string' && GUIDE_ID_SHAPE.test(value) ? value : undefined);
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -386,6 +392,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     connectedApps: flag(raw.connectedApps),
     twoFactor: flag(raw.twoFactor),
     pilotWelcome: flag(raw.pilotWelcome),
+    guide: guideId(raw.guide),
     step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' || raw.step === 'change' ? raw.step : undefined,
     billingPlan: raw.billingPlan === 'starter' || raw.billingPlan === 'solo' || raw.billingPlan === 'business' || raw.billingPlan === 'firm' ? raw.billingPlan : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,

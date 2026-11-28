@@ -53,6 +53,9 @@ const PINNED_VERSIONS: Record<string, string> = {
   // billing_checkout_started.plan solo/business/firm), MUT-733 (plan_cap_reached.plan, plan_gift_shown/accepted),
   // MUT-734 (plan_change_previewed/confirmed/undone), MUT-737 (onboarding_plan_shown/chosen, portal, ios, android).
   '2.14.0': '02120d99df27fd9aef24661a3fdc277528d1b0a32be22cb372c792fe8b831aff',
+  // MUT-674: guide_opened and guide_finished (portal), one `guide` property: the id of a guide file. Each new portal guide
+  // adds its id to that enum, which is a new minor and a new row here (guides.test.ts names the line to add).
+  '2.15.0': '6ac51fbff81d3a073da666a30e0b27a3a39ee97c722237d17a6f1c008cd2eb4f',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -283,6 +286,9 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       pilot_first_scan_saved: ['portal', 'ios', 'android'],
       pilot_first_invoice_issued: ['portal', 'ios', 'android'],
       pilot_usage_near_cap: ['portal', 'ios', 'android'],
+      // MUT-674: a guide's drawer opened, and Done pressed at its foot (the portal only; the phone joins with MUT-677).
+      guide_opened: ['portal'],
+      guide_finished: ['portal'],
     });
   });
 
@@ -295,6 +301,9 @@ describe('docs/analytics/events.json (ADR-090)', () => {
     expect(shape('pilot_first_scan_saved')).toEqual({ hours_since_start: 'integer' });
     expect(shape('pilot_first_invoice_issued')).toEqual({ hours_since_start: 'integer' });
     expect(shape('pilot_usage_near_cap')).toEqual({ limit: ['documents', 'scans', 'businesses', 'partners'] });
+    // MUT-674: a guide file's id with dashes as underscores (snake_case, like every enum value), one per portal guide.
+    expect(shape('guide_opened')).toEqual({ guide: ['tax_authority'] });
+    expect(shape('guide_finished')).toEqual({ guide: ['tax_authority'] });
   });
 
   it('MUT-575: the accountant and share-link events carry exactly their agreed properties', () => {

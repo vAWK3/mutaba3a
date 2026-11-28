@@ -5,6 +5,7 @@ import {
   endPortalUsage,
   resetPortalUsageForTests,
   syncPortalUsage,
+  trackGuide,
   trackOfferShown,
   trackPortal,
   usePortalUsage,
@@ -111,6 +112,27 @@ describe('turning it on', () => {
     await vi.waitFor(() => expect(calls.filter((c) => c === 'capture:billing_offer_shown')).toHaveLength(2));
     expect(sdk.capture).toHaveBeenCalledWith('billing_offer_shown', { offer: 'launch_2026', place: 'banner' });
     expect(sdk.capture).toHaveBeenCalledWith('billing_offer_shown', { offer: 'launch_2026', place: 'drawer' });
+  });
+});
+
+describe('guide events (MUT-674)', () => {
+  it('counts a guide opened and finished, with only its id, for a person who opted in', async () => {
+    await syncPortalUsage(ME);
+    await choosePortalUsage('on', 'settings');
+    trackGuide('guide_opened', 'tax-authority');
+    trackGuide('guide_finished', 'tax-authority');
+    await vi.waitFor(() => expect(sdk.capture).toHaveBeenCalledWith('guide_finished', { guide: 'tax_authority' }));
+    expect(sdk.capture).toHaveBeenCalledWith('guide_opened', { guide: 'tax_authority' });
+  });
+
+  it('sends nothing before a choice, or after Not now', async () => {
+    await syncPortalUsage(ME);
+    trackGuide('guide_opened', 'tax-authority');
+    await choosePortalUsage('off', 'settings');
+    calls.length = 0;
+    trackGuide('guide_opened', 'tax-authority');
+    await Promise.resolve();
+    expect(calls).toEqual([]);
   });
 });
 

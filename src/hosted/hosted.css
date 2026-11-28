@@ -2105,6 +2105,26 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-pilot-welcome-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
 .hp-pilot-welcome-step { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); font-weight: var(--weight-medium); }
 .hp-pilot-welcome-step .hp-scene { flex: none; }
+/* MUT-674: the guide drawer. The hero, the lead and the first step rise once on opening (website-entrance: 14px, 50ms
+   apart, opacity from .35 so the text reads from frame 1); reduced motion shows the still. Logical properties only. */
+.hp-guide { display: grid; gap: var(--space-4); }
+.hp-guide-hero { justify-self: center; }
+.hp-guide-lead { margin: 0; color: var(--text-secondary); }
+.hp-guide-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); counter-reset: guide-step; }
+.hp-guide-step { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); font-weight: var(--weight-medium); counter-increment: guide-step; }
+.hp-guide-step::before { content: counter(guide-step); flex: none; display: inline-flex; align-items: center; justify-content: center; inline-size: 28px; block-size: 28px; border-radius: var(--radius-pill); background: var(--accent-subtle); color: var(--text); font-size: var(--text-label); font-weight: var(--weight-semibold); }
+.hp-guide-step .hp-scene { flex: none; }
+.hp-guide-note { margin: 0; padding: var(--space-3); background: var(--accent-2-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-guide-links { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.hp-guide-link, .hp-guide-button { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 44px; font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
+.hp-guide-link:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; border-radius: var(--radius-xs); }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-guide-rise { animation: hp-guide-opacity 200ms linear both, hp-guide-rise 420ms var(--ease-spring) both; }
+  .hp-guide-rise-2 { animation-delay: 50ms; }
+  .hp-guide-rise-3 { animation-delay: 100ms; }
+}
+@keyframes hp-guide-opacity { from { opacity: .35; } to { opacity: 1; } }
+@keyframes hp-guide-rise { from { translate: 0 14px; } to { translate: 0 0; } }
 /* MUT-777: the one yes to watched sessions (Welcome) and its operator twin (grant drawer); a 44px row. */
 .hp-pilot-welcome-consent, .hp-operator-consent { display: flex; align-items: center; gap: var(--space-2); min-block-size: 44px; cursor: pointer; }
 .hp-pilot-welcome-consent input, .hp-operator-consent input { inline-size: 20px; block-size: 20px; flex: none; accent-color: var(--accent); }

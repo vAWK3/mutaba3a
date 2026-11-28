@@ -22,7 +22,7 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown' | PlanEvent | PilotEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown' | PlanEvent | PilotEvent | GuideEvent;
 /**
  * MUT-731 (ADR-284): Starter's limits (MUT-735 §2.9: the funnel is the clients', never the server's). A limit reached
  * (`plan_cap_reached`, `limit`), Upgrade shown (`plan_upgrade_offered`, `limit`) and pressed (`plan_upgrade_chosen`,
@@ -47,6 +47,9 @@ export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_promp
 export type SetupPasskeyEvent = 'setup_passkey_offered' | 'setup_passkey_created' | 'setup_passkey_not_now' | 'setup_passkey_not_created';
 /** MUT-525 (D10): the launch offer seen (`billing_offer_shown`), and Continue opening a Stripe Checkout (`billing_checkout_started`). */
 export type BillingOfferEvent = 'billing_offer_shown' | 'billing_checkout_started';
+
+/** MUT-674 (contract 2.15.0): a guide's drawer opened, and Done pressed at its foot. Each carries only the guide's id. */
+export type GuideEvent = 'guide_opened' | 'guide_finished';
 /** Where the launch offer was shown. The contract calls it `place`: `surface` is a shared property. */
 export type OfferPlace = 'drawer' | 'banner';
 
@@ -356,6 +359,12 @@ export function trackPlanEvent(event: PlanEvent, properties: Record<string, stri
 /** MUT-758: counts a pilot event. Once-per-opening and once-per-account are the callers' (the panel, the milestones). */
 export function trackPilotEvent(event: PilotEvent, properties: Record<string, string | number> = {}): void {
   void trackPortal(event, properties);
+}
+
+/** MUT-674: counts a guide event (anonymous, opt-in); `guide` is the guide file's id. Once per opening is the drawer's, which owns what an opening is. */
+export function trackGuide(event: GuideEvent, guide: string): void {
+  // The contract's enum values are snake_case, so a guide's id goes with its dashes as underscores.
+  void trackPortal(event, { guide: guide.replaceAll('-', '_') });
 }
 
 /** The offer/place pairs already counted on this page: `billing_offer_shown` is once per page view per place (D10). */

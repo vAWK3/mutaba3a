@@ -1,0 +1,31 @@
+app: portal
+area: guides
+title: Guides, opened in a drawer over the page (MUT-672)
+tier: secondary
+# MUT-674: the viewer and its one content format (src/content/guides/<id>.json). MUT-679 to 681 add the guides and the
+# buttons on the screens they belong to; until then the one shipped guide (tax-authority) opens through its link,
+# ?guide=tax-authority, and MUT-679 repoints this flow at the Connect button.
+paths:
+  - src/content/guides/guideSchema.ts
+  - src/content/guides/index.ts
+  - src/content/guides/types.ts
+  - src/content/guides/tax-authority.json
+  - src/hosted/components/GuideDrawer.tsx
+  - src/hosted/components/GuideButton.tsx
+features:
+  - id: guide-open-read-close
+    title: A guide opens in a drawer over the page, reads in Arabic then English, and closing it leaves the page as it was
+    tier: secondary
+    tickets: [MUT-674]
+    steps:
+      - Open Payments filtered to posted payments, in Arabic
+      - Open the Tax Authority guide by its link
+      - Read it in Arabic, right to left
+      - Close it with the cross
+      - Open the same guide in English and read it
+      - Press Done
+    expect:
+      - The guide is a drawer over Payments, named by its title, with the lead, four numbered steps each with a drawing, and the note
+      - In Arabic it reads right to left and the drawings are the Arabic ones
+      - Closing it with the cross leaves Payments and its posted filter exactly as they were
+      - In English it reads the same four steps; Done closes it and the page is as it was

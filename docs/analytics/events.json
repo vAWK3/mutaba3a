@@ -1,5 +1,5 @@
 {
-  "version": "2.14.0",
+  "version": "2.15.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -363,6 +363,20 @@
       "description": "MUT-758 (pilot): only while GET /v1/billing returns `pilot` (an operator grant with a cohort); the cohort itself is never sent (free text). A usage line in the panel reached 90% of its Business limit (it turns butter; nothing is refused). Once per opening per line.",
       "properties": {
         "limit": { "type": "enum", "values": ["documents", "scans", "businesses", "partners"], "description": "Which line." }
+      }
+    },
+    "guide_opened": {
+      "emitters": ["portal"],
+      "description": "MUT-674: a guide was opened in its drawer (a button on the feature's screen, or its link). Once per opening; a re-render is not an opening.",
+      "properties": {
+        "guide": { "type": "enum", "values": ["tax_authority"], "description": "Which guide: its id (the file name in src/content/guides/ without .json) with dashes as underscores. One value per portal guide, added with the guide's file." }
+      }
+    },
+    "guide_finished": {
+      "emitters": ["portal"],
+      "description": "MUT-674: the person pressed Done at the foot of a guide. Closing it with the cross, Escape or the overlay counts nothing.",
+      "properties": {
+        "guide": { "type": "enum", "values": ["tax_authority"], "description": "Which guide: its id (the file name in src/content/guides/ without .json) with dashes as underscores. One value per portal guide, added with the guide's file." }
       }
     }
   }
