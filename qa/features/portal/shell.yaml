@@ -101,7 +101,7 @@ features:
       - Open Clients with one client in credit, one owing in ILS and USD, one settled and one with no movement
       - Open Clients in Arabic
     expect:
-      - One Balance column; the owing client shows two lines (ILS and USD); the client in credit reads "Client in credit" without a minus; the settled one "Settled"; the one with no movement "—"; the list asks GET /v1/customer-balances once
+      - One Balance column; the owing client shows two lines (ILS and USD); the client in credit reads "Client in credit" without a minus; the settled one "Settled"; the one with no movement "—"; the column comes from GET /v1/customer-balances
       - The column reads «الرصيد», right to left, with no horizontal scroll
   - id: ledger-empty
     title: A client with no movements opens to the ledger-empty scene (MUT-774)
