@@ -3483,4 +3483,5 @@ When resolving debt:
 ### TD-373: The Flutter copy of the analytics contract is behind, and every portal guide is a contract bump (MUT-674)
 **Where**: `docs/analytics/events.json` (2.15.0); the Flutter repo's `test/fixtures/analytics/events.json` and its fixtures README hash (docs/analytics/README.md "Changing the contract", step 3).
 **Why deferred**: the Flutter repo is separate and its copy was already behind 2.14.0 (the billing stack's bump). 2.15.0 adds only portal events, so no phone code is affected, but its parity test pins a version.
+**Update 2026-11-28**: the contract is 2.16.0 (MUT-785 and MUT-786 added two guide values in one bump); the Flutter copy is still behind.
 **Cost**: each new portal guide adds a value to the `guide` enum (a minor bump, a pinned hash, a Flutter copy). A guide that is phone-only or website-only needs none. If guides multiply, move the guide id out of the enum into a closed list generated from the content files.

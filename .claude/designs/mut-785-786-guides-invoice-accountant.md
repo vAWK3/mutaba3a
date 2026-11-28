@@ -77,3 +77,7 @@ Revealed by the plan, to note on the tickets: (a) the two copy conflicts (D2); (
 - The two guides sit where people stall: the empty list after setting up invoicing, and the first time they share a profile. They also become the targets of the MUT-611 prompts ("set up, nothing issued yet", the accountant offer).
 - Roadmap: second and third portal guides of epic MUT-672; with MUT-679 they make the Get started hub (MUT-676) worth building.
 - Risk is low: no server or migration. The two copy edits are the only reason to pause, and they stop a guide from contradicting the product.
+
+## 8. Built (2026-11-28)
+
+Branch `feature/mut-785-786-guides`. Basel approved both copy edits (Q1, Q2) and signed the rest of the deck. Differences from the plan: none in scope. Q0 (MUT-673) stays open for the unsigned Claude, Scan and bank-text copy.

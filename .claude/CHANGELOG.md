@@ -28,6 +28,17 @@
 
 ---
 
+## 2026-11-28 · MUT-785 and MUT-786: the invoice guide and the accountant guide (epic MUT-672)
+
+### Added
+- `issue-first-invoice.json` (four steps on `guide-invoice-*`, note, `ifStuck`): a "How to issue" `GuideButton` under the empty line of the Issued documents list (`IssuedDocuments.tsx`) and in the invoicing setup's ready block (`InvoicingSetupPage.tsx`). Its lead names no document type, so an exempt dealer (receipts only) is not told they can issue one they cannot; this is one word of change from the signed deck, approved by Basel.
+- `accountant-access.json` (three steps on `guide-accountant-*`, note, `ifStuck`): a "How to invite" `GuideButton` in the Sharing page's empty state and in the Accountants column's head. Step 3 uses the Sharing page's own wording (`AccessScopeList`), not the deck's, approved by Basel.
+- Analytics contract 2.16.0: the `guide` enum of `guide_opened` and `guide_finished` gains `issue_first_invoice` and `accountant_access`.
+- QA: `portal.guides.invoice-from-issued-and-setup`, `portal.guides.accountant-from-sharing`, and `portal.guides.tax-guide-ended-state` (MUT-679's AC3c; `FakeApi` `taxAuthority.ended` reads `expired`).
+
+### Files
+`src/content/guides/{issue-first-invoice,accountant-access}.json`, `src/hosted/pages/{views/IssuedDocuments,invoicing/InvoicingSetupPage,sharing/SharingPage,sharing/AccountantsColumn}.tsx`, `src/hosted/hosted.css` (`.hp-sharing-head-actions`), `src/hosted/i18n/{ar,en}.json` (`hosted.issue.guide`, `hosted.sharing.guide`), `docs/analytics/events.json`, `scripts/__tests__/analytics-taxonomy.test.ts`, `qa/support/portalApi.ts`, `qa/features/portal/guides.yaml`, `qa/specs/portal/guides.spec.ts`, tests `guides.test.ts`, `SharingPage.test.tsx`.
+
 ## 2026-11-28 · MUT-679: the Tax Authority guide, opened from Connect and from the allocation panel (epic MUT-672)
 
 ### Added
