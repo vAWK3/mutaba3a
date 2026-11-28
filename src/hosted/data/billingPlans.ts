@@ -3,6 +3,7 @@ import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
 import type { BillingAddress, BillingOverview, BillingPlan } from '../api/client';
 import { formatMinor } from '../components/billingText';
+import { planLaunchOf } from './billingView';
 import { countryName } from './countries';
 
 /**
@@ -69,6 +70,27 @@ export function usePlanPrice(): (plan: BillingPlan, country: string | null) => s
   return (plan, country) => {
     const price = monthlyPriceOf(plan, country, language, t);
     return price ? t('hosted.billing.plans.perMonth', { price }) : null;
+  };
+}
+
+/**
+ * MUT-703 (offers plan §11.1): the first-year line under a plan row, from the plan's own `launch` (Stripe's amount, never
+ * computed here). Only on Yearly, only while the person is eligible; both currencies before a country is known.
+ */
+export function useOfferLine(): (billing: BillingOverview | undefined, plan: BillingPlan, interval: 'month' | 'year', country: string | null) => string | null {
+  const t = useT();
+  const { language } = useLanguage();
+  return (billing, plan, interval, country) => {
+    if (interval !== 'year' || !billing || !plan.launch || !planLaunchOf(billing)) return null;
+    const { ILS, USD } = plan.launch.firstYear;
+    if (!country) {
+      if (ILS !== null && USD !== null) return t('hosted.billing.plans.firstYear', { price: `${formatMinor(ILS, 'ILS', language)} ${t('hosted.billing.plan.or')} ${formatMinor(USD, 'USD', language)}` });
+      const only = ILS !== null ? formatMinor(ILS, 'ILS', language) : USD !== null ? formatMinor(USD, 'USD', language) : null;
+      return only ? t('hosted.billing.plans.firstYear', { price: only }) : null;
+    }
+    const currency = country === ISRAEL ? 'ILS' : 'USD';
+    const minor = plan.launch.firstYear[currency];
+    return minor === null ? null : t('hosted.billing.plans.firstYear', { price: formatMinor(minor, currency, language) });
   };
 }
 

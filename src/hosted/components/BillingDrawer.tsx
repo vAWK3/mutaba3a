@@ -31,6 +31,10 @@ import {
   daysLeft,
   comebackOfferOf,
   eligibleOfferOf,
+  planComebackOf,
+  planLaunchOf,
+  planOfferFor,
+  type ComebackOffer,
   firstChargeOf,
   isConfirmed,
   isSellable,
@@ -70,7 +74,7 @@ import { ChangeDoneBody, ChangePlanBody, ChangePlanFooter, ScheduledChangeLine }
 import { changeTargetsOf, useChangePlan, useScheduledToast } from '../data/planChangeQueries';
 import { useAccountDrawers } from '../shell/AccountDrawers';
 import { BillingAddressFields, PlanRow } from './BillingPlanPicker';
-import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, priceLinesOf, savedAddressOf, vatRateOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
+import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, priceLinesOf, savedAddressOf, useOfferLine, vatRateOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
 import { PriceLinesCard } from './PriceLinesCard';
 import { ContinueFreeOnStarter, PickActiveBusiness, StarterBilling } from './StarterPlan';
 import { billingPilotOf } from '../data/pilot';
@@ -1015,9 +1019,11 @@ function useSubscribeForm(billing: BillingOverview | undefined, wantedPlan?: Pla
   const route = billing ? checkoutRouteOf(country || null, buyer, billing.countries) : null;
   const currency = country ? currencyOfCountry(country) : null;
   const pair = billing && currency ? (plan ? plan.catalog[currency] : billing.catalog[currency]) : null;
-  const eligible = billing && !plan ? eligibleOfferOf(billing) : null;
-  const activeOffer = eligible && eligible.id !== refusedOffer ? eligible : null;
-  const offer = billing && activeOffer ? offerFor(billing, currency, new Date()) : null;
+  // MUT-703: with plans on sale the launch is per plan (its own first year); the legacy one reads the legacy catalog.
+  const eligible = billing ? (onOffer.length > 0 ? planLaunchOf(billing) : eligibleOfferOf(billing)) : null;
+  const launchId = plan?.launch?.id ?? eligible?.id ?? null;
+  const activeOffer = eligible && launchId !== refusedOffer ? eligible : null;
+  const offer = billing && activeOffer ? (plan ? planOfferFor(billing, plan, currency, new Date()) : offerFor(billing, currency, new Date())) : null;
   /** The offer is on screen: before a country is picked, or in the chosen currency. */
   const offerShown = activeOffer !== null && (currency === null || offer !== null);
   /** The offer this Continue would carry: Yearly, in the chosen currency. */
@@ -1026,11 +1032,11 @@ function useSubscribeForm(billing: BillingOverview | undefined, wantedPlan?: Pla
    * MUT-534 (D14): the come-back price for the chosen interval and currency, when the server says the person may have it
    * and the launch offer isn't what this Continue carries. Its amounts come from the server (ADR-004).
    */
-  const offeredBack = plan ? null : comebackOfferOf(billing);
+  const offeredBack: ComebackOffer | null = plan ? planComebackOf(plan) : comebackOfferOf(billing);
   const comeback = offeredBack && offeredBack.id !== refusedOffer && !applied ? offeredBack : null;
   const comebackPrice =
     comeback && currency
-      ? { first: (interval === 'year' ? comeback.firstYear : comeback.firstMonth)[currency], list: (interval === 'year' ? comeback.listYear : comeback.listMonth)[currency] }
+      ? { first: (interval === 'year' ? comeback.firstYear : comeback.firstMonth)?.[currency] ?? null, list: (interval === 'year' ? comeback.listYear : comeback.listMonth)?.[currency] ?? null }
       : null;
   const comebackShown = comeback !== null && comebackPrice !== null && comebackPrice.first !== null && comebackPrice.list !== null;
   const comebackEnded = refusedOffer !== null && refusedOffer === offeredBack?.id;
@@ -1091,8 +1097,8 @@ function useSubscribeForm(billing: BillingOverview | undefined, wantedPlan?: Pla
  * that plan has an eligible launch; until then a plan Checkout carries no offer.
  */
 function openingIntervalOf(billing: BillingOverview, plan: BillingPlan | null): { interval: 'month' | 'year'; offerId: string | null } {
-  const offer = plan || plansOnOffer(billing).length > 0 ? null : eligibleOfferOf(billing);
-  return { interval: offer ? 'year' : 'month', offerId: offer?.id ?? null };
+  const offer = plan ? (plan.launch ? planLaunchOf(billing) : null) : plansOnOffer(billing).length > 0 ? null : eligibleOfferOf(billing);
+  return { interval: offer ? 'year' : 'month', offerId: offer ? (plan?.launch?.id ?? offer.id) : null };
 }
 
 type SubscribeForm = ReturnType<typeof useSubscribeForm>;
@@ -1123,6 +1129,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
   const tp = useTp();
   const { language } = useLanguage();
   const ids = useId();
+  const offerLine = useOfferLine();
   const body = useRef<HTMLDivElement>(null);
   const { country, buyer, interval, route, currency, pair, activeOffer, offerShown, applied } = form;
   const firstCharge = firstChargeOf(billing, new Date());
@@ -1178,7 +1185,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
       {form.plan ? (
         <>
           {/* MUT-702 Part B (wireframes v3): the plan, then the billing address; its country sets the currency and VAT. */}
-          <PlanRow idPrefix={ids} plans={form.plans} value={form.plan.plan} country={form.address.country} onChange={form.setPlan} />
+          <PlanRow idPrefix={ids} plans={form.plans} value={form.plan.plan} country={form.address.country} onChange={form.setPlan} offerNote={(p) => offerLine(billing, p, interval, form.address.country)} />
           <BillingAddressFields idPrefix={ids} draft={form.address} onChange={form.setAddress} />
         </>
       ) : (

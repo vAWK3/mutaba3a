@@ -104,7 +104,12 @@ function PreviewCard({ flow }: { flow: ChangePlanState }) {
           <Amount minor={data.amountDue} currency={due} language={language} />
         </span>
         <p className="hp-starter-fine">{limitsLine}</p>
-        {/* MUT-703's seam (offers plan §11.6): one line here for the preview's `offerEnds`; none today. */}
+        {/* MUT-703 (offers plan §11.6): the running offer this upgrade ends, said before the confirm. */}
+        {(data.offerEnds?.kind === 'stay' || data.offerEnds?.kind === 'comeback') && (
+          <p className="hp-starter-fine" data-testid="change-offer-ends">
+            {t(`hosted.billing.change.offerEnds.${data.offerEnds.kind}`)}
+          </p>
+        )}
       </div>
     );
   }

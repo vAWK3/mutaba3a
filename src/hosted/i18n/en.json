@@ -1575,7 +1575,8 @@
         },
         "aMonth": "a month",
         "aYear": "a year",
-        "staffSoon": "Staff: coming soon"
+        "staffSoon": "Staff: coming soon",
+        "firstYear": "First year {price}"
       },
       "address": {
         "title": "Billing address",
@@ -1621,6 +1622,10 @@
         "perYear": "{price} a year",
         "current": "Current",
         "chargedNow": "Charged now",
+        "offerEnds": {
+          "stay": "The stay offer ends",
+          "comeback": "The come-back price ends"
+        },
         "fromDate": "{plan} from {date}",
         "readOnlyFrom": "Read-only from {date}",
         "pay": "Pay {amount}",

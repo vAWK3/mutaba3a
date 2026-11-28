@@ -1663,7 +1663,8 @@
         },
         "aMonth": "شهريًا",
         "aYear": "سنويًا",
-        "staffSoon": "الموظفون: قريبًا"
+        "staffSoon": "الموظفون: قريبًا",
+        "firstYear": "السنة الأولى {price}"
       },
       "address": {
         "title": "عنوان الفوترة",
@@ -1717,6 +1718,10 @@
         "perYear": "{price} سنويًا",
         "current": "الحالية",
         "chargedNow": "يُخصم الآن",
+        "offerEnds": {
+          "stay": "ينتهي عرض البقاء",
+          "comeback": "ينتهي سعر العودة"
+        },
         "fromDate": "{plan} من {date}",
         "readOnlyFrom": "للقراءة فقط من {date}",
         "pay": "ادفع {amount}",
