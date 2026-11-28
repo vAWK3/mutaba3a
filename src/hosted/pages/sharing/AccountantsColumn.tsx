@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
 import type { AccountantGrant, AccountantGrantList, HostedProfile } from '../../api/client';
 import { trackPortal } from '../../analytics/portalAnalytics';
+import { GuideButton } from '../../components/GuideButton';
 import { InPlaceConfirm } from '../../components/InPlaceConfirm';
 import { QueryView, type QueryState } from '../../components/QueryView';
 import { useToast } from '../../components/Toast';
@@ -48,9 +49,13 @@ export function AccountantsColumn({ profile, query, flashId, writable, onInvite,
           </span>
           {t('hosted.sharing.accountants.heading')}
         </h2>
-        <Button variant="secondary" size="sm" aria-disabled={blocked || undefined} aria-describedby={atLimit ? `${ids}-limit` : undefined} onClick={() => !blocked && onInvite()}>
-          {t('hosted.sharing.accountants.invite')}
-        </Button>
+        <div className="hp-sharing-head-actions">
+          {/* MUT-786: the accountant guide; this column only renders where Sharing is open */}
+          <GuideButton guide="accountant-access" label={t('hosted.sharing.guide')} />
+          <Button variant="secondary" size="sm" aria-disabled={blocked || undefined} aria-describedby={atLimit ? `${ids}-limit` : undefined} onClick={() => !blocked && onInvite()}>
+            {t('hosted.sharing.accountants.invite')}
+          </Button>
+        </div>
       </div>
       <QueryView queries={[query]} data={query.data}>
         {(list) => (

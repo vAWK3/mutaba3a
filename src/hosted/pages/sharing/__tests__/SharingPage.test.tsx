@@ -218,6 +218,14 @@ describe('the Accountants column (B1)', () => {
     expect(await screen.findByRole('dialog', { name: 'Invite an accountant' })).toBeInTheDocument();
     expect(locationOf(router)).toContain('invite=true');
   });
+
+  it('How to invite sits beside Invite by email and opens the accountant guide (MUT-786)', async () => {
+    const { user, router } = portal(`/p/${ORG_B}/you/sharing`);
+    await screen.findByText('Sami Khoury');
+    await user.click(screen.getByRole('button', { name: 'How to invite' }));
+    expect(await screen.findByRole('dialog', { name: 'Invite your accountant' })).toBeInTheDocument();
+    expect(locationOf(router)).toContain('guide=accountant-access');
+  });
 });
 
 describe('empty, loading and errors', () => {
@@ -235,6 +243,14 @@ describe('empty, loading and errors', () => {
     ]);
     expect(screen.getByRole('button', { name: 'Invite by email' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /link/i })).not.toBeInTheDocument();
+  });
+
+  it('the empty page offers How to invite too, and it opens the accountant guide (MUT-786)', async () => {
+    const { user, router } = portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/accountants`]: () => ok({ items: [], limit: 5 }) });
+    await screen.findByRole('heading', { name: "You haven't shared this profile yet" });
+    await user.click(screen.getByRole('button', { name: 'How to invite' }));
+    expect(await screen.findByRole('dialog', { name: 'Invite your accountant' })).toBeInTheDocument();
+    expect(locationOf(router)).toContain('guide=accountant-access');
   });
 
   it('loading shows the column skeleton under its heading', async () => {

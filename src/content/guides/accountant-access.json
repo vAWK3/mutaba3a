@@ -1,0 +1,23 @@
+{
+  "id": "accountant-access",
+  "surfaces": ["portal", "web"],
+  "title": { "ar": "دعوة المحاسب", "en": "Invite your accountant" },
+  "lead": { "ar": "يستطيع محاسبك قراءة ملفك، ولا يستطيع تغيير شيء.", "en": "Your accountant can read your profile. They can't change anything." },
+  "hero": "guide-accountant-hero",
+  "steps": [
+    {
+      "text": { "ar": "في ملفك افتح «شارك مع محاسبك» واضغط «دعوة بالبريد».", "en": "On your profile, open Share with your accountant and press Invite by email." },
+      "scene": "guide-accountant-1"
+    },
+    {
+      "text": { "ar": "يصله بريد ويقبل الدعوة.", "en": "They get an email and accept." },
+      "scene": "guide-accountant-2"
+    },
+    {
+      "text": { "ar": "يرى المصاريف والدخل والإيصالات في هذا الملف.", "en": "They see this profile's expenses, income and receipts." },
+      "scene": "guide-accountant-3"
+    }
+  ],
+  "note": { "ar": "يمكنك إيقاف وصوله في أي وقت.", "en": "You can stop their access at any time." },
+  "ifStuck": { "ar": "تبقى الدعوة سارية 14 يومًا. إن انتهت فأرسل دعوة جديدة.", "en": "The invite lasts 14 days. If it expires, invite again." }
+}

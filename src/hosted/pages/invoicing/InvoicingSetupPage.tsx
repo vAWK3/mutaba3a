@@ -10,6 +10,7 @@ import { youPath } from '../../shell/youRoutes';
 import { isolate } from '../sharing/sharingRules';
 import { DefaultsStep, DetailsStep, LogoStep, NumberingStep, TaxAuthorityStep } from './InvoicingSteps';
 import { IntroArt, ReadyArt } from './InvoicingArt';
+import { GuideButton } from '../../components/GuideButton';
 import { Letterhead } from './Letterhead';
 import { UniformFileExport } from './UniformFileExport';
 import { DEFAULT_INK, REQUIRED_STEPS, SETUP_STEPS, type PaperModel, type SetupStep } from './setupSteps';
@@ -178,6 +179,8 @@ function Status({ setup }: { setup: IssuingSetup }) {
         <ReadyArt />
         <strong>{t('hosted.invoicing.ready.title')}</strong>
         <span>{t('hosted.invoicing.ready.body')}</span>
+        {/* MUT-785: the first-invoice guide, once the letterhead is ready and issuing is open */}
+        <GuideButton guide="issue-first-invoice" label={t('hosted.issue.guide')} />
       </div>
     );
   }
