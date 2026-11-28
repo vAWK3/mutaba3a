@@ -18,15 +18,15 @@
 
 ## Open Debt
 
-### TD-375: The VAT period sweep ignores the Accountant plan lock (MUT-782, 2026-11-28)
+### TD-376: The VAT period sweep ignores the Accountant plan lock (MUT-782, 2026-11-28)
 
 The routes honour ADR-251 (a client past the free books of a lapsed accountant is 402, and left off the desk list), but `vatPeriods.sweepTargets` still mails that client's owners and counts it in the lapsed accountant's digest. Dark while `VAT_PERIOD_REMINDERS` and `ACCOUNTANT_PLAN` are off (the plan is off until MUT-747). Before the plan goes on, give the sweep the same rule (`readableClientIds` per accountant) or drop locked grants from `accountants`.
 
-### TD-374: The VAT period sweep cannot resume past its per-run cap (MUT-782, 2026-11-28)
+### TD-375: The VAT period sweep cannot resume past its per-run cap (MUT-782, 2026-11-28)
 
 `VAT_PERIOD_POLICY.maxPerRun` (5000 profiles) stops the run and logs `vat_period_sweep_incomplete`, but there is no cursor, so the next day starts again from the first profile id and the profiles past the cap are never reached. The unclaimed sweep (MUT-767) has the same shape. Far above today's volume; persist a cursor (or skip profiles with nothing due) before accountants reach that scale.
 
-### TD-373: A VAT period's announcement mail is not retried (MUT-782, 2026-11-28)
+### TD-374: A VAT period's announcement mail is not retried (MUT-782, 2026-11-28)
 
 `announce` inserts the period before the mail goes, so a failed send is not retried that day; the client's follow-up 5 days later covers it, and the accountant's digest is its own mail. If real send failures show up, record the mail status on `vat_period_records` and retry the unsent ones in the next run.
 
@@ -3491,3 +3491,9 @@ When resolving debt:
 **Where**: `server/src/billing/offer.ts` `offersFor` (BILLING_OFFER_COUPON_ID and BILLING_STAY_COUPON_ID replace every entry of their kind, legacy and plans alike; BILLING_COMEBACK_COUPON_ID_ILS/_USD replace only the legacy per-currency pair, so a QA server has no way to name its own percent come-back coupon); `billing/comeback-mail.ts` `skipped.firm` is always 0 since Firm lapses are mailed (kept so older operator tools and `ComebackMailSummarySchema` don't break).
 **Why deferred**: the live QA flows for the offers (`portal-live` launch/stay/come-back per plan) wait on the UI half and on TD-347's sandbox seeding, which will run `billing:plans` and so make the real coupon ids in the sandbox; an override is only needed if a QA run must own its coupons. **Fix**: with those flows, add `BILLING_COMEBACK_PLANS_COUPON_ID` (refused on a live key, like the others) if the sandbox can't share the real ids; drop `skipped.firm` at the next breaking change of the job's summary.
 **Not debt (spike S1, 2026-11-27):** an upgrade after a spent launch coupon does not over-credit: Stripe's unused-time credit is the discounted amount paid ("Unused time on Solo (with 50.0% off)": ₪178.98 of ₪195 after 30 days), so no cap is needed.
+
+### TD-373: The Flutter copy of the analytics contract is behind, and every portal guide is a contract bump (MUT-674)
+**Where**: `docs/analytics/events.json` (2.15.0); the Flutter repo's `test/fixtures/analytics/events.json` and its fixtures README hash (docs/analytics/README.md "Changing the contract", step 3).
+**Why deferred**: the Flutter repo is separate and its copy was already behind 2.14.0 (the billing stack's bump). 2.15.0 adds only portal events, so no phone code is affected, but its parity test pins a version.
+**Update 2026-11-28**: the contract is 2.16.0 (MUT-785 and MUT-786 added two guide values in one bump); the Flutter copy is still behind.
+**Cost**: each new portal guide adds a value to the `guide` enum (a minor bump, a pinned hash, a Flutter copy). A guide that is phone-only or website-only needs none. If guides multiply, move the guide id out of the enum into a closed list generated from the content files.

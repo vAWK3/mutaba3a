@@ -1,7 +1,7 @@
 import type { IsoDate } from '../dates.js';
 
 /**
- * MUT-782 (ADR-341): the jurisdiction-neutral shape of a VAT period, so the core (store, routes, the daily sweep) names
+ * MUT-782 (ADR-343): the jurisdiction-neutral shape of a VAT period, so the core (store, routes, the daily sweep) names
  * the types without importing a country pack (`jurisdictions/__tests__/boundary.test.ts`). The rules that make a period
  * (what ends when, what is due) are the pack's: `pack.vat.periods`.
  */

@@ -6278,7 +6278,7 @@ export const UsagePruneSummarySchema = z
   })
   .openapi('UsagePruneSummary');
 
-// ---- MUT-782 (ADR-341): VAT periods and "all receipts sent". Additive since 1.215.0-mut782. -----------------------
+// ---- MUT-782 (ADR-343): VAT periods and "all receipts sent". Additive since 1.215.0-mut782. -----------------------
 
 export const VatPeriodKindSchema = z.enum(['MONTHLY', 'BIMONTHLY', 'YEARLY', 'NONE']).openapi('VatPeriodKind');
 export const VatPeriodStateSchema = z.enum(['OPEN', 'CLIENT_DONE', 'CONFIRMED', 'MORE_NEEDED']).openapi('VatPeriodState');

@@ -112,6 +112,21 @@ describe('shell overlay keys (MUT-183 R1)', () => {
     expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
     expect(pickShellOverlay(search)).toEqual({ billing: 'true', checkout: 'cancelled' });
   });
+
+  it('parses ?guide=<id> as a lower-case slug and drops anything else (MUT-674)', () => {
+    expect(parseProfileDrawer({ guide: 'tax-authority' })).toEqual({ guide: 'tax-authority' });
+    expect(parseProfileDrawer({ guide: 'guide-2' })).toEqual({ guide: 'guide-2' });
+    for (const bad of ['', 'Tax Authority', '../x', 'a'.repeat(41), 'tax_authority', 7, true, null, ['a']]) {
+      expect(parseProfileDrawer({ guide: bad }), String(bad)).toEqual({});
+    }
+  });
+
+  it('strips the guide key from a page and carries it across a filter change (MUT-674)', () => {
+    const search = { status: 'OPEN', guide: 'tax-authority' };
+    expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
+    expect(pickShellOverlay(search)).toEqual({ guide: 'tax-authority' });
+    expect({ ...pickShellOverlay(search), status: 'PAID' }).toEqual({ guide: 'tax-authority', status: 'PAID' });
+  });
 });
 
 describe('expense groups URL state (MUT-268)', () => {

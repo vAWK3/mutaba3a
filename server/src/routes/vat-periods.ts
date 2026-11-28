@@ -23,13 +23,13 @@ import type { VatPeriodKind } from '../vat-periods/types.js';
 import type { z } from '@hono/zod-openapi';
 
 /**
- * MUT-782 (ADR-341): a client's VAT period and its "all receipts sent" state.
+ * MUT-782 (ADR-343): a client's VAT period and its "all receipts sent" state.
  *
  *   Client (session; owns the profile, else 403 NOT_OWNER; 404 when they can't see it):
  *     GET  /v1/profiles/{profileId}/vat-periods/current            the latest announced period, or null
  *     POST /v1/profiles/{profileId}/vat-periods/{periodKey}/done   all receipts sent (a repeat answers 200 and changes nothing)
  *   Accountant (session; an ACTIVE grant on the profile, else 404). Never through a profile: ADR-245 refuses an
- *   accountant every write there, so these live under /v1/clients like Remove (ADR-341 amends ADR-245 d3):
+ *   accountant every write there, so these live under /v1/clients like Remove (ADR-343 amends ADR-245 d3):
  *     GET  /v1/clients/vat-periods                                     every active client's period and state, in one read
  *     PUT  /v1/clients/{profileId}/vat-period                          choose how often the client files
  *     POST /v1/clients/{profileId}/vat-periods/{periodKey}/review      confirm, or ask for more with a note
@@ -128,7 +128,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore; baseStore: Ledger
       path: '/v1/profiles/{profileId}/vat-periods/current',
       tags: ['VAT periods'],
       summary: 'The latest VAT period announced for this profile, and where it stands',
-      description: 'MUT-782 (ADR-341). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.215.0-mut782.',
+      description: 'MUT-782 (ADR-343). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema },
       responses: {
@@ -151,7 +151,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore; baseStore: Ledger
       path: '/v1/profiles/{profileId}/vat-periods/{periodKey}/done',
       tags: ['VAT periods'],
       summary: 'All receipts for this period are sent',
-      description: 'MUT-782 (ADR-341). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.215.0-mut782.',
+      description: 'MUT-782 (ADR-343). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: VatPeriodKeyParamSchema },
       responses: {
@@ -181,7 +181,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore; baseStore: Ledger
       path: '/v1/clients/vat-periods',
       tags: ['VAT periods'],
       summary: 'Your active clients: how often each files VAT, and where its latest period stands',
-      description: 'MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.',
+      description: 'MUT-782 (ADR-343). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       responses: {
         200: { description: 'One item per active client', content: { 'application/json': { schema: ClientVatPeriodsResponseSchema } } },
@@ -213,7 +213,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore; baseStore: Ledger
       path: '/v1/clients/{profileId}/vat-period',
       tags: ['VAT periods'],
       summary: 'Choose how often this client files VAT',
-      description: 'MUT-782 (ADR-341). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.215.0-mut782.',
+      description: 'MUT-782 (ADR-343). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema, body: { required: true, content: { 'application/json': { schema: SetVatPeriodKindRequestSchema } } } },
       responses: {
@@ -237,7 +237,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore; baseStore: Ledger
       path: '/v1/clients/{profileId}/vat-periods/{periodKey}/review',
       tags: ['VAT periods'],
       summary: 'Confirm that the receipts are all in, or ask the client for more',
-      description: 'MUT-782 (ADR-341). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client\'s reminder five days out, and lets the client say Done again. Additive since 1.215.0-mut782.',
+      description: 'MUT-782 (ADR-343). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client\'s reminder five days out, and lets the client say Done again. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: VatPeriodKeyParamSchema, body: { required: true, content: { 'application/json': { schema: ReviewVatPeriodRequestSchema } } } },
       responses: {

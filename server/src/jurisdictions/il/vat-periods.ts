@@ -3,7 +3,7 @@ import type { DealerType } from '../../issuing/types.js';
 import { VAT_PERIOD_KINDS, type FilingPeriodKind, type VatPeriod, type VatPeriodKind } from '../../vat-periods/types.js';
 
 /**
- * MUT-782 (ADR-341): the periods an Israeli client files VAT for, as pure functions of a day. No clock, no store.
+ * MUT-782 (ADR-343): the periods an Israeli client files VAT for, as pure functions of a day. No clock, no store.
  * A period's key names it for good (`2026-M10` October, `2026-B5` September and October, `2026-Y`), so a record
  * written for it never moves when the client's period kind changes later.
  */

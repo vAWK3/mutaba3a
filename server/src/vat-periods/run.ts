@@ -6,7 +6,7 @@ import { vatPackFor } from './pack.js';
 import type { VatPeriod, VatPeriodKind } from './types.js';
 
 /**
- * MUT-782 (ADR-341): the daily VAT period sweep, shaped like MUT-767's unclaimed sweep (keyset pages, a per-run cap, a
+ * MUT-782 (ADR-343): the daily VAT period sweep, shaped like MUT-767's unclaimed sweep (keyset pages, a per-run cap, a
  * try/catch per profile, mail idempotency keys, one digest per accountant per day, counts only in the logs).
  *
  *   for each profile with an ACTIVE accountant and a claimed, live owner (pages of `batch`):
@@ -27,7 +27,7 @@ export const VAT_PERIOD_POLICY = {
   /** A scheduler that fires a little early on the day still sends it that day, not the next. */
   followUpGraceMinutes: 60,
   batch: 200,
-  /** Safety cap: at most this many profiles looked at per run; `incomplete` says the run stopped at it and the profiles past it were not reached (TD-374: there is no resume cursor yet). */
+  /** Safety cap: at most this many profiles looked at per run; `incomplete` says the run stopped at it and the profiles past it were not reached (TD-375: there is no resume cursor yet). */
   maxPerRun: 5000,
 } as const;
 
@@ -82,7 +82,7 @@ export async function runVatPeriodSweep(options: VatPeriodSweepOptions): Promise
     after = targets[targets.length - 1]!.organizationId;
     if (targets.length < VAT_PERIOD_POLICY.batch) break;
   }
-  if (summary.incomplete) options.logger.warn({ event: 'vat_period_sweep_incomplete', looked: summary.looked }, 'VAT period sweep stopped at its cap; later profiles were not reached (TD-374)');
+  if (summary.incomplete) options.logger.warn({ event: 'vat_period_sweep_incomplete', looked: summary.looked }, 'VAT period sweep stopped at its cap; later profiles were not reached (TD-375)');
   for (const [accountantUserId, tally] of tallies) {
     if (tally.ended > 0 && (await mailDigest(options, accountantUserId, tally))) summary.digests += 1;
   }

@@ -294,7 +294,7 @@ const envSchema = z.object({
    * POST /v1/accountant/customers answers 404 for everyone (the server deploys dark). Only "true" turns it on.
    */
   ACCOUNTANT_PROVISIONING: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
-  /** MUT-782 (ADR-341): VAT period reminders and "all receipts sent". Off: every route and the daily job answer 404. */
+  /** MUT-782 (ADR-343): VAT period reminders and "all receipts sent". Off: every route and the daily job answer 404. */
   VAT_PERIOD_REMINDERS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-593 (ADR-254 D10): Malafat acting as each person with a delegated token. Off, the token endpoint refuses a

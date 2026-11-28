@@ -1,4 +1,4 @@
--- MUT-782 (ADR-341): VAT period per client profile, each period's reminder and its "all receipts sent" state.
+-- MUT-782 (ADR-343): VAT period per client profile, each period's reminder and its "all receipts sent" state.
 -- Additive only: two enums and two new tables; no existing table or column changes, so old and new code run together.
 -- Rollback: DROP TABLE "vat_period_records"; DROP TABLE "vat_period_settings"; DROP TYPE "VatPeriodState"; DROP TYPE "VatPeriodKind";
 

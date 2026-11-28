@@ -16,6 +16,7 @@ import { DEFAULT_INK, INKS, endsSoon, wholeNumber, type PaperModel } from './set
 import { TwoFactorIssuingPrompt } from '../../twoFactor/TwoFactorIssuingPrompt';
 import { isTwoFactorRefusal } from '../../twoFactor/twoFactor';
 import { useAccountDrawers } from '../../shell/AccountDrawers';
+import { GuideButton } from '../../components/GuideButton';
 
 /** MUT-660: the documents preference choices, in the order the client page offers them. */
 const DOCUMENTS_PREFERENCES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
@@ -506,9 +507,13 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
       {state !== 'connected' && <TwoFactorIssuingPrompt error={refusedForTwoFactor} />}
       <div className="hp-setup-actions">
         {status.data && (state !== 'connected' || ending) && (
-          <Button type="button" onClick={() => void connect()} disabled={busy} data-testid="tax-authority-connect">
-            {t(ending ? 'hosted.invoicing.taxAuthority.reconnect' : 'hosted.invoicing.taxAuthority.connect')}
-          </Button>
+          <>
+            <Button type="button" onClick={() => void connect()} disabled={busy} data-testid="tax-authority-connect">
+              {t(ending ? 'hosted.invoicing.taxAuthority.reconnect' : 'hosted.invoicing.taxAuthority.connect')}
+            </Button>
+            {/* MUT-679: the guide, where Connect is offered (not on a plan without it: that path returned above) */}
+            <GuideButton guide="tax-authority" label={t('hosted.invoicing.taxAuthority.guide')} />
+          </>
         )}
         {state === 'connected' && (
           <Button type="button" variant="ghost" onClick={() => void disconnect()} disabled={busy}>

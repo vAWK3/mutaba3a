@@ -9,7 +9,7 @@ import { ErrorEnvelopeSchema, VatPeriodSweepSummarySchema } from '../schemas.js'
 import { runVatPeriodSweep } from '../vat-periods/run.js';
 
 /**
- * MUT-782 (ADR-341): the daily VAT period sweep (vat-periods/run.ts), by Cloud Scheduler with the job token, on the
+ * MUT-782 (ADR-343): the daily VAT period sweep (vat-periods/run.ts), by Cloud Scheduler with the job token, on the
  * unguarded store. Counts only, never an address. 404 while VAT_PERIOD_REMINDERS is off (`enabled`), after the job token.
  */
 export function vatPeriodSweepRoutes(options: { store: LedgerStore; mailer: Mailer; logger: Logger; settings: SessionSettings; enabled: boolean }): OpenAPIHono<AppEnv> {

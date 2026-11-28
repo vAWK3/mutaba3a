@@ -55,7 +55,7 @@ export const PURGE_PROFILE_TABLES = [
   'tax_authority_connections',
   // MUT-735 (ADR-281): the deleted profile's usage events (the person's own, on any profile, go by subjectKey too).
   'usage_events',
-  // MUT-782 (ADR-341): the profile's chosen VAT period and each announced period's state.
+  // MUT-782 (ADR-343): the profile's chosen VAT period and each announced period's state.
   'vat_period_records',
   'vat_period_settings',
 ] as const;
@@ -156,7 +156,7 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
 export const PURGE_UNKEYED_USER_COLUMNS = [
   'receivables.createdByUserId',
   'usage_events.actorUserId',
-  // MUT-782 (ADR-341): who chose a profile's VAT period, said Done, and reviewed a period; plain ids, no foreign key.
+  // MUT-782 (ADR-343): who chose a profile's VAT period, said Done, and reviewed a period; plain ids, no foreign key.
   'vat_period_settings.setByUserId',
   'vat_period_records.doneByUserId',
   'vat_period_records.reviewedByUserId',

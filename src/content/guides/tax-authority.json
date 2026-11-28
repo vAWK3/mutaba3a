@@ -1,0 +1,40 @@
+{
+  "id": "tax-authority",
+  "surfaces": ["portal", "phone", "web"],
+  "title": { "ar": "الربط بسلطة الضرائب", "en": "Connect to the Tax Authority" },
+  "lead": {
+    "ar": "تحتاج بعض الفواتير إلى رقم تخصيص من سلطة الضرائب. اربط مرة واحدة وتحصل «متابعة» عليه لك.",
+    "en": "Some invoices need an allocation number from the Tax Authority. Connect once and MTB3A gets it for you."
+  },
+  "hero": "guide-tax-hero",
+  "steps": [
+    {
+      "text": { "ar": "افتح «الفوترة» في ملفك واضغط «الربط بسلطة الضرائب».", "en": "Open Invoicing on your profile and press Connect to the Tax Authority." },
+      "scene": "guide-tax-1"
+    },
+    {
+      "text": { "ar": "سجّل الدخول إلى المنطقة الشخصية في سلطة الضرائب بحسابك أنت.", "en": "Sign in to the Tax Authority personal area with your own account." },
+      "scene": "guide-tax-2"
+    },
+    {
+      "text": { "ar": "وافق على وصول «متابعة».", "en": "Approve MTB3A's access." },
+      "scene": "guide-tax-3"
+    },
+    {
+      "text": {
+        "ar": "عند عودتك إلى «متابعة» تظهر في «الفوترة» عبارة «مرتبط بسلطة الضرائب حتى» مع تاريخ.",
+        "en": "Back in MTB3A, Invoicing shows “Connected to the Tax Authority until” and a date."
+      },
+      "scene": "guide-tax-4"
+    }
+  ],
+  "note": { "ar": "أعد الربط كل 90 يومًا.", "en": "Reconnect every 90 days." },
+  "ifStuck": {
+    "ar": "إن انتهى الربط أو لم تتم الموافقة، اضغط «إعادة الربط». ويمكنك دائمًا طلب الرقم من موقع سلطة الضرائب وإدخاله في الفاتورة.",
+    "en": "If the connection ends or isn't approved, press Connect again. You can also request the number on the Tax Authority's site and enter it on the invoice."
+  },
+  "source": {
+    "url": "https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page",
+    "label": { "ar": "صفحة سلطة الضرائب", "en": "The Tax Authority's page" }
+  }
+}

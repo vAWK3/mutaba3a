@@ -168,7 +168,7 @@ const ACCOUNTANT_OPERATIONS = [
   'PUT /v1/accountant/customers/{userId}/email',
   // MUT-766: the activation Checkout for an unclaimed customer.
   'POST /v1/accountant/customers/{userId}/checkout-session',
-  // MUT-782 (ADR-341): VAT periods. The client's Done and read, and the accountant's two writes under /v1/clients.
+  // MUT-782 (ADR-343): VAT periods. The client's Done and read, and the accountant's two writes under /v1/clients.
   'GET /v1/profiles/{profileId}/vat-periods/current',
   'POST /v1/profiles/{profileId}/vat-periods/{periodKey}/done',
   'GET /v1/clients/vat-periods',

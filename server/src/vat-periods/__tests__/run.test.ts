@@ -8,7 +8,7 @@ import type { VatPeriodKind } from '../types.js';
 import { runVatPeriodSweep, VAT_PERIOD_POLICY } from '../run.js';
 
 /**
- * MUT-782 (ADR-341): the daily VAT period sweep. Clock-injected, on the memory store with a recording mailer. A period
+ * MUT-782 (ADR-343): the daily VAT period sweep. Clock-injected, on the memory store with a recording mailer. A period
  * is announced on the first day after it ends (never mid-period, never a stale one), each kind on its own schedule; a
  * second run the same day does nothing; the client's follow-up comes five days later and stops at Done; one digest a
  * day per accountant.

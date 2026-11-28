@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { JOB, accountantHarness, businessOf, json, person, read, shared, type AccountantHarness, type Person } from './helpers/accountants.js';
 
 /**
- * MUT-782 (ADR-341): the client's Done and the accountant's period and review. The accountant never writes through a
+ * MUT-782 (ADR-343): the client's Done and the accountant's period and review. The accountant never writes through a
  * profile (ADR-245 d3); these are session-only routes under /v1/clients, authorised by an ACTIVE grant. The dark flag
  * (VAT_PERIOD_REMINDERS) answers 404 on all of them and on the job.
  */

@@ -562,7 +562,10 @@ export interface FakeApiSeed {
    * invoice of 5,000.00 or more previews MANUAL with `automaticOn: 'solo'`. Solo connects (the stand-in sign-in comes
    * straight back with `taxAuthority=connected`) and, connected, such an invoice gets its number by itself.
    */
-  taxAuthority?: { plan: 'starter' | 'solo'; connected?: boolean };
+  /**
+   * MUT-679 AC3c: `ended` is a connection whose 90 days have run out: the status reads `expired` until the person connects again.
+   */
+  taxAuthority?: { plan: 'starter' | 'solo'; connected?: boolean; ended?: boolean };
 }
 
 /** MUT-660: one due document as the server lists it. `hasTaxDocument` makes marking it answer 409 HAS_TAX_DOCUMENT. */
@@ -961,7 +964,7 @@ export class FakeApi {
   private readonly offerAfterSave: boolean;
   private readonly manualAllocation: boolean;
   /** MUT-736: the Tax Authority here, per the payer's plan; `connected` per profile. */
-  private readonly taxAuthority: { plan: 'starter' | 'solo'; connected: Set<string>; initiallyConnected: boolean } | null;
+  private readonly taxAuthority: { plan: 'starter' | 'solo'; connected: Set<string>; initiallyConnected: boolean; ended: boolean } | null;
   /** MUT-660: what is due, and what was marked not for invoice. */
   private readonly due: { items: DueSeed[]; marked: DueSeed[] };
   private readonly invoiceSplit: FakeApiSeed['invoiceSplit'] | null;
@@ -1008,7 +1011,7 @@ export class FakeApi {
     this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
     this.offerAfterSave = seed.offerAfterSave ?? true;
     this.manualAllocation = seed.manualAllocation ?? false;
-    this.taxAuthority = seed.taxAuthority ? { plan: seed.taxAuthority.plan, connected: new Set(), initiallyConnected: seed.taxAuthority.connected ?? false } : null;
+    this.taxAuthority = seed.taxAuthority ? { plan: seed.taxAuthority.plan, connected: new Set(), initiallyConnected: seed.taxAuthority.connected ?? false, ended: seed.taxAuthority.ended ?? false } : null;
     this.due = { items: [...(seed.documentsDue ?? [])], marked: [] };
     this.invoiceSplit = seed.invoiceSplit ?? null;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
@@ -1999,6 +2002,7 @@ export class FakeApi {
     const plan = { allowed, nextPlan: allowed ? null : 'solo' };
     if (!sub && e.method === 'GET') {
       const connected = this.isConnected(profileId);
+      if (!connected && ta.ended) return json({ state: 'expired', connectedAt: '2026-08-01T10:00:00.000Z', until: '2026-11-01T10:00:00.000Z', environment: 'sandbox', plan });
       if (!connected) return json({ state: 'none', connectedAt: null, until: null, environment: null, plan });
       return json({ state: allowed ? 'connected' : 'suspended', connectedAt: '2026-11-01T10:00:00.000Z', until: '2027-01-30T10:00:00.000Z', environment: 'sandbox', plan });
     }

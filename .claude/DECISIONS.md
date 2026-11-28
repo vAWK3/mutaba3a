@@ -7598,7 +7598,7 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** One coupon per kind means one percent for every plan and currency; a per-plan amount would need one coupon per (kind, plan) and one entry each (the plan's §4 reserve). The live key needs Write on Coupons before the first run (before-release stage 1).
 
-## ADR-341: VAT Periods and "All Receipts Sent": The Accountant's Two Writes Live Under /v1/clients, Never Under a Profile; The Period Rules Are the Country Pack's (MUT-782, epic MUT-762; amends ADR-245 d3; overrides ADR-159 §5 for two mails)
+## ADR-343: VAT Periods and "All Receipts Sent": The Accountant's Two Writes Live Under /v1/clients, Never Under a Profile; The Period Rules Are the Country Pack's (MUT-782, epic MUT-762; amends ADR-245 d3; overrides ADR-159 §5 for two mails)
 
 **Status:** Accepted (2026-11-28, Basel: the cadence, channels and the Done / confirm flow; plan `.claude/designs/MUT-782-783-784-vat-period-reminders.md`). Built 2026-11-28 (server; the portal is MUT-783, the phone MUT-784).
 
@@ -7617,6 +7617,35 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 10. **Reads:** the owner's `GET .../vat-periods/current`, and one desk read `GET /v1/clients/vat-periods` (three queries however many clients). `/v1/clients` and `/v1/me` are unchanged, so no existing consumer moves.
 11. **Dark launch:** `VAT_PERIOD_REMINDERS` (default false; Terraform `vat_period_reminders`, which also creates the scheduler job): off, every route and the job answer 404 (the job after its token). Contract 1.215.0-mut782.
 
-12. **Plan gating (ADR-251):** the accountant's routes check the grant is readable under the Accountant plan (`assertClientReadable` on the base store, as `authenticate()` does: 402 `ACCOUNTANT_PLAN_REQUIRED` past the free client books), and the desk read lists only what `GET /v1/clients` marks readable and not closing. The sweep does not yet (TD-375). A period already announced that reaches a new period's last day covers it, so a kind changed right after an announcement does not mail the same months again; a follow-up due within an hour counts as due. Who acted (`setByUserId`, `doneByUserId`, `reviewedByUserId`) is in `PURGE_UNKEYED_USER_COLUMNS` (R14).
+12. **Plan gating (ADR-251):** the accountant's routes check the grant is readable under the Accountant plan (`assertClientReadable` on the base store, as `authenticate()` does: 402 `ACCOUNTANT_PLAN_REQUIRED` past the free client books), and the desk read lists only what `GET /v1/clients` marks readable and not closing. The sweep does not yet (TD-376). A period already announced that reaches a new period's last day covers it, so a kind changed right after an announcement does not mail the same months again; a follow-up due within an hour counts as due. Who acted (`setByUserId`, `doneByUserId`, `reviewedByUserId`) is in `PURGE_UNKEYED_USER_COLUMNS` (R14).
 
 **Consequences:** the accountant channel gets its first recurring reason to come back each period. Because periods are keyed by name, a later change of kind never rewrites history. A second country adds its own `vat.periods`; nothing in the core names Israel. The filing day and the yearly date are the two facts to confirm with an accountant before the flag is turned on.
+
+## ADR-341: A Guide Is One JSON File With Its Copy Inline, Opened by a URL Key in a Drawer; Done Is the Only "Finished" (MUT-674, epic MUT-672)
+
+**Status**: Accepted (2026-11-28; Basel settled the two flow questions the same day).
+
+**Context**: The portal had nowhere to explain a feature in plain steps, and the phone and the website's help pages (MUT-678) needed the same words. The portal's copy lives in two i18n dictionaries; a guide that needed edits in both plus code could not be read by the phone or the website.
+
+**Decision**:
+1. A guide is `src/content/guides/<id>.json`, copy inline as `{ar, en, he?}`, no code and no i18n keys. `parseGuide` is the only door (it names every problem; it never throws into the UI). CI parses every file and checks that each scene is drawn with its `-rtl` twin.
+2. The registry is a lazy `import.meta.glob`: one small chunk per guide, no registry to edit. The website reads the same files with its own eager glob (MUT-678).
+3. A guide opens by the shell overlay key `?guide=<id>` (ADR-008 pattern), on every page and in both modes; closing keeps the page and its state. An id with no file closes itself; a load failure is Unreachable with Retry.
+4. Done is the footer's one primary button and the only signal of "finished" (`guide_finished`). The cross, Escape and the overlay count nothing. Scrolling to the end was rejected: a four-step guide often fits on screen and would fire on open.
+5. Telemetry (contract 2.15.0): `guide_opened` once per opening (a ref-guarded effect, so React StrictMode's second run is not another opening) and `guide_finished`, one enum property `guide`. The strict guard allows no free text (ADR-090), so the enum lists every portal guide id (dashes as underscores); `guides.test.ts` fails with the exact line to add when a guide file and the enum disagree.
+6. The need-help link is the portal's one `SUPPORT_EMAIL` (`src/hosted/terms.ts`); a guide file carries no address.
+7. 674 ships one draft guide (`tax-authority`) with no button on any screen, because the registry is a build-time glob and the release-QA flow needs a real file. "Copy deck MUT-673 signed off" is a before-release precondition.
+
+**Consequences**: A new portal guide is its file plus one enum value in the contract (a minor bump, a pinned hash, and the Flutter copy of the contract). A guide placed on the phone only (`surfaces` without `portal`) needs no enum value. The mockup's second footer action (a feature action such as Connect) is not built; MUT-679 adds an optional `action` to the same schema.
+
+## ADR-342: A Guide's Button Sits Only Where the Person Can Do What It Teaches, and a Guide May Open Over a Page Drawer (MUT-679, epic MUT-672; extends ADR-341)
+
+**Status**: Accepted (2026-11-28; the plan was reviewed by the founder, who asked for the build).
+
+**Decision**:
+1. A `GuideButton` is shown only where the guide's action is available: the Tax Authority guide's button is beside Connect (step 5: not connected, ended or ending soon) and in the allocation panel when `automaticOn` is null (Solo and above, not yet connected). Never on a plan without the connection (Starter is offered the upgrade, and a guide about connecting would mislead), and never when the status could not be read.
+2. A guide opens over a page drawer (the issue drawer) the way the two-step prompt does (ADR-274 D10): `?guide=` is a shell key, the page drawer's key stays, closing the guide returns to the invoice as it was.
+3. The guide format gains one optional field, `ifStuck` (`{ar, en, he?}`), for "what to do if it goes wrong" (the MUT-673 standard's fourth part), rendered after the note.
+4. There is no expired-connection banner in the portal; the entry for an ended or ending connection is step 5's own lines, which carry the button.
+
+**Consequences**: Each new guide's story decides its own entry points by the same rule. A guide about a plan-gated action never shows its button to a plan without it. The phone shows the same file with MUT-677.

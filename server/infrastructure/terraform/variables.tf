@@ -597,7 +597,7 @@ variable "accountant_provisioning" {
 }
 
 variable "vat_period_reminders" {
-  description = "MUT-782 (ADR-341): sets VAT_PERIOD_REMINDERS=true: when a client's VAT period ends, its owners are asked whether all receipts are sent and the accountant gets a digest; the client says Done, the accountant confirms or asks for more. Adds the daily sweep job (POST /jobs/v1/vat-periods/sweep). false (default) = every route and the job answer 404. Needs the MUT-782 migration applied first and a working mailer."
+  description = "MUT-782 (ADR-343): sets VAT_PERIOD_REMINDERS=true: when a client's VAT period ends, its owners are asked whether all receipts are sent and the accountant gets a digest; the client says Done, the accountant confirms or asks for more. Adds the daily sweep job (POST /jobs/v1/vat-periods/sweep). false (default) = every route and the job answer 404. Needs the MUT-782 migration applied first and a working mailer."
   type        = bool
   default     = false
 }

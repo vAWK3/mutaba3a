@@ -3179,7 +3179,7 @@ export interface LedgerStore {
   accountantGrants: AccountantGrantRepository;
   /** MUT-763: an approved accountant creates a customer's account (own guard class `provision`). */
   provision: ProvisionRepository;
-  /** MUT-782 (ADR-341): a client's VAT period, each period's reminder and its "all receipts sent" state. */
+  /** MUT-782 (ADR-343): a client's VAT period, each period's reminder and its "all receipts sent" state. */
   vatPeriods: VatPeriodRepository;
   /** MUT-560 (ADR-247): one-time links to a period of one profile, opened with a PIN and no account. */
   shareLinks: ShareLinkRepository;
@@ -5607,7 +5607,7 @@ export interface UsageRepository {
   purgeSubject(subjectKey: string): Promise<{ events: number; counters: number }>;
 }
 
-// ---- MUT-782 (ADR-341): VAT periods, period-end reminders and "all receipts sent" ------------------------------------
+// ---- MUT-782 (ADR-343): VAT periods, period-end reminders and "all receipts sent" ------------------------------------
 
 export type VatPeriodState = 'OPEN' | 'CLIENT_DONE' | 'CONFIRMED' | 'MORE_NEEDED';
 

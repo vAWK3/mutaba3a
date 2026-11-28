@@ -12,7 +12,7 @@ Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Bac
 
 ## Facts found in the code that shape the plan
 
-1. **An accountant cannot write through a profile.** ADR-245 d3 refuses every non-GET with `ACCOUNTANT_READ_ONLY` (three layers, the store guard included). So the accountant's two writes (set period, confirm / ask for more) cannot be profile routes. They follow the precedent of `DELETE /v1/clients/{profileId}` (accountants.ts:483): session-only routes under `/v1/clients/{profileId}/…`, authorised by an ACTIVE grant, on the unguarded store, audited on the profile. The client's one write (Done) is a normal owner route on the profile. This needs **ADR-341** (amends ADR-245 d3: "narrow accountant writes live under /v1/clients, never under a profile").
+1. **An accountant cannot write through a profile.** ADR-245 d3 refuses every non-GET with `ACCOUNTANT_READ_ONLY` (three layers, the store guard included). So the accountant's two writes (set period, confirm / ask for more) cannot be profile routes. They follow the precedent of `DELETE /v1/clients/{profileId}` (accountants.ts:483): session-only routes under `/v1/clients/{profileId}/…`, authorised by an ACTIVE grant, on the unguarded store, audited on the profile. The client's one write (Done) is a normal owner route on the profile. This needs **ADR-343** (amends ADR-245 d3: "narrow accountant writes live under /v1/clients, never under a profile").
 2. **Dealer type is optional.** `dealerType` lives on `IssuerDetails`, which a profile may not have. No issuer details → no default; the period stays unset, nobody is pinged, the desk shows "Set period".
 3. **Client = the profile's owners.** Mail goes to the profile's OWNER members; the accountant side is every ACTIVE grant holder (up to 5 per profile), one digest per accountant per day.
 4. **A pattern exists.** MUT-767's `runUnclaimedSweep` (keyset pages, `maxPerRun`, per-row try/catch, mail `idempotencyKey`, one digest per accountant per UTC day, job token route, counts only in logs). 782 copies its shape.
@@ -59,7 +59,7 @@ vat_period_records    id  organizationId (CASCADE)  periodKey  state VatPeriodSt
 | `server/src/email/ports.ts`, `templates/copy.ts`, `look.ts`, `scripts/mail-preview.ts` | templates `vat-period-client` (`reminder` var for the follow-up) and `vat-period-accountant-digest`, ar and en |
 | `server/src/config.ts`, `.env.example`, `app.ts` | `VAT_PERIOD_REMINDERS` |
 | `server/src/schemas.ts`, OpenAPI | schemas; `openapi:check` |
-| `.claude/DECISIONS.md` | ADR-341 |
+| `.claude/DECISIONS.md` | ADR-343 |
 
 ### Routes (all 404 while the flag is off)
 
@@ -132,10 +132,10 @@ Repo `~/Work/Barmajiyat/Mutaba3a/mutaba3a-flutter/mutaba3a`. Existing seams: `li
 
 ## Self-review (no /plan-eng-review skill is installed here, so this is my own adversarial pass)
 
-- **Biggest risk:** the accountant write path. If it were built on the profile routes it would 403; if built loosely it would let any grant holder write. Mitigation: ADR-341, grant check in one place, tests for revoked and other-accountant 404.
+- **Biggest risk:** the accountant write path. If it were built on the profile routes it would 403; if built loosely it would let any grant holder write. Mitigation: ADR-343, grant check in one place, tests for revoked and other-accountant 404.
 - **Wrong-mail risk:** a period rule error mails real clients. Mitigation: pure pack functions with year-edge tests, flag dark, catch-up window, operator dry run can reuse the mail-preview script.
 - **Scope kept out:** push, filing, per-client deadline overrides, weekend shift, owner-set period.
-- **Covers every acceptance criterion** of 782, 783, 784. Added beyond the tickets: dark flag, catch-up window, ADR-341, accountant may confirm from OPEN, unset-period handling. These should be noted on MUT-782.
+- **Covers every acceptance criterion** of 782, 783, 784. Added beyond the tickets: dark flag, catch-up window, ADR-343, accountant may confirm from OPEN, unset-period handling. These should be noted on MUT-782.
 
 ## Business / product impact
 

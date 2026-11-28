@@ -210,3 +210,16 @@ describe('guardEvent: the portal welcome (MUT-513)', () => {
     expect(guarded?.properties).not.toHaveProperty('$raw_user_agent');
   });
 });
+
+describe('the guide events (MUT-674)', () => {
+  it('keeps the guide id of a portal guide_opened and guide_finished', () => {
+    for (const event of ['guide_opened', 'guide_finished']) {
+      expect(guardEvent(capture(event, { guide: 'tax_authority' }), PORTAL)?.properties, event).toMatchObject({ guide: 'tax_authority', surface: 'portal' });
+    }
+  });
+
+  it('drops a guide id the contract does not list, and sends nothing from another surface', () => {
+    expect(guardEvent(capture('guide_opened', { guide: 'someone-private' }), PORTAL)?.properties).not.toHaveProperty('guide');
+    expect(guardEvent(capture('guide_opened', { guide: 'tax_authority' }), LANDING)).toBeNull();
+  });
+});

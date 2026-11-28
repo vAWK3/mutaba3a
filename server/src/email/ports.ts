@@ -195,7 +195,7 @@ export interface TemplateVars {
    */
   'accountant-unclaimed-digest': { waiting: number; removingSoon: number; deskLink: string };
   /**
-   * MUT-782 (ADR-341): to a client profile's owner when a VAT period ends (and again as a follow-up): are all receipts
+   * MUT-782 (ADR-343): to a client profile's owner when a VAT period ends (and again as a follow-up): are all receipts
    * sent? `period` names the months; `dueOn` is the filing day, null where none is stated (a yearly period). No amount.
    */
   'vat-period-client': { businessName: string; period: { kind: 'MONTHLY' | 'BIMONTHLY' | 'YEARLY'; year: number; firstMonth: number; lastMonth: number }; dueOn: CalendarDay | null; link: string; reminder: boolean };

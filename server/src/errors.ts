@@ -108,7 +108,7 @@ export const ERROR_CODES = {
   CLAIM_CODE_LOCKED: 403,
   /** MUT-765 (ACCT-10): a setup action on a customer who has already claimed their account; only the read grant remains. */
   CUSTOMER_CLAIMED: 403,
-  // MUT-782 (ADR-341): the period is past this step (a confirmed period no longer moves).
+  // MUT-782 (ADR-343): the period is past this step (a confirmed period no longer moves).
   VAT_PERIOD_STATE: 409,
   /**
    * MUT-559 (ADR-245, D4): an accountant invite accepted by someone else: neither the invited address nor a colleague

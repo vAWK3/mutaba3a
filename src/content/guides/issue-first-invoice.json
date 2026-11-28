@@ -1,0 +1,33 @@
+{
+  "id": "issue-first-invoice",
+  "surfaces": ["portal", "web"],
+  "title": { "ar": "إصدار أول فاتورة", "en": "Issue your first invoice" },
+  "lead": { "ar": "أصدِر أول مستند من «متابعة».", "en": "Issue your first document from MTB3A." },
+  "hero": "guide-invoice-hero",
+  "steps": [
+    {
+      "text": { "ar": "افتح «الفوترة» في ملفك وأكمِل الإعداد.", "en": "Open Invoicing on your profile and finish the setup." },
+      "scene": "guide-invoice-1"
+    },
+    {
+      "text": { "ar": "اضغط «إصدار مستند».", "en": "Press Issue a document." },
+      "scene": "guide-invoice-2"
+    },
+    {
+      "text": { "ar": "اختر العميل ونوع المستند ثم أضِف البنود.", "en": "Choose the client and the document type, then add the lines." },
+      "scene": "guide-invoice-3"
+    },
+    {
+      "text": { "ar": "راجع المجاميع ثم أصدِر المستند.", "en": "Check the totals and issue." },
+      "scene": "guide-invoice-4"
+    }
+  ],
+  "note": {
+    "ar": "لا يمكن تعديل المستند بعد إصداره، وتُصحَّح الفاتورة الضريبية بإشعار دائن.",
+    "en": "An issued document can't be edited. A tax invoice is corrected with a credit note."
+  },
+  "ifStuck": {
+    "ar": "إن طُلب رقم تخصيص فراجع «الربط بسلطة الضرائب». وإن تعذّر الإصدار فأكمِل إعداد الفوترة.",
+    "en": "If it asks for an allocation number, see Connect to the Tax Authority. If issuing is blocked, finish the invoicing setup."
+  }
+}

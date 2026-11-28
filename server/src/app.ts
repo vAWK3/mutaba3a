@@ -670,7 +670,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   app.route('/', accountantCustomerRoutes({ store, settings: sessions, mailer, logger: deps.logger }));
-  // MUT-782 (ADR-341): the client's Done and the accountant's period and review, on the store the routes check themselves.
+  // MUT-782 (ADR-343): the client's Done and the accountant's period and review, on the store the routes check themselves.
   app.route('/', vatPeriodRoutes({ store, baseStore: deps.store, accountantPlan }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));

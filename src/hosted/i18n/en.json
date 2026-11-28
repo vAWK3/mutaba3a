@@ -2009,6 +2009,12 @@
       "copied": "Copied",
       "failed": "Couldn’t copy. Select the address and copy it yourself."
     },
+    "guide": {
+      "open": "Guide",
+      "done": "Done",
+      "needHelp": "Need help?",
+      "opensInNewTab": "opens in a new tab"
+    },
     "connect": {
       "title": "Connect Claude",
       "rowSub": "Let your own Claude read and add your records",
@@ -2777,6 +2783,7 @@
       "title": "Sharing {profile}",
       "back": "Profiles",
       "entryRow": "Share with your accountant",
+      "guide": "How to invite",
       "manageRow": "Sharing",
       "accountants": {
         "heading": "Accountants",
@@ -3182,6 +3189,7 @@
         "returnedRefused": "The connection wasn't approved. Try again.",
         "endingSoon": "The connection to the Tax Authority ends on {until}. Connect again now.",
         "reconnect": "Connect again",
+        "guide": "How to connect",
         "upgrade": "Upgrade to {plan}",
         "returnedPlan": "Nothing was connected."
       },
@@ -3207,6 +3215,7 @@
       "tabIssued": "Issued",
       "tabFiles": "Files",
       "empty": "No documents issued on this profile yet.",
+      "guide": "How to issue",
       "colDocument": "Document",
       "colClient": "Client",
       "colDate": "Date",

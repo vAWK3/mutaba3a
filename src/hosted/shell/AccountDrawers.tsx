@@ -13,6 +13,7 @@ import { YourDataDrawer } from '../components/YourDataDrawer';
 import { useIsLocalMode } from '../session/mode';
 import { TwoFactorDrawer } from '../twoFactor/TwoFactorDrawer';
 import { PilotWelcomeDrawer } from '../components/PilotWelcomeDrawer';
+import { GuideDrawer } from '../components/GuideDrawer';
 
 /**
  * The shell's account-menu drawers (MUT-237), on every page, beside `ProfileDrawers`.
@@ -54,6 +55,8 @@ export function useAccountDrawers() {
     openTwoFactor: () => go({ twoFactor: true }, false),
     /** MUT-755: the pilot Welcome; it takes the page's entry, so Back never reopens it. */
     openPilotWelcome: () => go({ pilotWelcome: true }, true),
+    /** MUT-674: a guide in its drawer (`?guide=<id>`), on any page. Its own history entry, so Back closes it and the page is as it was. */
+    openGuide: (id: string) => go({ guide: id }, false),
     /** MUT-415: the review after a password change, in Change password's place (Back doesn't reopen the form). */
     reviewPasskeys: () => go({ passkeys: true, review: 'password' }, true),
     close: () => go({}, true),
@@ -64,6 +67,8 @@ export function useAccountDrawers() {
 export function AccountDrawers() {
   const drawers = useAccountDrawers();
   const local = useIsLocalMode();
+  // MUT-674: a guide is static content, so it opens signed out too. Keyed by id: Back between two guides starts the second afresh.
+  if (drawers.state.guide) return <GuideDrawer key={drawers.state.guide} id={drawers.state.guide} onClose={drawers.close} />;
   if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} onReviewPasskeys={drawers.reviewPasskeys} />;
   if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
   // MUT-333: an account's, never this device's; Download my records opens Your data in its place.

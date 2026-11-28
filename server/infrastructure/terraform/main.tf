@@ -53,7 +53,7 @@ locals {
   usage_prune_job = "mutaba3a-usage-prune${local.suffix}"
   # MUT-767 (ADR-300): the daily sweep of accounts an accountant created that nobody claimed.
   accountant_unclaimed_sweep_job = "mutaba3a-accountant-unclaimed-sweep${local.suffix}"
-  # MUT-782 (ADR-341): the daily VAT period reminders (clients and accountants).
+  # MUT-782 (ADR-343): the daily VAT period reminders (clients and accountants).
   vat_period_sweep_job = "mutaba3a-vat-period-sweep${local.suffix}"
   # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
@@ -824,7 +824,7 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
-        # MUT-782 (ADR-341): VAT period reminders and "all receipts sent"; off = those routes and the daily job answer 404.
+        # MUT-782 (ADR-343): VAT period reminders and "all receipts sent"; off = those routes and the daily job answer 404.
         dynamic "env" {
           for_each = var.vat_period_reminders ? { VAT_PERIOD_REMINDERS = "true" } : {}
           content {
@@ -1462,7 +1462,7 @@ resource "google_cloud_scheduler_job" "accountant_unclaimed_sweep" {
   depends_on = [google_project_service.apis]
 }
 
-# MUT-782 (ADR-341): the daily VAT period sweep at 08:00 Jerusalem: on the first day after a client's period ends, its
+# MUT-782 (ADR-343): the daily VAT period sweep at 08:00 Jerusalem: on the first day after a client's period ends, its
 # owners are asked whether all receipts are sent and each accountant gets one digest; a follow-up goes 5 days later
 # while the period is open. Each period is announced once (a unique row), so a retry or a second run sends nothing new.
 # Only with vat_period_reminders: while it is off the route answers 404.

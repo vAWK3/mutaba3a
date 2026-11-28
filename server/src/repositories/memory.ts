@@ -1013,7 +1013,7 @@ export class MemoryLedgerStore implements LedgerStore {
    * MUT-763: an approved accountant creates a customer's account. Every check runs before the first write (the in-memory
    * stand-in for the Postgres transaction), so a refusal or a duplicate leaves nothing behind.
    */
-  /** MUT-782 (ADR-341): the chosen VAT period kind per profile, and each profile's announced periods (key: `${organizationId}|${periodKey}`). */
+  /** MUT-782 (ADR-343): the chosen VAT period kind per profile, and each profile's announced periods (key: `${organizationId}|${periodKey}`). */
   private readonly vatKinds = new Map<string, VatPeriodKind>();
   private readonly vatRecords = new Map<string, VatPeriodRecord>();
 

@@ -95,7 +95,7 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 - **Sweep** (`vat-periods/__tests__/run.test.ts`): one ping per period, none mid-period, none for a stale one; monthly, 2-monthly, yearly (no day) and NONE; the accountant's choice beats the dealer type; unclaimed owners skipped; one digest for forty clients; follow-up once, stops at Done or Confirm, re-armed by Ask for more.
 - **Routes** (`__tests__/routes-vat-periods.test.ts`): the dark flag 404s everything (the job after its token); owner-only Done and read; an accountant credential on the profile reaches nothing; accountant routes need an ACTIVE grant (stranger, owner and revoked accountant get 404); confirm is final (409); the note limit; the desk read; the job through the app.
 - After review: the plan lock (402 on the period and review of a client past the free books; the desk list leaves it out), a kind change after an announcement mails nothing twice, an early scheduler still sends the follow-up, and a purged person's id is forgotten on the profile's records (Memory and Postgres).
-- Not covered: the sweep honouring the plan lock (TD-375), the portal and phone screens (MUT-783, MUT-784) and release QA (the desk has no screen yet).
+- Not covered: the sweep honouring the plan lock (TD-376), the portal and phone screens (MUT-783, MUT-784) and release QA (the desk has no screen yet).
 
 ## Unclaimed-account sweep (MUT-767, 2026-11-27)
 
@@ -5227,3 +5227,25 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 - `data/__tests__/planOffers.test.ts`: `planLaunchOf`, `planOfferFor`, `planComebackOf`, `eligibleOfferOf` with plans only, `renewalPriceOf` on a plan.
 - `components/__tests__/BillingDrawer.mut703.test.tsx`: first-year lines on Yearly, none on Monthly or when ineligible, `expectedOffer` sent, the plan's come-back price.
 - QA `portal.plans.plan-launch-yearly` (spec written, not recorded; recording waits for the epics).
+
+## MUT-674 — the guide viewer (2026-11-28)
+- `src/content/guides/__tests__/guideSchema.test.ts`: a full guide parses; a missing ar or en line, an empty line, no steps, an unknown key at any level, a non-https source, an unknown surface and an id that is not the file name each reject; every problem is reported.
+- `src/content/guides/__tests__/guides.test.ts`: over the real files: each parses, the registry lists exactly the files, every scene is drawn with its `-rtl` twin, the contract's guide enum matches the portal guides (names the line to add), both events are portal-only with one property.
+- `src/hosted/data/__tests__/filters.test.ts`: `?guide=` parses a slug and drops the rest; the key is stripped from a page and carried across a filter change.
+- `src/hosted/components/__tests__/GuideDrawer.test.tsx` (through the real portal): opens over the page, ar right to left with the `-rtl` art, source link attributes, help link, no note or source when absent, ✕ and Escape close and keep the page and count nothing, Done counts finished, an unknown id closes itself, a load failure shows Retry, one opening under StrictMode. `GuideButton.test.tsx`: opens its guide.
+- `src/hosted/analytics/__tests__/portalAnalytics.test.ts`, `src/lib/analytics/__tests__/guard.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts`: `trackGuide` for opted-in people only, the guard keeps a listed guide and drops an unlisted one, contract 2.15.0 pinned.
+- QA `portal.guides.guide-open-read-close` (Arabic then English, the page kept, Done).
+
+## MUT-679 — the Tax Authority guide (2026-11-28)
+- `guideSchema.test.ts`, `GuideDrawer.test.tsx`: `ifStuck` optional, validated, rendered after the note.
+- `guides.test.ts`: no `%`, currency symbol or `NIS`/`ILS` in any guide's copy; scenes need an `-rtl` twin unless declared neutral.
+- `InvoicingSteps.test.tsx`: the guide button shows when not connected, ended or ending soon, not while connected with time left, not on a plan without the connection, not when the status fails; opens `tax-authority`; named in Arabic.
+- `ManualAllocationPanel.test.tsx`: the button only when `automaticOn` is null.
+- `GuideButton.router.test.tsx`: through the real shell, `?guide=` is pushed on the page's search, closing and Back keep it, focus returns to the button.
+- QA `portal.guides.guide-open-read-close` (step 5, Arabic, Escape and focus, English, Done) and `portal.guides.guide-over-issue-drawer`.
+
+## MUT-785 and MUT-786 — the invoice and accountant guides (2026-11-28)
+- `guides.test.ts` over the real files: both parse, scenes drawn with their `-rtl` twin (`guide-invoice-2` declared neutral), both ids in the contract enum, no rate or currency in the copy.
+- `SharingPage.test.tsx`: How to invite in the Accountants column and in the empty page, each opening the accountant guide through the real portal.
+- `analytics-taxonomy.test.ts`: contract 2.16.0 pinned, the three-value `guide` enum.
+- The Issued list and the ready setup are proven by QA `portal.guides.invoice-from-issued-and-setup` (both pages need most of the issuing API stubbed, which the flows already do); `portal.guides.accountant-from-sharing`; `portal.guides.tax-guide-ended-state`.

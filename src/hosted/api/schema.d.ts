@@ -4139,7 +4139,7 @@ export interface paths {
         };
         /**
          * The latest VAT period announced for this profile, and where it stands
-         * @description MUT-782 (ADR-341). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.215.0-mut782.
+         * @description MUT-782 (ADR-343). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.215.0-mut782.
          */
         get: {
             parameters: {
@@ -4200,7 +4200,7 @@ export interface paths {
         put?: never;
         /**
          * All receipts for this period are sent
-         * @description MUT-782 (ADR-341). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.215.0-mut782.
+         * @description MUT-782 (ADR-343). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.215.0-mut782.
          */
         post: {
             parameters: {
@@ -4267,7 +4267,7 @@ export interface paths {
         };
         /**
          * Your active clients: how often each files VAT, and where its latest period stands
-         * @description MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.
+         * @description MUT-782 (ADR-343). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.
          */
         get: {
             parameters: {
@@ -4316,7 +4316,7 @@ export interface paths {
         get?: never;
         /**
          * Choose how often this client files VAT
-         * @description MUT-782 (ADR-341). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.215.0-mut782.
+         * @description MUT-782 (ADR-343). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.215.0-mut782.
          */
         put: {
             parameters: {
@@ -4380,7 +4380,7 @@ export interface paths {
         put?: never;
         /**
          * Confirm that the receipts are all in, or ask the client for more
-         * @description MUT-782 (ADR-341). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client's reminder five days out, and lets the client say Done again. Additive since 1.215.0-mut782.
+         * @description MUT-782 (ADR-343). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client's reminder five days out, and lets the client say Done again. Additive since 1.215.0-mut782.
          */
         post: {
             parameters: {

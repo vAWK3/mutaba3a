@@ -3,7 +3,7 @@ import { GRACE_MS } from '../../accounts/closure.js';
 import type { AuditEventInput, CreateUserInput, LedgerStore } from '../ports.js';
 
 /**
- * MUT-782 storage contract (ADR-341): a client's chosen VAT period, each period announced exactly once, the client's
+ * MUT-782 storage contract (ADR-343): a client's chosen VAT period, each period announced exactly once, the client's
  * Done and the accountant's review as guarded transitions, the follow-up queue, and the profiles the daily sweep walks.
  * Run against the memory store and Postgres.
  */

@@ -873,7 +873,7 @@ export class PrismaLedgerStore implements LedgerStore {
    * profile, the provisioning stamp, the setup link with the claim code's digest, the owned BUSINESS profile and its
    * membership, the ACTIVE read grant and the audit rows. Any failure rolls everything back.
    */
-  /** MUT-782 (ADR-341): VAT periods. Transitions are guarded updates (`updateMany` on the allowed states), so a race can't skip one. */
+  /** MUT-782 (ADR-343): VAT periods. Transitions are guarded updates (`updateMany` on the allowed states), so a race can't skip one. */
   readonly vatPeriods: VatPeriodRepository = {
     settingOf: async (organizationId) => (await this.prisma.vatPeriodSetting.findUnique({ where: { organizationId }, select: { kind: true } }))?.kind ?? null,
     setKind: ({ organizationId, kind, userId, at, audit }) =>
