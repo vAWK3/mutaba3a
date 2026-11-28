@@ -47,8 +47,7 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 - [x] 2026-11-28: two APNs auth keys, Sandbox and Production, team scoped, saved as `~/Work/_keys/apple/Barmajiyat_{Sandbox,Prod}_AuthKey_….p8`.
 - [x] 2026-11-28: Firebase project `mtb3a-barmajiyat` (FCM v1 on), with apps MTB3A Web, iOS and Android (`com.barmajiyat.mutaba3a`).
       Its config files and admin SDK key are in `~/Work/_keys/barmajiyat/firebase/`, never in a repo.
-- [ ] Firebase › Project settings › Cloud Messaging › MTB3A iOS: upload the Sandbox `.p8` as the Development APNs auth key and
-      the Prod `.p8` as the Production one (each with its Key ID, Team ID `4LCWA596X7`).
+- [x] 2026-11-28: Firebase › Cloud Messaging › MTB3A iOS: the Sandbox `.p8` as the Development APNs auth key, the Prod `.p8` as the Production one.
 - [ ] Later: move Malafat's Firebase to the Barmajiyat APNs keys, send a test push, then revoke the three Malafat keys.
 
 ### Then: release, and one switch stage per release
