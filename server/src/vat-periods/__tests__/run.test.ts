@@ -158,6 +158,18 @@ describe('runVatPeriodSweep: when each kind pings', () => {
     expect(await w.sweep(at(2026, 3, 2))).toMatchObject({ announced: 1 });
   });
 
+  it('changing the period applies from the next period and leaves past records alone', async () => {
+    const w = world();
+    const c = await client(w, { dealer: 'LICENSED' });
+    await w.sweep(at(2026, 3, 1));
+    const before = await w.store.vatPeriods.recordOf(c.organizationId, '2026-B1');
+    await w.store.vatPeriods.setKind({ organizationId: c.organizationId, kind: 'MONTHLY', userId: c.accountant.id, at: at(2026, 3, 10) });
+    expect(await w.store.vatPeriods.recordOf(c.organizationId, '2026-B1')).toEqual(before);
+    await w.sweep(at(2026, 4, 1));
+    expect(await w.store.vatPeriods.recordOf(c.organizationId, '2026-M3')).toMatchObject({ state: 'OPEN' });
+    expect(await w.store.vatPeriods.recordOf(c.organizationId, '2026-B1')).toEqual(before);
+  });
+
   it('the accountant\'s chosen kind wins over the dealer type', async () => {
     const w = world();
     await client(w, { dealer: 'LICENSED', kind: 'MONTHLY' });
