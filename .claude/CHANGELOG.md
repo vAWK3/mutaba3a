@@ -28,6 +28,16 @@
 
 ---
 
+## 2026-11-28 · MUT-780 release wiring: `fcm_project_id` Terraform variable
+
+### Added
+- Terraform variable `fcm_project_id` (default empty = push dark) sets `FCM_PROJECT_ID` on the Cloud Run API; `production.tfvars` sets it to `mtb3a-barmajiyat` for the first release. The API's service account still needs `roles/firebasecloudmessaging.admin` on that project (Basel, one `gcloud` command in `docs/operations/before-release.md`); until then sends are refused and logged.
+
+### Changed
+- The phone takes one Firebase API key per platform (`FIREBASE_API_KEY_IOS`, `FIREBASE_API_KEY_ANDROID`), because the console issues separate iOS and Android keys; the before-release note says six values, not five.
+
+---
+
 ## 2026-11-28 · TD-361: Checkout's email no longer stays on an unclaimed account's Stripe customer (MUT-766, ADR-292 R5)
 
 ### Fixed

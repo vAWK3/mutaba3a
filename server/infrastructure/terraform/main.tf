@@ -832,6 +832,14 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
+        # MUT-780 (ADR-350): phone push through Firebase Cloud Messaging; unset = push is dark.
+        dynamic "env" {
+          for_each = var.fcm_project_id != "" ? { FCM_PROJECT_ID = var.fcm_project_id } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-764..767 (ADR-292): an approved accountant creates customers' accounts; off = those routes answer 404.
         dynamic "env" {
           for_each = var.accountant_provisioning ? { ACCOUNTANT_PROVISIONING = "true" } : {}
