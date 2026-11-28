@@ -7572,6 +7572,16 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 2. The card (`PilotMilestones` in the shell, signed in) shows the `milestone-first-scan` / `milestone-first-invoice` scene with `motion-milestone` exactly, two words, a 44 px close; it leaves after 4 s. Reduced motion shows the still. Pilot only: the billing read happens only for `mayBeOnPilot`.
 3. Billing's cache is invalidated after a receipt lands on an expense (the library upload already did) and after a document is issued, so the next read sees the first (and the plan meters move).
 
+## ADR-333: A Pilot Tester's Yes to Watched Sessions Is One Dated Column on the Person, Given in the Welcome or by the Operator's Grant (MUT-777, epic MUT-751; Basel 2026-11-27, plan open question 5)
+
+**Status:** Accepted (2026-11-27; Basel's answer to open question 5; built without Basel).
+
+**Decision:**
+1. `users.pilotWatchConsentAt` (nullable; migration `20261127230000_mut777_pilot_watch_consent`, after `20261127210000_mut752_pilot_grants`; API 1.214.0-mut777). NULL = not asked or no. The first yes is kept (conditional update, like the Welcome flag). No withdrawal flow yet: a tester who takes it back tells us, and the operator stops watching (TD-372).
+2. Two ways in: the tester ticks "You may watch and record my sessions in this pilot" in the Welcome (off by default; `POST /v1/billing/pilot-watch-consent`), or the operator records it on the pilot grant (`watchConsent: true`, console checkbox or `billing:grant --watch-consent`), only with a cohort (422 `CONSENT_NEEDS_PILOT`), audited in the grant's metadata.
+3. Shown: `GET /v1/billing` `pilot.watchConsentAt`, and the operator's Accounts row (`pilot.watchConsentAt`: "✓ Agreed to watching · <date>" or "– Not agreed to watching"). The runbook's watched-session script checks it first. PostHog session replay stays off.
+4. The privacy draft (MUT-732, `docs/legal/drafts/privacy-policy-2026-11-25.*.json`) gains `pilotSessions`, with a [TODO] for how long recordings are kept.
+
 ## ADR-340: Offers Per Plan: One Coupon per Kind on Solo, Business and Firm, Made Only by the Catalog Script; Dropped on an Upgrade, Kept Through a Downgrade (MUT-703, epic MUT-701; amends ADR-237 d1/d3/d4, ADR-238 d2, ADR-240 d5/d7, ADR-243 d1/d8, ADR-291 d6)
 
 **Status:** Accepted (2026-11-27; plan `.claude/designs/mut-703-offers-plan.md`, Basel approved all 12 §13 defaults; spikes S1/S2 in the plan's "Build decisions").

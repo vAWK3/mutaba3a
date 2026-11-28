@@ -18,6 +18,10 @@
 
 ## Open Debt
 
+### TD-372: Pilot watched-session consent has no withdrawal in the product (MUT-777, 2026-11-27)
+
+The yes is stored once (`users.pilotWatchConsentAt`); there is no "take it back" control. A tester who withdraws tells us and the operator stops watching; clearing the column needs a script. Add a You › Account switch if a tester asks. Recording retention is a [TODO] in the privacy draft.
+
 ### TD-371: The portal-selfservice QA API keeps STARTER_PLAN and OPEN_SIGNUP off (Switch rollout, 2026-11-27)
 **Status**: Open (2026-11-27)
 - **What:** dev (`server/.env.example`) runs the production target with every switch on. `qa/support/selfservice-live.mjs` turns on all of them except `STARTER_PLAN` and `OPEN_SIGNUP`. Several recorded flows still expect the 14-day trial step or a waiting sign-up: `signup.create`, `signup.review-declined`, `operator.signups-approve` and `-decline`, `mail.mail-directional-art`, and the two `malafat-delegation` sign-ins (`passTrialWelcome`).

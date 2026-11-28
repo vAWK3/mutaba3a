@@ -101,6 +101,7 @@ describe('MUT-752 GET /v1/billing pilot', () => {
       welcomeSeenAt: null,
       firstScanAt: null,
       firstInvoiceAt: null,
+      watchConsentAt: null,
       pricesExpected: true,
       plans: [
         { plan: 'solo', expectedMonthly: { ILS: 3900, USD: 1200 }, limits: { businesses: 1, partners: 0, documentsPerMonth: 50, scansPerMonth: 100 } },

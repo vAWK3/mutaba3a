@@ -5080,6 +5080,15 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/operator/__tests__/pilot.test.ts` | chip: ends / N days left (14) / Ended; no pilot; cohort slug rule |
 | Console | `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` | the filter in the address and the request; chip, accountant, ticks only with the filter; grant with cohort and accountant by email (unknown email refused before sending); slug and accountant-without-cohort errors |
 
+## MUT-777 — the pilot tester's yes to watched sessions (2026-11-27, ADR-333)
+
+| Level | File | What |
+|---|---|---|
+| Route | `server/src/__tests__/billing-pilot-consent.test.ts` | null until a yes; the tester's yes kept at its first instant; 401 signed out; the operator's grant records and audits it and the Accounts row shows it; 422 without a cohort and nothing granted; `false` records nothing |
+| Store contract | `store-contract-billing.ts` (memory and Postgres) | once per person, first instant kept, unknown null, carried on `listForOperator` |
+| Migration | `migration-mut777.test.ts` (Postgres) | after the pilot migration; old people null; schema matches |
+| Portal | `PilotWelcome.test.tsx`, `OperatorAccountPage.test.tsx` | the tick is off by default and sends nothing unticked; ticked sends once; not asked again once recorded; the Accounts line; the grant drawer sends `watchConsent` |
+
 ## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
 
 | Layer | File | Covers |

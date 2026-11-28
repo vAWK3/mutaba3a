@@ -489,6 +489,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly paidTrials = new Map<string, { offeredAt: Date | null; usedAt: Date | null }>();
   /** MUT-752: users.pilotWelcomeSeenAt. */
   private readonly pilotWelcomes = new Map<string, Date>();
+  /** MUT-777: users.pilotWatchConsentAt. */
+  private readonly pilotWatchConsents = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
   private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
@@ -778,6 +780,7 @@ export class MemoryLedgerStore implements LedgerStore {
         user: { ...u },
         features: [...this.featureGrants.values()].filter((g) => g.userId === u.id && g.revokedAt === null && isFeature(g.feature)).map((g) => g.feature).sort(),
         pilotGrants: pilotGrantsOf(u.id).map((g) => ({ cohort: g.cohort!, createdAt: g.createdAt, expiresAt: g.expiresAt, revokedAt: g.revokedAt, referredBy: referrer(g.referredByUserId) })),
+        pilotWatchConsentAt: this.pilotWatchConsents.get(u.id) ?? null,
       }));
       const last = page.at(-1);
       return { items, nextCursor: rows.length > limit && last ? { lastSignInAt: last.lastSignInAt, createdAt: last.createdAt, id: last.id } : null };
@@ -5091,6 +5094,13 @@ export class MemoryLedgerStore implements LedgerStore {
     hasLivePilot: async (userId, at) =>
       [...this.grants.values()].some((g) => g.userId === userId && g.cohort !== null && g.tier !== 'ACCOUNTANT' && !g.revokedAt && g.expiresAt !== null && g.expiresAt > at),
     pilotWelcomeSeenOf: async (userId) => this.pilotWelcomes.get(userId) ?? null,
+    pilotWatchConsentOf: async (userId) => this.pilotWatchConsents.get(userId) ?? null,
+    markPilotWatchConsent: async (userId, at) => {
+      if (!this.people.has(userId)) return null;
+      const yes = this.pilotWatchConsents.get(userId) ?? at;
+      this.pilotWatchConsents.set(userId, yes);
+      return yes;
+    },
     markPilotWelcomeSeen: async (userId, at) => {
       if (!this.people.has(userId)) return null;
       const seen = this.pilotWelcomes.get(userId) ?? at;

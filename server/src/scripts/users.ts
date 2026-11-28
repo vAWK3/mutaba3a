@@ -84,7 +84,8 @@ const USAGE = [
   '  firm-disable --organization-id <uuid>',
   '  firm-decline --organization-id <uuid>',
   '  billing-grant  (--email <email> | --organization-id <uuid>) --tier SOLO|BUSINESS|FIRM|FREELANCER|ACCOUNTANT --reason <text> [--expires <ISO date-time>]',
-  '                 [--cohort <slug> [--accountant <email>]]   a pilot (MUT-752): a person only, ends in 60 days unless --expires',
+  '                 [--cohort <slug> [--accountant <email>] [--watch-consent]]   a pilot (MUT-752): a person only, ends in 60 days unless --expires;',
+  '                 --watch-consent records the tester\'s yes to watched sessions (MUT-777)',
   '          covers the person\'s own profiles, or one profile (MUT-358); a pilot user gets one until their Stripe subscription is linked',
   '  billing-revoke --grant-id <uuid>',
   '  billing-grants [--email <email> | --organization-id <uuid>] [--active]',
@@ -371,7 +372,7 @@ const FEATURE_HANDLERS: Record<Extract<Command, `feature-${string}`>, (ctx: Hand
 };
 
 const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
-  'billing-grant': async ({ client, need, optional, out }) => {
+  'billing-grant': async ({ client, need, optional, flag, out }) => {
     const email = optional('email');
     const organizationId = optional('organization-id');
     if ((email === undefined) === (organizationId === undefined)) throw new CliError('give exactly one of --email and --organization-id');
@@ -379,10 +380,13 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     const cohort = optional('cohort');
     const accountant = optional('accountant');
     if (accountant !== undefined && cohort === undefined) throw new CliError('--accountant names a pilot\'s referring accountant: give --cohort too');
+    const watchConsent = flag('watch-consent');
+    if (watchConsent && cohort === undefined) throw new CliError('--watch-consent is a pilot tester\'s yes: give --cohort too');
     const target = email ? { userId: (await client.userByEmail(email)).id } : { organizationId };
     const pilot = {
       ...(cohort !== undefined ? { cohort } : {}),
       ...(accountant !== undefined ? { referredByUserId: (await client.userByEmail(accountant)).id } : {}),
+      ...(watchConsent ? { watchConsent: true } : {}),
     };
     const grant = await client.call<GrantRow>('POST', '/admin/v1/billing/grants', { ...target, tier: need('tier'), reason: need('reason'), ...(expires ? { expiresAt: expires } : {}), ...pilot });
     out(`granted: ${describeGrant(grant)}`);

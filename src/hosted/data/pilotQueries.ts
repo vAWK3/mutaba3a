@@ -19,6 +19,20 @@ export function usePilot(): { pilot: BillingPilot | null; billing: BillingOvervi
   return { pilot: billingPilotOf(data), billing: data, settled: !enabled || billing.isSuccess || billing.isError };
 }
 
+/** MUT-777 (ADR-333): the tester said yes to watched sessions (in the Welcome); the cache says so once it is stored. */
+export function usePilotWatchConsent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.pilotWatchConsent(),
+    onSuccess: ({ watchConsentAt }) => {
+      client.setQueryData<BillingOverview>(BILLING_KEY, (old) => {
+        const pilot = billingPilotOf(old);
+        return old && pilot ? { ...old, pilot: { ...pilot, watchConsentAt } } : old;
+      });
+    },
+  });
+}
+
 /**
  * MUT-755 (ADR-296): the Welcome was closed. The cached billing says so at once, so the Welcome never opens again in
  * this tab even if the request fails (then it comes back on the next visit, which is the safe side).

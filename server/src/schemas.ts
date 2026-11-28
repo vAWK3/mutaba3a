@@ -345,6 +345,12 @@ export const EntitlementGrantSchema = z
 const PilotGrantFields = {
   cohort: z.string().min(1).max(64).optional(),
   referredByUserId: z.string().uuid().optional(),
+  /**
+   * MUT-777 (ADR-333): the tester said yes, once, to being watched and recorded in later watched sessions (asked when
+   * they joined). Only with `cohort`; recorded on the person with this instant (an earlier yes is kept). Additive since
+   * 1.214.0-mut777.
+   */
+  watchConsent: z.boolean().optional(),
 };
 
 /** POST /admin/v1/billing/grants: exactly one of userId, userEmail and organizationId. */
@@ -716,6 +722,8 @@ export const BillingPilotSchema = z
      */
     firstScanAt: z.string().datetime().nullable().optional(),
     firstInvoiceAt: z.string().datetime().nullable().optional(),
+    /** MUT-777 (ADR-333): the tester's yes to watched sessions, and when; null = not asked or no. Additive since 1.214.0-mut777. */
+    watchConsentAt: z.string().datetime().nullable().optional(),
     pricesExpected: z.boolean(),
     plans: z.array(
       z.object({
@@ -734,6 +742,9 @@ export const BillingPilotSchema = z
 export const BillingPilotEndedSchema = z.object({ cohort: z.string(), endedAt: z.string().datetime() }).openapi('BillingPilotEnded');
 
 export const PilotWelcomeSeenSchema = z.object({ welcomeSeenAt: z.string().datetime() }).openapi('PilotWelcomeSeen');
+
+/** MUT-777 (ADR-333): the tester's yes to watched sessions, as recorded (the first one kept). */
+export const PilotWatchConsentSchema = z.object({ watchConsentAt: z.string().datetime() }).openapi('PilotWatchConsent');
 
 export const BillingOverviewSchema = z
   .object({
@@ -2288,6 +2299,8 @@ export const OperatorAccountListItemSchema = z
           startedAt: z.string().datetime(),
           endsAt: z.string().datetime(),
           referredBy: z.union([z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string() }), z.null()]),
+          /** MUT-777 (ADR-333): the tester's yes to watched sessions, and when; null = not asked or no. Additive since 1.214.0-mut777. */
+          watchConsentAt: z.string().datetime().nullable().optional(),
         }),
         z.null(),
       ])

@@ -26,6 +26,11 @@ function portal(path: string, opts: { pilot?: BillingPilot | null; entitlement?:
   const api = stubApi({
     'GET /v1/me': () => ok(me([personal], opts.locale ?? 'en')),
     'GET /v1/billing': () => ok(overview(current)),
+    'POST /v1/billing/pilot-watch-consent': () => {
+      const at = current?.watchConsentAt ?? new Date().toISOString();
+      if (current) current = { ...current, watchConsentAt: at };
+      return ok({ watchConsentAt: at });
+    },
     'POST /v1/billing/pilot-welcome': () => {
       const at = current?.welcomeSeenAt ?? new Date().toISOString();
       if (current) current = { ...current, welcomeSeenAt: at };
@@ -89,6 +94,31 @@ describe('the pilot Welcome (MUT-755)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'أهلًا بك' });
     expect(within(dialog).getByText(/مجانًا حتى .*كانون الثاني/)).toBeInTheDocument();
     expect(dialog.querySelector('[data-scene-art="pilot-welcome-1-rtl"]')).not.toBeNull();
+  });
+});
+
+describe('the yes to watched sessions in the Welcome (MUT-777)', () => {
+  it('is off until ticked; closing without it records no yes', async () => {
+    const { user, api } = portal(`/p/${ORG_B}`);
+    const dialog = await screen.findByRole('dialog', { name: 'Welcome' });
+    expect(within(dialog).getByRole('checkbox', { name: 'You may watch and record my sessions in this pilot' })).not.toBeChecked();
+    await user.click(within(dialog).getByRole('button', { name: 'Later' }));
+    await waitFor(() => expect(api.count('POST /v1/billing/pilot-welcome')).toBe(1));
+    expect(api.count('POST /v1/billing/pilot-watch-consent')).toBe(0);
+  });
+
+  it('ticked, closing records the yes once', async () => {
+    const { user, api } = portal(`/p/${ORG_B}`);
+    const dialog = await screen.findByRole('dialog', { name: 'Welcome' });
+    await user.click(within(dialog).getByRole('checkbox', { name: 'You may watch and record my sessions in this pilot' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Start with a receipt' }));
+    await waitFor(() => expect(api.count('POST /v1/billing/pilot-watch-consent')).toBe(1));
+  });
+
+  it('is not asked again once the yes is recorded (the operator gave it)', async () => {
+    portal(`/p/${ORG_B}`, { pilot: pilot({ watchConsentAt: iso(-1) }) });
+    const dialog = await screen.findByRole('dialog', { name: 'Welcome' });
+    expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });
 

@@ -358,6 +358,9 @@ model User {
   /// MUT-752 (ADR-296, eng review D2): when the pilot Welcome was closed; NULL = not yet. On the person, not the grant,
   /// so an extension (revoke + new grant) never shows it again.
   pilotWelcomeSeenAt              DateTime?
+  /// MUT-777 (ADR-333): when the pilot tester said yes, once, to being watched and recorded in later watched sessions
+  /// (the Welcome, or the operator's grant on their behalf); NULL = not asked or no. The first yes is kept.
+  pilotWatchConsentAt             DateTime?
   createdAt                       DateTime
   updatedAt                       DateTime
 

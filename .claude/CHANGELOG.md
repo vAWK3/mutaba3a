@@ -46,6 +46,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.214.0-mut777, ADR-333, migration)
+
+### Added
+- Server: `users.pilotWatchConsentAt` (migration `20261127230000_mut777_pilot_watch_consent`), `pilotWatchConsentOf` / `markPilotWatchConsent` in both stores, `POST /v1/billing/pilot-watch-consent`, `pilot.watchConsentAt` on `GET /v1/billing` and on the operator's Accounts rows, `watchConsent` on both grant create requests (pilot only) and `billing:grant --watch-consent`.
+- Portal: the Welcome's consent tick (off by default); the grant drawer's "The tester agreed…" tick; the Accounts row says whether and when.
+- Docs: runbook §1.13 checks the yes before a watched session; privacy draft `pilotSessions` (en, ar).
+
+### Technical
+- Tests: `server/src/__tests__/billing-pilot-consent.test.ts`, `store-contract-billing.ts` (MUT-777), `migration-mut777.test.ts` (Postgres), `route-security.test.ts`; `PilotWelcome.test.tsx`, `OperatorAccountPage.test.tsx`. OpenAPI and portal types regenerated.
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-757 console half: the Pilot filter, chip, accountant and ticks; the grant form's pilot
 
 ### Added

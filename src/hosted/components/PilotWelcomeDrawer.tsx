@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
 import { useLanguage, useT } from '../../lib/i18n/core';
-import { usePilot, usePilotWelcomeSeen } from '../data/pilotQueries';
+import { usePilot, usePilotWatchConsent, usePilotWelcomeSeen } from '../data/pilotQueries';
 import { formatLongDay } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
 import { useMe, useOptionalProfile } from '../session/me';
@@ -28,6 +28,9 @@ export function PilotWelcomeDrawer({ onClose }: { onClose: () => void }) {
   const { language } = useLanguage();
   const { pilot, settled } = usePilot();
   const seen = usePilotWelcomeSeen();
+  // MUT-777 (ADR-333): the one yes to watched sessions, asked here when the tester joins; off until they tick it.
+  const consent = usePilotWatchConsent();
+  const [agree, setAgree] = useState(false);
   const navigate = useNavigate();
   const receiptsProfileId = useReceiptsProfileId();
   // Kept from the first read: closing marks it seen in the cache, and the drawer must not change under the person.
@@ -41,12 +44,17 @@ export function PilotWelcomeDrawer({ onClose }: { onClose: () => void }) {
   }, [nothingToShow, onClose]);
   if (!shown || nothingToShow) return null;
 
-  const close = () => {
+  const asked = shown.watchConsentAt === null || shown.watchConsentAt === undefined;
+  const record = () => {
     if (!seen.isPending && !seen.isSuccess) seen.mutate();
+    if (asked && agree && !consent.isPending && !consent.isSuccess) consent.mutate();
+  };
+  const close = () => {
+    record();
     onClose();
   };
   const start = () => {
-    if (!seen.isPending && !seen.isSuccess) seen.mutate();
+    record();
     if (receiptsProfileId) void navigate({ to: '/p/$profileId/expenses/receipts', params: { profileId: receiptsProfileId } } as never);
     else onClose();
   };
@@ -77,6 +85,12 @@ export function PilotWelcomeDrawer({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ol>
+        {asked && (
+          <label className="hp-pilot-welcome-consent">
+            <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
+            <span>{t('hosted.pilotWelcome.consent')}</span>
+          </label>
+        )}
       </div>
     </Drawer>
   );

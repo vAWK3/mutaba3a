@@ -535,8 +535,8 @@ describe('the pilot on Accounts (MUT-757)', () => {
   const accountant = { id: ACCOUNTANT, email: 'nasser@acct.example', displayName: 'Nasser & Co' };
   const ROWS = [
     rowOf('00000000-0000-4000-8000-000000000001', 'lina@studio.example', { cohort: 'dec-2026', startedAt: at(-10), endsAt: '2027-01-27T10:00:00.000Z', referredBy: accountant }, { firstScanAt: at(-9), firstInvoiceAt: at(-8) }),
-    rowOf('00000000-0000-4000-8000-000000000002', 'omar@studio.example', { cohort: 'dec-2026', startedAt: at(-50), endsAt: at(9), referredBy: accountant }, { firstScanAt: at(-40), firstInvoiceAt: null }),
-    rowOf('00000000-0000-4000-8000-000000000003', 'rami@studio.example', { cohort: 'dec-2026', startedAt: at(-70), endsAt: at(-1), referredBy: null }, { firstScanAt: null, firstInvoiceAt: null }),
+    rowOf('00000000-0000-4000-8000-000000000002', 'omar@studio.example', { cohort: 'dec-2026', startedAt: at(-50), endsAt: at(9), referredBy: accountant, watchConsentAt: null }, { firstScanAt: at(-40), firstInvoiceAt: null }),
+    rowOf('00000000-0000-4000-8000-000000000003', 'rami@studio.example', { cohort: 'dec-2026', startedAt: at(-70), endsAt: at(-1), referredBy: null, watchConsentAt: '2026-10-01T09:00:00.000Z' }, { firstScanAt: null, firstInvoiceAt: null }),
   ];
   const listed: Handler = (request) => {
     const pilotOn = request.url.searchParams.get('pilot') === '1';
@@ -555,7 +555,11 @@ describe('the pilot on Accounts (MUT-757)', () => {
     await waitFor(() => expect(locationOf(router)).toBe('/operator/accounts?pilot=1'));
     expect(api.calls.some((c) => c.url.pathname === '/v1/operator/accounts' && c.url.searchParams.get('pilot') === '1')).toBe(true);
     const lines = (await screen.findAllByTestId('pilot-line')).map((l) => l.textContent);
-    expect(lines).toEqual(['Accountant: Nasser & Co · ✓ Scan · ✓ Invoice', 'Accountant: Nasser & Co · ✓ Scan · – Invoice', '– Scan · – Invoice']);
+    expect(lines).toEqual([
+      'Accountant: Nasser & Co · ✓ Scan · ✓ Invoice',
+      'Accountant: Nasser & Co · – Not agreed to watching · ✓ Scan · – Invoice',
+      expect.stringMatching(/^✓ Agreed to watching · .+ · – Scan · – Invoice$/),
+    ]);
     const filtered = screen.getByRole('list', { name: 'Accounts' });
     expect(within(filtered).getByText('9 days left')).toHaveClass('badge-warning');
     expect(within(filtered).getByText('Ended')).toBeInTheDocument();
@@ -582,9 +586,11 @@ describe('the pilot on Accounts (MUT-757)', () => {
 
     await user.clear(drawer.getByLabelText("Referring accountant's email"));
     await user.type(drawer.getByLabelText("Referring accountant's email"), 'nasser@acct.example');
+    // MUT-777: the tester's yes, recorded on their behalf.
+    await user.click(drawer.getByRole('checkbox', { name: 'The tester agreed to watched and recorded sessions' }));
     await user.click(drawer.getByRole('button', { name: 'Grant' }));
     await toasted('Coverage granted to sara@studio.example');
-    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'BUSINESS', reason: 'pilot Nasser', cohort: 'dec-2026', referredByUserId: ACCOUNTANT });
+    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'BUSINESS', reason: 'pilot Nasser', cohort: 'dec-2026', referredByUserId: ACCOUNTANT, watchConsent: true });
   });
 
   it('says what is wrong before sending: a cohort that is not a slug, an accountant without a cohort', async () => {

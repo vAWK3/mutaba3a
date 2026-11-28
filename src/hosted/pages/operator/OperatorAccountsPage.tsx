@@ -160,8 +160,13 @@ function PilotChip({ pilot }: { pilot: OperatorPilot }) {
 /** MUT-757: the referring accountant, and with the Pilot filter on, the first scan and first invoice ticks. */
 function PilotLine({ pilot, milestones }: { pilot: OperatorPilot; milestones: OperatorAccountListItem['milestones'] }) {
   const t = useT();
+  const { language } = useLanguage();
   const parts: string[] = [];
   if (pilot.referredBy) parts.push(t('hosted.operator.pilot.accountant', { name: pilot.referredBy.displayName || pilot.referredBy.email }));
+  // MUT-777 (ADR-333): whether the tester said yes to watched sessions, and when (a server older than 1.201.0 sends nothing).
+  if (pilot.watchConsentAt !== undefined) {
+    parts.push(pilot.watchConsentAt ? `✓ ${t('hosted.operator.pilot.watched', { date: dayText(pilot.watchConsentAt, language) })}` : `– ${t('hosted.operator.pilot.notWatched')}`);
+  }
   if (milestones) {
     parts.push(`${milestones.firstScanAt ? '✓' : '–'} ${t('hosted.operator.pilot.scan')}`);
     parts.push(`${milestones.firstInvoiceAt ? '✓' : '–'} ${t('hosted.operator.pilot.invoice')}`);

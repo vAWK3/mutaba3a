@@ -221,6 +221,18 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(await store.billing.pilotWelcomeSeenOf(randomUUID())).toBeNull();
     });
 
+    it('MUT-777: the yes to watched sessions is recorded once per person; the first instant is kept; the operator list carries it', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      expect(await store.billing.pilotWatchConsentOf(user.id)).toBeNull();
+      expect(await store.billing.markPilotWatchConsent(user.id, at(3))).toEqual(at(3));
+      expect(await store.billing.markPilotWatchConsent(user.id, at(9))).toEqual(at(3));
+      expect(await store.billing.pilotWatchConsentOf(user.id)).toEqual(at(3));
+      expect(await store.billing.markPilotWatchConsent(randomUUID(), at(3))).toBeNull();
+      const page = await store.users.listForOperator({ q: null, limit: 50, cursor: null });
+      expect(page.items.find((i) => i.user.id === user.id)?.pilotWatchConsentAt).toEqual(at(3));
+    });
+
     it('MUT-565: an ACCOUNTANT grant names a person, never a profile (the CHECK, in both stores)', async () => {
       const store = await makeStore();
       const { user, personalOrganization } = await store.users.create(userInput());

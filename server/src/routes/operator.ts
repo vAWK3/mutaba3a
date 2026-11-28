@@ -419,7 +419,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       const body = c.req.valid('json');
       assertFutureExpiry(body.expiresAt, c.get('now')());
       const user = await accounts.mustGet(userId);
-      const grant = await grants.create({ target: { userId: user.id, organizationId: null }, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt, cohort: body.cohort, referredByUserId: body.referredByUserId }, contextOf(c));
+      const grant = await grants.create({ target: { userId: user.id, organizationId: null }, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt, cohort: body.cohort, referredByUserId: body.referredByUserId, watchConsent: body.watchConsent }, contextOf(c));
       return c.json(serializeGrant(grant), 201);
     },
   );

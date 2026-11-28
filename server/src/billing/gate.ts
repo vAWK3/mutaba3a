@@ -64,6 +64,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/billing/over-cap-gift': 'open',
   // MUT-752: closing the pilot Welcome is the person's own onboarding.
   'POST /v1/billing/pilot-welcome': 'open',
+  // MUT-777 (ADR-333): the tester's yes to watched sessions is theirs to give whatever their standing.
+  'POST /v1/billing/pilot-watch-consent': 'open',
   // MUT-731 (ADR-284): choosing Starter or the active business is how a read-only person writes again; the trial step
   // shown is the person's own onboarding.
   'POST /v1/billing/starter': 'open',

@@ -2415,7 +2415,10 @@
         "accountantNeedsCohort": "Add a pilot cohort first.",
         "accountantUnknown": "No account with this email.",
         "accountantRefused": "This account can't be the accountant.",
-        "defaultEnd": "Ends in 60 days"
+        "defaultEnd": "Ends in 60 days",
+        "watched": "Agreed to watching · {date}",
+        "notWatched": "Not agreed to watching",
+        "consentLabel": "The tester agreed to watched and recorded sessions"
       }
     },
     "welcome": {
@@ -3654,7 +3657,8 @@
         "tell": "Tell us what is unclear"
       },
       "later": "Later",
-      "start": "Start with a receipt"
+      "start": "Start with a receipt",
+      "consent": "You may watch and record my sessions in this pilot"
     },
     "pilot": {
       "milestone": {

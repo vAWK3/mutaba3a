@@ -540,6 +540,7 @@ export class PrismaLedgerStore implements LedgerStore {
           user: toUser(row),
           features: featureGrants.map((g) => g.feature),
           pilotGrants: entitlementGrants.map((g) => ({ ...g, cohort: g.cohort! })),
+          pilotWatchConsentAt: row.pilotWatchConsentAt,
         })),
         nextCursor: rows.length > limit && last ? { lastSignInAt: last.lastSignInAt, createdAt: last.createdAt, id: last.id } : null,
       };
@@ -4084,6 +4085,12 @@ export class PrismaLedgerStore implements LedgerStore {
     hasLivePilot: async (userId, at) =>
       (await this.prisma.entitlementGrant.count({ where: { userId, cohort: { not: null }, tier: { not: 'ACCOUNTANT' }, revokedAt: null, expiresAt: { gt: at } }, take: 1 })) > 0,
     pilotWelcomeSeenOf: async (userId) => (await this.prisma.user.findUnique({ where: { id: userId }, select: { pilotWelcomeSeenAt: true } }))?.pilotWelcomeSeenAt ?? null,
+    pilotWatchConsentOf: async (userId) => (await this.prisma.user.findUnique({ where: { id: userId }, select: { pilotWatchConsentAt: true } }))?.pilotWatchConsentAt ?? null,
+    markPilotWatchConsent: async (userId, at) => {
+      // Conditional, like the Welcome: the first yes is the one kept.
+      await this.prisma.user.updateMany({ where: { id: userId, pilotWatchConsentAt: null }, data: { pilotWatchConsentAt: at } });
+      return (await this.prisma.user.findUnique({ where: { id: userId }, select: { pilotWatchConsentAt: true } }))?.pilotWatchConsentAt ?? null;
+    },
     markPilotWelcomeSeen: async (userId, at) => {
       // Conditional: two tabs closing it at once keep the first instant.
       await this.prisma.user.updateMany({ where: { id: userId, pilotWelcomeSeenAt: null }, data: { pilotWelcomeSeenAt: at } });

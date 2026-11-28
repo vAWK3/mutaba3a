@@ -95,7 +95,7 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
       const body = c.req.valid('json');
       assertFutureExpiry(body.expiresAt, c.get('now')());
       const target = body.organizationId !== undefined ? { userId: null, organizationId: body.organizationId } : { userId: await personId(body), organizationId: null };
-      const grant = await grants.create({ target, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt, cohort: body.cohort, referredByUserId: body.referredByUserId }, ctxOf(c));
+      const grant = await grants.create({ target, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt, cohort: body.cohort, referredByUserId: body.referredByUserId, watchConsent: body.watchConsent }, ctxOf(c));
       return c.json(serializeGrant(grant), 201);
     },
   );
