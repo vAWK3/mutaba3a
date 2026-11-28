@@ -16,6 +16,9 @@ import { ToReviewGroup } from './ToReviewGroup';
 import { ToIssueGroup } from './ToIssueGroup';
 import { useDocumentsDueCount } from '../../data/documentsDueQueries';
 import { useInvoicingWorthAsking } from '../../data/issuingQueries';
+import { useCurrentVatPeriod } from '../../data/vatPeriodQueries';
+import { clientVatVisible } from '../client-books/vatPeriodRules';
+import { VatPeriodGroup } from './VatPeriodGroup';
 
 /**
  * Home's Receipts & to-dos (MUT-657, "Two lanes"): an Add lane beside a Waiting lane, Add first in reading order and
@@ -70,22 +73,27 @@ function WaitingLane({ profile, availability, toReview }: { profile: HostedProfi
   const id = useId();
   const summary = useOrganizationSummary(profile.id);
   const names = useCustomerDirectory(profile.id);
+  const local = useIsLocalMode();
   const reviewing = availability === 'on' ? toReview : 0;
   const overdue = summary.data ? overdueClientCount(summary.data) : 0;
   // MUT-660: null where invoicing is off (and on this device), so the group never shows there.
   const toIssueCount = useDocumentsDueCount(profile.id, useInvoicingWorthAsking(profile));
   const toIssue = toIssueCount.data ?? 0;
+  // MUT-783: the client's VAT period; never read on this device (no accountant there), and nothing while the switch is off.
+  const vat = useCurrentVatPeriod(profile.id, !local).data ?? null;
+  const vatShown = vat !== null && clientVatVisible(vat, new Date());
 
   let body;
   if (summary.isError) body = <Unreachable onRetry={() => void summary.refetch()} />;
   else if (summary.isPending || availability === 'checking') body = <Skeleton rows={2} />;
-  else if (reviewing === 0 && overdue === 0 && toIssue === 0) body = <CalmLine />;
+  else if (reviewing === 0 && overdue === 0 && toIssue === 0 && !vatShown) body = <CalmLine />;
   else
     body = (
       <>
         {reviewing > 0 && <ToReviewGroup profileId={profile.id} count={reviewing} />}
         {overdue > 0 && summary.data && <OverdueGroup profileId={profile.id} count={overdue} clients={overdueClients(summary.data, OVERDUE_SHOWN)} names={names.data} />}
         {toIssue > 0 && <ToIssueGroup profileId={profile.id} count={toIssue} names={names.data} />}
+        {vatShown && vat && <VatPeriodGroup profileId={profile.id} period={vat} />}
         {/* MUT-604's rhythm and period cards will sit under these groups */}
       </>
     );

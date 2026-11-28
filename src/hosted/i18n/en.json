@@ -3921,6 +3921,40 @@
           "continue": "Continue"
         }
       }
+    },
+    "vat": {
+      "title": "VAT · {period}",
+      "done": "Done",
+      "confirm": "Confirm",
+      "ask": "Ask for more",
+      "note": "Note",
+      "col": "VAT",
+      "unset": "VAT period",
+      "allConfirmed": "All confirmed",
+      "failed": "Couldn't save. Try again.",
+      "openAria": "VAT period: {profile}",
+      "states": {
+        "OPEN": "Waiting for client",
+        "CLIENT_DONE": "Client sent",
+        "CONFIRMED": "Confirmed",
+        "MORE_NEEDED": "More needed"
+      },
+      "client": {
+        "waiting": "Waiting for your accountant",
+        "confirmed": "Confirmed by your accountant",
+        "more": "Your accountant needs more"
+      },
+      "filters": {
+        "label": "VAT state",
+        "all": "All"
+      },
+      "period": {
+        "label": "VAT period",
+        "BIMONTHLY": "Every 2 months",
+        "MONTHLY": "Monthly",
+        "YEARLY": "Yearly",
+        "NONE": "None"
+      }
     }
   }
 }

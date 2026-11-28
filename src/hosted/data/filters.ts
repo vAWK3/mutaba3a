@@ -374,8 +374,10 @@ export interface DeskSearch {
   customer?: string;
   /** The Take card pane of that customer's drawer. */
   pane?: 'card';
+  /** MUT-783: a client's VAT period drawer (the client's profile id). */
+  vat?: string;
 }
-export const parseDeskSearch = (raw: Raw): DeskSearch => compact({ newCustomer: flag(raw.newCustomer), customer: id(raw.customer), pane: raw.pane === 'card' ? ('card' as const) : undefined });
+export const parseDeskSearch = (raw: Raw): DeskSearch => compact({ newCustomer: flag(raw.newCustomer), customer: id(raw.customer), pane: raw.pane === 'card' ? ('card' as const) : undefined, vat: id(raw.vat) });
 
 export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
   compact({
