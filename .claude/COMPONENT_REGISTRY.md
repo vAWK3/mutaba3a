@@ -2626,6 +2626,7 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `billingPilotOf`, `billingPilotEndedOf`, `pilotCurrencyOf`, `PILOT_LAST_DAYS` (`src/hosted/data/pilot.ts`).
 - `PilotWelcomeDrawer` (`src/hosted/components/PilotWelcomeDrawer.tsx`, MUT-755, ADR-331): the once-per-account Welcome, by URL key `pilotWelcome`; opened by `PilotWelcomeOpener` (`src/hosted/shell/`).
 - `usePilot()` (`src/hosted/data/pilotQueries.ts`): the pilot for shell-level features (Welcome, milestones); reads billing only when `mayBeOnPilot(me)`.
+- `PilotMilestones` (`src/hosted/shell/PilotMilestones.tsx`, ADR-332): the first-scan / first-invoice celebration card; `usePilotMilestones` is its queue (zustand, ephemeral).
 
 ## MUT-768 — the accountant's desk (ADR-325)
 

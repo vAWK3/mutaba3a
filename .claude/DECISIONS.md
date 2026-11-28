@@ -7563,6 +7563,15 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 4. The web has a real scan: the main action opens Expenses › Receipts of the open profile (the personal one outside a profile). This answers the plan's open item "whether the web has a real Scan a receipt action".
 5. Motion is `motion-pilot-sheet` for the step cards and their nuqtas exactly (180/230/280 ms rise, 480/530/580 ms pop); the drawer's own entrance stands for the scrim and the half sheet. Reduced motion shows the scenes as drawn.
 
+## ADR-332: Pilot Milestones Are Celebrated by the Browser That Saw Them Happen, Once; Billing Is Re-read After a Scan or an Issue (epic MUT-751; applies ADR-298 rule 2)
+
+**Status:** Accepted (2026-11-27; plan S5 and journey steps 3–4; Basel's brief "small you-did-it moments", pilot only for now).
+
+**Decision:**
+1. A first (scan, invoice) is reached in a browser when `pilot.firstScanAt` / `firstInvoiceAt` was null at an earlier read there and is set now (`firstsReached`). It is celebrated once (`nextFirstsMemory`, kept per person in localStorage, a per-viewer convenience). A first made before the browser ever looked, or on another device while this one never read it null, is not celebrated here. MUT-758's "first" events use the same rule.
+2. The card (`PilotMilestones` in the shell, signed in) shows the `milestone-first-scan` / `milestone-first-invoice` scene with `motion-milestone` exactly, two words, a 44 px close; it leaves after 4 s. Reduced motion shows the still. Pilot only: the billing read happens only for `mayBeOnPilot`.
+3. Billing's cache is invalidated after a receipt lands on an expense (the library upload already did) and after a document is issued, so the next read sees the first (and the plan meters move).
+
 ## ADR-340: Offers Per Plan: One Coupon per Kind on Solo, Business and Firm, Made Only by the Catalog Script; Dropped on an Upgrade, Kept Through a Downgrade (MUT-703, epic MUT-701; amends ADR-237 d1/d3/d4, ADR-238 d2, ADR-240 d5/d7, ADR-243 d1/d8, ADR-291 d6)
 
 **Status:** Accepted (2026-11-27; plan `.claude/designs/mut-703-offers-plan.md`, Basel approved all 12 §13 defaults; spikes S1/S2 in the plan's "Build decisions").

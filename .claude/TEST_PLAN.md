@@ -5067,6 +5067,12 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 |---|---|---|
 | Portal | `src/hosted/components/__tests__/PilotWelcome.test.tsx` | opens once on a pilot (URL replaced), the lead with the end, three steps on their scenes; Later, ✕ and Start each call the server once; Start goes to Receipts; closed or no pilot never opens; Arabic -rtl art and Levantine month; `mayBeOnPilot` / `pilotWelcomeDue` |
 
+## Pilot milestones (2026-11-27, ADR-332)
+
+| Level | File | What |
+|---|---|---|
+| Unit + portal | `src/hosted/shell/__tests__/PilotMilestones.test.tsx` | a first is reached only after a null read, once; not when made before the browser looked; hours since start; per-person memory and a broken store; the card shows on the next read with its scene, closes, never again; Arabic -rtl art |
+
 ## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
 
 | Layer | File | Covers |

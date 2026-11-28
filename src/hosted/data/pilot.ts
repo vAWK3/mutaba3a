@@ -50,3 +50,66 @@ export function pilotWelcomeDue(billing: Partial<Pick<BillingOverview, 'pilot'>>
   const pilot = billingPilotOf(billing);
   return pilot !== null && pilot.welcomeSeenAt === null;
 }
+
+// ---- The milestones: first scan, first invoice (MUT-758 S5, ADR-298) ----------------------------------------------
+
+export type PilotFirst = 'scan' | 'invoice';
+export const PILOT_FIRSTS: readonly PilotFirst[] = ['scan', 'invoice'];
+
+/** What this browser saw of the person's firsts: which were still null at a read, and which it already celebrated. */
+export interface FirstsMemory {
+  nullSeen: PilotFirst[];
+  celebrated: PilotFirst[];
+}
+
+export const NO_FIRSTS_MEMORY: FirstsMemory = { nullSeen: [], celebrated: [] };
+
+function firstAt(pilot: BillingPilot, first: PilotFirst): string | null {
+  return (first === 'scan' ? pilot.firstScanAt : pilot.firstInvoiceAt) ?? null;
+}
+
+/**
+ * ADR-298 rule 2: a "first" happens when the field was null at this browser's last read and is set now. Only those
+ * are celebrated (and sent, MUT-758), once each; a first made before this browser ever looked is not.
+ */
+export function firstsReached(pilot: BillingPilot | null, memory: FirstsMemory): PilotFirst[] {
+  if (!pilot) return [];
+  return PILOT_FIRSTS.filter((f) => firstAt(pilot, f) !== null && memory.nullSeen.includes(f) && !memory.celebrated.includes(f));
+}
+
+/** The memory after this read: firsts still null are remembered as such; reached ones are marked celebrated. */
+export function nextFirstsMemory(pilot: BillingPilot | null, memory: FirstsMemory): FirstsMemory {
+  if (!pilot) return memory;
+  const nullNow = PILOT_FIRSTS.filter((f) => firstAt(pilot, f) === null);
+  const reached = firstsReached(pilot, memory);
+  return { nullSeen: [...new Set([...memory.nullSeen, ...nullNow])], celebrated: [...new Set([...memory.celebrated, ...reached])] };
+}
+
+/** The hours from the pilot's start to a first (MUT-758 `hours_since_start`), never negative; null without a start. */
+export function hoursSinceStart(pilot: BillingPilot, first: PilotFirst): number | null {
+  const at = firstAt(pilot, first);
+  if (!at || !pilot.startedAt) return null;
+  return Math.max(0, Math.floor((new Date(at).getTime() - new Date(pilot.startedAt).getTime()) / 3_600_000));
+}
+
+const FIRSTS_STORE = 'mutaba3a-pilot-firsts';
+
+/** Per-viewer convenience (DESIGN: never state that must persist): a blocked store only means no celebration. */
+export function readFirstsMemory(userId: string): FirstsMemory {
+  try {
+    const all = JSON.parse(localStorage.getItem(FIRSTS_STORE) ?? '{}') as Record<string, FirstsMemory>;
+    const mine = all[userId];
+    return mine && Array.isArray(mine.nullSeen) && Array.isArray(mine.celebrated) ? mine : NO_FIRSTS_MEMORY;
+  } catch {
+    return NO_FIRSTS_MEMORY;
+  }
+}
+
+export function writeFirstsMemory(userId: string, memory: FirstsMemory): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(FIRSTS_STORE) ?? '{}') as Record<string, FirstsMemory>;
+    localStorage.setItem(FIRSTS_STORE, JSON.stringify({ ...all, [userId]: memory }));
+  } catch {
+    // Nothing to do: the celebration is a convenience.
+  }
+}
