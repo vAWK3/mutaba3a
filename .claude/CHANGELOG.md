@@ -46,6 +46,14 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-759: the pilot's release-QA flows on web
+
+### Added
+- `qa/features/portal-selfservice/pilot.yaml` + `qa/specs/portal-selfservice/pilot.spec.ts` (live API): `pilot-panel` (Welcome once with the yes, the Pilot panel with Expected prices, Arabic at 375 px), `pilot-ended`, `pilot-extension`, `pilot-first-scan`. `operator.pilot-grant` (the console's pilot grant with cohort, accountant and the yes; the Pilot filter's chip, accountant, consent and ticks).
+- `grantPilot` and `revokeGrant` in `qa/support/selfService.ts`. The pilot's portal files move from the stubbed `portal` app's watch to `portal-selfservice`'s (they need a real pilot grant).
+
+---
+
 ## [Unreleased] - 2026-11-27 — MUT-758 web half: the six pilot events (contract 2.13.0, ADR-298)
 
 ### Added

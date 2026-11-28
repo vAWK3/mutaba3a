@@ -1,0 +1,74 @@
+app: portal-selfservice
+area: pilot
+title: The free pilot on the live API (Welcome, Pilot panel, end, extension, first scan)
+tier: secondary
+# MUT-759 (epic MUT-751, plan docs/designs/pilot-testers-business-plan.md, QA scenarios): a pilot grant made as
+# `billing:grant --cohort` makes it (ADR-296); the tester's Welcome (MUT-755, ADR-331), Pilot panel (MUT-753, ADR-330),
+# the end and an extension, the yes to watched sessions (MUT-777, ADR-333) and the first-scan milestone (ADR-332).
+# The operator's grant and Pilot filter are in operator.yaml.
+paths:
+  - server/src/billing/pilot.ts
+  - server/src/billing/pilot-prices.json
+  - src/hosted/data/pilot.ts
+  - src/hosted/data/pilotQueries.ts
+  - src/hosted/data/usageLines.ts
+features:
+  - id: pilot-panel
+    title: A pilot tester signs in to the Welcome once, then Billing shows the Pilot panel with the end, the limits and the plans
+    tier: secondary
+    tickets: [MUT-759, MUT-753, MUT-755, MUT-777]
+    paths:
+      - src/hosted/components/PilotBilling.tsx
+      - src/hosted/components/PilotWelcomeDrawer.tsx
+      - src/hosted/shell/PilotWelcomeOpener.tsx
+      - src/hosted/session/pilotWelcomeOffer.ts
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/data/billingView.ts
+    steps:
+      - The accountant's client, granted a Business pilot, opens MTB3A
+      - Tick the yes to watched sessions and choose Later
+      - Reload
+      - Open You › Account › Billing
+      - Open it at 375 px in Arabic
+    expect:
+      - The Welcome opens by itself with "Business, free until <date>", three steps on their scenes and the yes unticked
+      - It closes; the server records the Welcome closed and the yes with its date
+      - It does not open again
+      - Pilot, "Free until <date>", "Business · 100% off", 0 of 250 documents, 0 of 500 scans, Solo ₪39, Business ₪89, Firm ₪249 each marked Expected, one Write to us link, no Subscribe
+      - «مجاني حتى …», right to left, no horizontal scroll
+  - id: pilot-ended
+    title: When the pilot ends, Billing says Pilot ended with its scene
+    tier: secondary
+    tickets: [MUT-759, MUT-753]
+    paths:
+      - server/src/routes/billing.ts
+    steps:
+      - The tester, mid-pilot, sees the Pilot panel
+      - The operator ends the pilot; the tester opens Billing
+    expect:
+      - GET /v1/billing carries the pilot
+      - '"Pilot ended" with the pilot-ended scene; no Write to us'
+  - id: pilot-extension
+    title: The operator extends a pilot; Billing shows the new end and the Welcome does not come back
+    tier: secondary
+    tickets: [MUT-759]
+    steps:
+      - The tester closes the Welcome and sees the end in 20 days
+      - The operator revokes it and grants again for 45 days with the same cohort
+    expect:
+      - '"Free until <the 20-day date>"'
+      - No Welcome; "Free until <the 45-day date>"
+  - id: pilot-first-scan
+    title: A tester's first scan is celebrated once
+    tier: secondary
+    tickets: [MUT-758]
+    paths:
+      - src/hosted/shell/PilotMilestones.tsx
+    steps:
+      - The tester opens MTB3A before any scan
+      - A first scan is saved; the next read celebrates it
+      - Reload
+    expect:
+      - No celebration
+      - '"First scan saved" with the milestone-first-scan scene'
+      - Not again

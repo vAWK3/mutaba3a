@@ -202,3 +202,72 @@ test('turning sharing off in one tab silences another open tab', { tag: '@portal
     await expect(other.getByRole('switch', { name: TURN_ON })).toHaveAttribute('aria-checked', 'false');
   });
 });
+
+/** MUT-758 (ADR-298): GET /v1/billing answered as a pilot tester's (an operator grant with a cohort, Business usage). */
+function pilotBilling(endsAt: string) {
+  const plan = (name: string, ils: number, usd: number, limits: [number, number, number, number]) => ({
+    plan: name,
+    expectedMonthly: { ILS: ils, USD: usd },
+    limits: { businesses: limits[0], partners: limits[1], documentsPerMonth: limits[2], scansPerMonth: limits[3] },
+  });
+  return {
+    configured: false,
+    subscription: null,
+    canManage: false,
+    trial: null,
+    catalog: { ILS: null, USD: null },
+    countries: { consumer: [], consumerEverywhere: true, customTaxId: [] },
+    coveredProfileIds: [OFFICE_A],
+    offer: null,
+    yearlySwitch: null,
+    starter: null,
+    usage: {
+      month: '2026-12',
+      resetsOn: '2027-01-01',
+      plan: 'business',
+      meters: [
+        { meter: 'documents', used: 230, limit: 250, level: 'nudge' },
+        { meter: 'scans', used: 12, limit: 500, level: 'ok' },
+      ],
+      businesses: { used: 1, limit: 3 },
+      partners: { limit: 2 },
+    },
+    pilot: {
+      cohort: 'qa-secret-cohort',
+      startedAt: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+      endsAt,
+      welcomeSeenAt: new Date().toISOString(),
+      firstScanAt: null,
+      firstInvoiceAt: null,
+      watchConsentAt: null,
+      pricesExpected: true,
+      plans: [plan('solo', 3900, 1200, [1, 0, 50, 100]), plan('business', 8900, 2700, [3, 2, 250, 500]), plan('firm', 24900, 7500, [6, 2, 1000, 2000])],
+    },
+    pilotEnded: null,
+  };
+}
+
+test('with sharing on, a pilot tester’s Billing counts the pilot events, never the cohort', { tag: '@portal.usage-analytics.pilot-events' }, async ({ page, step, analytics }) => {
+  await step('Turn sharing on as a pilot tester with documents at 92% of Business’s limit, and open Billing', async () => {
+    await openPortal(page, seed());
+    await turnOnFromPrompt(page, analytics);
+    const endsAt = new Date(Date.now() + 30.5 * 86_400_000).toISOString();
+    await page.route('**/v1/billing', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pilotBilling(endsAt)) }));
+    await page.goto(`/p/${OFFICE_A}/payments?billing=true`);
+    await expect(page.getByRole('dialog', { name: 'Billing' }).getByTestId('pilot-plans')).toBeVisible();
+    expect((await nextEvent(analytics, 'pilot_billing_opened')).properties).toMatchObject({ days_left: 30 });
+    await nextEvent(analytics, 'pilot_plans_viewed');
+    expect((await nextEvent(analytics, 'pilot_usage_near_cap')).properties).toMatchObject({ limit: 'documents' });
+    const pilotEvents = analytics.events().filter((e) => e.event.startsWith('pilot_'));
+    expect(pilotEvents.map((e) => e.event).sort()).toEqual(['pilot_billing_opened', 'pilot_plans_viewed', 'pilot_usage_near_cap']);
+    expect(JSON.stringify(pilotEvents)).not.toContain('qa-secret-cohort');
+  });
+
+  await step('Press Write to us', async () => {
+    const link = page.getByRole('link', { name: 'Write to us' });
+    await link.evaluate((a) => a.addEventListener('click', (e) => e.preventDefault()));
+    await link.click();
+    await nextEvent(analytics, 'pilot_contact_tapped');
+  });
+});
+

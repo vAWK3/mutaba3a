@@ -5097,6 +5097,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Portal | `src/hosted/shell/__tests__/PilotMilestones.test.tsx` | the first scan counted once with `hours_since_start` |
 | Gate | existing `portalAnalytics` tests | release-only and opt-in (`trackPortal`), unchanged |
 
+## MUT-759 — pilot release-QA (2026-11-27)
+
+| App | Feature ids | What |
+|---|---|---|
+| portal-selfservice | `pilot.pilot-panel`, `pilot.pilot-ended`, `pilot.pilot-extension`, `pilot.pilot-first-scan` | the plan's four QA scenarios on the live API, plus the Welcome, the yes to watched sessions and the first-scan milestone |
+| portal-selfservice | `operator.pilot-grant` | the console's pilot grant (cohort, accountant, yes) and the Pilot filter |
+
 ## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
 
 | Layer | File | Covers |

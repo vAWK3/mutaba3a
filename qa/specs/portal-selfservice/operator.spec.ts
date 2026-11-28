@@ -461,6 +461,44 @@ test('Grant a person the Business plan', { tag: '@portal-selfservice.operator.bi
   });
 });
 
+// MUT-759 / MUT-757 / MUT-777: a pilot granted from the console, and the cohort followed with the Pilot filter.
+test('Grant a pilot with its cohort, accountant and the tester’s yes; the Pilot filter shows the tester with the chip and the ticks', { tag: '@portal-selfservice.operator.pilot-grant' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  const op = await operator(page);
+  const tester = await targetWithId('pilot');
+  const accountant = await targetWithId('pilot-accountant');
+  const billing = page.getByRole('region', { name: 'Billing' });
+  await step('Open the tester’s account and press Grant coverage', async () => {
+    await openAccount(page, tester.email);
+    await billing.getByRole('button', { name: /Grant coverage/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Grant coverage' })).toBeVisible();
+  });
+  await step('Choose Business, give the reason, the cohort and the accountant’s email, tick the tester’s yes, and grant with the passkey', async () => {
+    const drawer = page.getByRole('dialog', { name: 'Grant coverage' });
+    await drawer.getByRole('radio', { name: /Business/ }).check();
+    await drawer.getByLabel('Reason').fill('pilot Nasser & Co');
+    await drawer.getByRole('button', { name: 'No end date' }).click();
+    await drawer.getByLabel('Pilot cohort').fill('qa-dec-2026');
+    await expect(drawer.getByText('Ends in 60 days')).toBeVisible();
+    await drawer.getByLabel("Referring accountant's email").fill(accountant.email);
+    await drawer.getByRole('checkbox', { name: 'The tester agreed to watched and recorded sessions' }).check();
+    await drawer.getByRole('button', { name: 'Grant with passkey' }).click();
+    await expect.poll(() => toastText(page)).toContain(`Coverage granted to ${tester.email}`);
+    await expect(billing.getByText('Business · pilot Nasser & Co')).toBeVisible();
+    const [grant] = await adminGrants(tester.id);
+    expect(grant).toMatchObject({ tier: 'BUSINESS', grantedBy: `operator:${op.id}`, revokedAt: null });
+  });
+  await step('The tester saves a first scan; open Accounts and turn on the Pilot filter', async () => {
+    seedUsage(tester.id, 'business', { documents: 0, scans: 1 });
+    await page.goto('/operator/accounts');
+    await page.getByRole('button', { name: 'Pilot', pressed: false }).click();
+    await expect(page).toHaveURL(/pilot=1/);
+    const row = accountLink(page, tester.email);
+    await expect(row).toContainText(`Pilot · ends ${dayIn(60)}`);
+    await expect(row.getByTestId('pilot-line')).toContainText(/Accountant: .+ · ✓ Agreed to watching · .+ · ✓ Scan · – Invoice/);
+  });
+});
+
 test('Turn Connect Claude on for a person, then off with a confirm', { tag: '@portal-selfservice.operator.feature-grant-revoke' }, async ({ page, step }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await chooseLanguage(page, 'en');
