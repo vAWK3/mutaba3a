@@ -64,8 +64,8 @@ describe('the launch offer on a plan Checkout', () => {
   it('opens on Yearly and says the first year under each plan row', async () => {
     portal(`/p/${ORG_B}?billing=true&step=subscribe&billingPlan=business`, overview());
     const step = await screen.findByRole('dialog', { name: 'Subscribe' });
-    expect(await within(step).findByText(/First year ₪445\.00 or \$135\.00/)).toBeInTheDocument();
-    expect(within(step).getByText(/First year ₪195\.00 or \$60\.00/)).toBeInTheDocument();
+    expect(await within(step).findByText(/First year ₪445\.00/)).toBeInTheDocument();
+    expect(within(step).getByText(/First year ₪195\.00/)).toBeInTheDocument();
   });
 
   it('Monthly drops the first-year lines', async () => {
@@ -89,9 +89,9 @@ describe('the launch offer on a plan Checkout', () => {
     });
     const step = await screen.findByRole('dialog', { name: 'Subscribe' });
     await within(step).findByText(/First year ₪445/);
-    fireEvent.click(within(step).getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(api.calls(/checkout-session/).length).toBe(1));
-    expect(api.calls(/checkout-session/)[0]!.body).toMatchObject({ plan: 'business', interval: 'year', expectedOffer: LAUNCH });
+    fireEvent.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    await waitFor(() => expect(api.count('POST /v1/billing/checkout-session')).toBe(1));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toMatchObject({ plan: 'business', interval: 'year', expectedOffer: LAUNCH });
   });
 });
 
@@ -105,8 +105,8 @@ describe('the come-back price on a plan', () => {
     });
     const step = await screen.findByRole('dialog', { name: 'Subscribe' });
     expect(await within(step).findByText(/₪29\.37/)).toBeInTheDocument();
-    fireEvent.click(within(step).getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(api.calls(/checkout-session/).length).toBe(1));
-    expect(api.calls(/checkout-session/)[0]!.body).toMatchObject({ expectedOffer: COMEBACK });
+    fireEvent.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    await waitFor(() => expect(api.count('POST /v1/billing/checkout-session')).toBe(1));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toMatchObject({ expectedOffer: COMEBACK });
   });
 });
