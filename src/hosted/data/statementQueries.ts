@@ -1,5 +1,5 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { api, type CustomerStatement, type StatementLine } from '../api/client';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { api, type Currency, type CustomerStatement, type StatementLine } from '../api/client';
 import { todayLocalISO } from '../format/dates';
 import { profileKey } from '../session/me';
 import type { LedgerPeriod } from './filters';
@@ -26,6 +26,26 @@ export function periodRange(period: LedgerPeriod, today: string = todayLocalISO(
 export interface LedgerData {
   head: Omit<CustomerStatement, 'lines' | 'nextCursor'>;
   lines: StatementLine[];
+}
+
+/** MUT-774: one client's balances, per currency (never summed), as the clients list shows them. */
+export type ClientBalances = Map<string, { currency: Currency; balance: string }[]>;
+
+/**
+ * MUT-774: GET /v1/customer-balances, grouped by client. Under the profile's `summary` scope, so every save that moves
+ * the ledger card or Owed refreshes it too: the list always matches them.
+ */
+export function useCustomerBalances(profileId: string) {
+  return useQuery({
+    queryKey: profileKey(profileId, 'summary', 'balances'),
+    queryFn: ({ signal }) => api.customerBalances(profileId, signal),
+    select: (data): ClientBalances => {
+      const byClient: ClientBalances = new Map();
+      for (const b of data.balances) byClient.set(b.customerId, [...(byClient.get(b.customerId) ?? []), { currency: b.currency, balance: b.balance }]);
+      for (const list of byClient.values()) list.sort((a, b) => a.currency.localeCompare(b.currency));
+      return byClient;
+    },
+  });
 }
 
 export function useCustomerStatement(profileId: string, customerId: string, currency: string | undefined, period: LedgerPeriod) {

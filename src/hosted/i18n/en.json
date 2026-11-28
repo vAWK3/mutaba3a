@@ -364,14 +364,16 @@
         "outstanding": "Outstanding",
         "overdue": "Overdue",
         "lastPayment": "Last payment",
-        "status": "Status"
+        "status": "Status",
+        "balance": "Balance"
       },
       "empty": {
         "title": "No clients on this profile yet"
       },
       "noMatch": "No clients match \"{query}\".",
       "add": "Add client",
-      "addFailed": "Couldn't add the client. Try again."
+      "addFailed": "Couldn't add the client. Try again.",
+      "settled": "Settled"
     },
     "client": {
       "back": "All clients",

@@ -2628,6 +2628,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `usePilot()` (`src/hosted/data/pilotQueries.ts`): the pilot for shell-level features (Welcome, milestones); reads billing only when `mayBeOnPilot(me)`.
 - `PilotMilestones` (`src/hosted/shell/PilotMilestones.tsx`, ADR-332): the first-scan / first-invoice celebration card; `usePilotMilestones` is its queue (zustand, ephemeral).
 
+---
+
+## MUT-774 — client balances on the clients list
+
+- `ClientBalance` (`src/hosted/components/ledger/ClientBalance.tsx`): one client balance in one currency (owes / "Client in credit · …" / "Settled"), the ledger card's words. `useCustomerBalances(profileId)` (`src/hosted/data/statementQueries.ts`) groups `GET /v1/customer-balances` by client.
+
 ## MUT-768 — the accountant's desk (ADR-325)
 
 | Where | Exports | Used by |

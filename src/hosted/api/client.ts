@@ -891,6 +891,8 @@ export const api = {
   removeExternalInvoice: (profileId: string, id: string) => request<void>('DELETE', `/v1/issuing/external-invoices/${encodeURIComponent(id)}`, { profileId }),
   issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
   /** MUT-664: one page of a client's ledger card in one currency (newest first for the portal). */
+  /** MUT-774: each client's closing balance per currency (MUT-664's statement with no period); negative = in credit. */
+  customerBalances: (profileId: string, signal?: AbortSignal) => request<Get<'/v1/customer-balances'>>('GET', '/v1/customer-balances', { profileId, signal }),
   customerStatement: (profileId: string, customerId: string, query: Query<'/v1/customers/{customerId}/statement'>, signal?: AbortSignal) =>
     request<CustomerStatement>('GET', `/v1/customers/${encodeURIComponent(customerId)}/statement`, { profileId, query, signal }),
   issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string; cursor?: string | null } = {}, signal?: AbortSignal) =>

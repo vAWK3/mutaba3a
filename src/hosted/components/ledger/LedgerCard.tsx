@@ -9,7 +9,8 @@ import { useCustomerStatement } from '../../data/statementQueries';
 import { formatDecimal, isZeroDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { formatBalance, formatMonth } from '../../format/ledger';
-import { Empty, QueryView, Skeleton } from '../QueryView';
+import { QueryView, Skeleton } from '../QueryView';
+import { Scene } from '../Scene';
 
 /**
  * MUT-664: the client's ledger card (כרטסת), layout A. Newest first (D14), 50 lines a page with "Show earlier"; one
@@ -34,7 +35,7 @@ export function LedgerCard({ profileId, customerId, currencies, currency, period
   const { t, language } = useLanguage();
   const active = currency && currencies.includes(currency) ? currency : currencies[0];
   const statement = useCustomerStatement(profileId, customerId, active, period);
-  if (!active) return <Empty title={t('hosted.ledger.empty.title')} />;
+  if (!active) return <LedgerEmpty title={t('hosted.ledger.empty.title')} />;
 
   const balance = (value: string) => {
     const b = formatBalance(value, active, language);
@@ -69,7 +70,7 @@ export function LedgerCard({ profileId, customerId, currencies, currency, period
       <QueryView queries={[statement]} data={statement.data} loading={<Skeleton />}>
         {({ head, lines }) =>
           lines.length === 0 ? (
-            <Empty title={t('hosted.ledger.empty.title')} />
+            <LedgerEmpty title={t('hosted.ledger.empty.title')} />
           ) : (
             <>
               <p className="hp-ledger-closing" data-testid="ledger-closing">
@@ -169,3 +170,14 @@ function movement(t: (key: string, vars?: Record<string, string>) => string, lin
   const number = line.number ? ` ${line.number}` : '';
   return `${t(`hosted.ledger.kinds.${line.kind}`)}${number}`;
 }
+
+/** MUT-774: a client with no movements: the `ledger-empty` scene above the line (the empty states' drop-in). */
+function LedgerEmpty({ title }: { title: string }) {
+  return (
+    <div className="hp-empty hp-ledger-empty" data-testid="ledger-empty">
+      <Scene name="ledger-empty" size={160} motion="drop-in" />
+      <h2>{title}</h2>
+    </div>
+  );
+}
+

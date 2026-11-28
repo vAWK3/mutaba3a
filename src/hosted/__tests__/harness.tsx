@@ -100,6 +100,8 @@ export function emptyProfileRoutes(): Record<string, Handler> {
   return {
     'GET /v1/summaries/organization': () => ok({ asOf: '2026-10-11', currencies: [] }),
     'GET /v1/customers': () => ok(EMPTY_PAGE),
+    // MUT-774: the clients list's balance column.
+    'GET /v1/customer-balances': () => ok({ asOf: '2026-10-11', balances: [] }),
     'GET /v1/projects': () => ok(EMPTY_PAGE),
     'GET /v1/receivables': () => ok(EMPTY_PAGE),
     'GET /v1/payments': () => ok(EMPTY_PAGE),

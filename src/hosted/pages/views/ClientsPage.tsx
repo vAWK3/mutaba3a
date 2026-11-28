@@ -7,6 +7,8 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import type { ClientsFilters } from '../../data/filters';
 import { useCustomerDirectory, useOrganizationSummary } from '../../data/queries';
+import { useCustomerBalances, type ClientBalances } from '../../data/statementQueries';
+import { ClientBalance } from '../../components/ledger/ClientBalance';
 import { DecimalAmount, isZeroDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { MalafatClientsCard } from '../../components/MalafatPortal';
@@ -55,7 +57,9 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
   const { t } = useLanguage();
   const directory = useCustomerDirectory(profile.id);
   const summary = useOrganizationSummary(profile.id);
-  const data = directory.data && summary.data ? { customers: directory.data, summary: summary.data } : undefined;
+  // MUT-774: the balance column; the list waits for it too, so the column never fills in after the rows.
+  const balances = useCustomerBalances(profile.id);
+  const data = directory.data && summary.data && balances.data ? { customers: directory.data, summary: summary.data, balances: balances.data } : undefined;
   const searchBox = useRef<HTMLDivElement>(null);
 
   return (
@@ -66,16 +70,16 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
         </div>
       </PageHeader>
       <QueryView
-        queries={[directory, summary]}
+        queries={[directory, summary, balances]}
         data={data}
         isEmpty={({ customers }) => customers.size === 0}
         empty={<Empty title={t('hosted.clients.empty.title')} />}
       >
-        {({ customers, summary: s }) => (
+        {({ customers, summary: s, balances: b }) => (
           <>
             {/* One Malafat suggestion beside a loaded list, never while searching (MUT-191) */}
             <MalafatClientsCard customers={customers} query={filters.q} onGone={() => searchBox.current?.querySelector('input')?.focus()} />
-            <ClientsTable customers={customers} summary={s} query={filters.q} />
+            <ClientsTable customers={customers} summary={s} balances={b} query={filters.q} />
           </>
         )}
       </QueryView>
@@ -85,7 +89,7 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
   );
 }
 
-function ClientsTable({ customers, summary, query }: { customers: Map<string, Customer>; summary: OrganizationSummary; query?: string }) {
+function ClientsTable({ customers, summary, balances, query }: { customers: Map<string, Customer>; summary: OrganizationSummary; balances: ClientBalances; query?: string }) {
   const profile = useProfile();
   const { t, language } = useLanguage();
   const [shown, setShown] = useState(CHUNK);
@@ -99,6 +103,16 @@ function ClientsTable({ customers, summary, query }: { customers: Map<string, Cu
   const columns = useMemo<Column<ClientRow>[]>(
     () => [
       { key: 'name', header: t('hosted.clients.columns.name'), cell: (row) => <Link to={`/p/${profile.id}/clients/${row.id}`}>{row.name}</Link> },
+      // MUT-774 (wireframe A): one Balance column, one line per currency stacked, never summed; below zero "Client in credit".
+      {
+        key: 'balance',
+        header: t('hosted.clients.columns.balance'),
+        numeric: true,
+        cell: (row) => {
+          const lines = balances.get(row.id);
+          return lines?.length ? lines.map((b) => <ClientBalance key={b.currency} balance={b.balance} currency={b.currency} />) : '—';
+        },
+      },
       {
         key: 'outstanding',
         header: t('hosted.clients.columns.outstanding'),
@@ -114,7 +128,7 @@ function ClientsTable({ customers, summary, query }: { customers: Map<string, Cu
       { key: 'lastPayment', header: t('hosted.clients.columns.lastPayment'), cell: (row) => formatDay(row.lastPaymentOn, language) },
       { key: 'status', header: t('hosted.clients.columns.status'), cell: (row) => (row.status ? <StatusBadge family="customer" status={row.status} /> : '—') },
     ],
-    [t, language, profile.id],
+    [t, language, profile.id, balances],
   );
 
   if (rows.length === 0) return <Empty title={t('hosted.clients.noMatch', { query: query ?? '' })} />;

@@ -5137,6 +5137,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Unit | `src/hosted/components/__tests__/Activating.test.tsx` | `activatingPhase`; the poll every 4 s, late at 2 min, active when paid, late on a late reload; `hopEnd`; loop → finish the hop → resolve; -rtl key frames; reduced motion shows the scene; the activating spec values; the polite live region in ar and en |
 | Guard | `src/styles/__tests__/direction.test.ts`, `brand.test.ts` | the two `dir` sites; the Copy pill's contrast |
 
+## MUT-774 (portal half) — client balances (2026-11-27)
+
+| Level | File | What |
+|---|---|---|
+| Portal | `src/hosted/pages/__tests__/clientBalances.test.tsx` | currencies stacked and never summed, in credit without a minus, settled, "—" without movement, one request; Arabic |
+| Component | `src/hosted/components/ledger/__tests__/LedgerCard.test.tsx` | no movements and no currency show the `ledger-empty` scene |
+
 ## MUT-769 — /setup for an accountant's customer (2026-11-27, ADR-320)
 
 | Layer | File | Covers |
