@@ -94,6 +94,20 @@ describe('parseGuide', () => {
     }
   });
 
+  it('accepts a guide with no ifStuck, and rejects one missing its Arabic or English line', () => {
+    const none = clone();
+    delete none.ifStuck;
+    expect(problemsOf(none)).toEqual([]);
+    for (const lang of ['ar', 'en'] as const) {
+      const raw = clone();
+      delete (raw.ifStuck as Record<string, string>)[lang];
+      expect(problemsOf(raw)).toEqual([expect.stringContaining('ifStuck')]);
+    }
+    const blank = clone();
+    (blank.ifStuck as Record<string, string>).en = '  ';
+    expect(problemsOf(blank)).toEqual([expect.stringContaining('ifStuck')]);
+  });
+
   it('rejects an unknown surface and an empty surface list', () => {
     expect(problemsOf({ ...clone(), surfaces: ['portal', 'watch'] })).not.toEqual([]);
     expect(problemsOf({ ...clone(), surfaces: [] })).not.toEqual([]);

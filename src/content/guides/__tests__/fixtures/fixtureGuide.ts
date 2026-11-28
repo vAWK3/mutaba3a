@@ -10,5 +10,6 @@ export const FIXTURE_GUIDE = {
     { text: { ar: 'الخطوة الثانية', en: 'Second step' }, scene: 'guide-tax-2' },
   ],
   note: { ar: 'ملاحظة', en: 'A note' },
+  ifStuck: { ar: 'إن تعثّرت', en: 'If you get stuck' },
   source: { url: 'https://example.com/official', label: { ar: 'المصدر الرسمي', en: 'The official page' } },
 };

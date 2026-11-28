@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { ManualAllocationPanel, type ManualAllocation } from '../ManualAllocationPanel';
 
-const utils = vi.hoisted(() => ({ copyToClipboard: vi.fn<(text: string) => Promise<boolean>>() }));
+const utils = vi.hoisted(() => ({ copyToClipboard: vi.fn<(text: string) => Promise<boolean>>(), openGuide: vi.fn() }));
+vi.mock('../../shell/AccountDrawers', () => ({ useAccountDrawers: () => ({ openGuide: utils.openGuide }) }));
 vi.mock('../../../lib/utils', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../lib/utils')>()), copyToClipboard: utils.copyToClipboard }));
 
 /** MUT-711 (AC1): the manual allocation panel — the Tax Authority's details with Copy, the link, the input, a way out. */
@@ -67,5 +68,19 @@ describe('ManualAllocationPanel', () => {
     renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } });
     expect(screen.getByRole('heading', { name: 'This invoice needs an allocation number' })).toBeVisible();
     expect(screen.queryByText(/automatically/)).toBeNull();
+  });
+});
+
+describe('ManualAllocationPanel guide (MUT-679)', () => {
+  it('offers How to connect when the person can connect (Solo and above), and it opens the guide', async () => {
+    utils.openGuide.mockClear();
+    renderPanel();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'How to connect' }));
+    expect(utils.openGuide).toHaveBeenCalledWith('tax-authority');
+  });
+
+  it('offers nothing on Starter, where the plan is why the number is manual', () => {
+    renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } });
+    expect(screen.queryByRole('button', { name: 'How to connect' })).toBeNull();
   });
 });

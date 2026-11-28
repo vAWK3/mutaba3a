@@ -95,6 +95,7 @@ function GuideBody({ guide, line }: { guide: Guide; line: (text: LocalizedText) 
           {line(guide.note)}
         </p>
       )}
+      {guide.ifStuck && <p className="hp-guide-stuck">{line(guide.ifStuck)}</p>}
       <div className="hp-guide-links">
         {guide.source && (
           <a className="hp-guide-link press" href={guide.source.url} target="_blank" rel="noopener noreferrer">

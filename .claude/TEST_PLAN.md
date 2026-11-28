@@ -5226,3 +5226,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 - `src/hosted/components/__tests__/GuideDrawer.test.tsx` (through the real portal): opens over the page, ar right to left with the `-rtl` art, source link attributes, help link, no note or source when absent, ✕ and Escape close and keep the page and count nothing, Done counts finished, an unknown id closes itself, a load failure shows Retry, one opening under StrictMode. `GuideButton.test.tsx`: opens its guide.
 - `src/hosted/analytics/__tests__/portalAnalytics.test.ts`, `src/lib/analytics/__tests__/guard.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts`: `trackGuide` for opted-in people only, the guard keeps a listed guide and drops an unlisted one, contract 2.15.0 pinned.
 - QA `portal.guides.guide-open-read-close` (Arabic then English, the page kept, Done).
+
+## MUT-679 — the Tax Authority guide (2026-11-28)
+- `guideSchema.test.ts`, `GuideDrawer.test.tsx`: `ifStuck` optional, validated, rendered after the note.
+- `guides.test.ts`: no `%`, currency symbol or `NIS`/`ILS` in any guide's copy; scenes need an `-rtl` twin unless declared neutral.
+- `InvoicingSteps.test.tsx`: the guide button shows when not connected, ended or ending soon, not while connected with time left, not on a plan without the connection, not when the status fails; opens `tax-authority`; named in Arabic.
+- `ManualAllocationPanel.test.tsx`: the button only when `automaticOn` is null.
+- `GuideButton.router.test.tsx`: through the real shell, `?guide=` is pushed on the page's search, closing and Back keep it, focus returns to the button.
+- QA `portal.guides.guide-open-read-close` (step 5, Arabic, Escape and focus, English, Done) and `portal.guides.guide-over-issue-drawer`.

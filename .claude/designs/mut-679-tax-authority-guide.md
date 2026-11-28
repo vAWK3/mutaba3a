@@ -78,3 +78,7 @@ Revealed by the plan, to note on the ticket: (a) there is no expired-connection 
 - The Tax Authority connection is where invoicing setup most often stalls; the guide sits on the connect step and on the invoice that needs a number, so the person gets help at the moment they are stuck.
 - Roadmap: first real guide of epic MUT-672; unblocks the help page (MUT-695) and the Tax Authority prompt (MUT-611).
 - Risk is low: no server, no migration, no new dependency. The one cost is that unsigned copy becomes reachable, handled by the release gate.
+
+## 7. Built (2026-11-28)
+
+Branch `feature/mut-679-tax-authority-guide`. Differences from the plan: the source link label is "The Tax Authority's page" (ar «صفحة سلطة الضرائب»); the over-the-issue-drawer check is a release-QA flow only (a jsdom test of the whole issue drawer would need most of the portal stubbed); `GuideButton.router.test.tsx` covers the real shell. Not done here: the authority-side steps 2 and 3 are unverified against the real screens (Q2, MUT-638), and the phone half waits for MUT-677 (Q4).

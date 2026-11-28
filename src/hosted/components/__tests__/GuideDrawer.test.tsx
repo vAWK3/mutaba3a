@@ -55,6 +55,24 @@ describe('the guide drawer (MUT-674)', () => {
     expect(within(dialog).getByRole('note')).toHaveTextContent('A note');
   });
 
+  it('shows "if it goes wrong" after the note', async () => {
+    portal(`${PAGE}?guide=fixture-guide`);
+    const dialog = await screen.findByRole('dialog', { name: 'A test guide' });
+    const stuck = within(dialog).getByText('If you get stuck');
+    const note = within(dialog).getByRole('note');
+    expect(note.compareDocumentPosition(stuck) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('has no if-it-goes-wrong line when the guide has none', async () => {
+    const bare: Record<string, unknown> = { ...FIXTURE_GUIDE };
+    delete bare.ifStuck;
+    vi.mocked(loadGuide).mockResolvedValue(bare as unknown as Guide);
+    portal(`${PAGE}?guide=fixture-guide`);
+    const dialog = await screen.findByRole('dialog', { name: 'A test guide' });
+    expect(within(dialog).queryByText('If you get stuck')).toBeNull();
+    expect(dialog.querySelector('.hp-guide-stuck')).toBeNull();
+  });
+
   it('reads in Arabic, right to left, with the -rtl drawings', async () => {
     portal(`${PAGE}?guide=fixture-guide`, 'ar');
     const dialog = await screen.findByRole('dialog', { name: 'دليل تجريبي' });

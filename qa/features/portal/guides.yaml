@@ -2,9 +2,8 @@ app: portal
 area: guides
 title: Guides, opened in a drawer over the page (MUT-672)
 tier: secondary
-# MUT-674: the viewer and its one content format (src/content/guides/<id>.json). MUT-679 to 681 add the guides and the
-# buttons on the screens they belong to; until then the one shipped guide (tax-authority) opens through its link,
-# ?guide=tax-authority, and MUT-679 repoints this flow at the Connect button.
+# MUT-674: the viewer and its one content format (src/content/guides/<id>.json). MUT-679: the Tax Authority guide opens
+# from the button beside Connect on the invoicing setup's step 5 and from the allocation panel on the issue screen.
 paths:
   - src/content/guides/guideSchema.ts
   - src/content/guides/index.ts
@@ -14,18 +13,34 @@ paths:
   - src/hosted/components/GuideButton.tsx
 features:
   - id: guide-open-read-close
-    title: A guide opens in a drawer over the page, reads in Arabic then English, and closing it leaves the page as it was
+    title: The Tax Authority guide opens from Connect, reads in Arabic then English, and closing it leaves the page as it was
     tier: secondary
-    tickets: [MUT-674]
+    tickets: [MUT-674, MUT-679]
     steps:
-      - Open Payments filtered to posted payments, in Arabic
-      - Open the Tax Authority guide by its link
+      - Open Invoicing in Arabic and choose step 5, the Tax Authority
+      - Press the guide button beside Connect
       - Read it in Arabic, right to left
       - Close it with the cross
-      - Open the same guide in English and read it
+      - Press the button again and Escape
+      - Open it in English from the same button and read it
       - Press Done
     expect:
-      - The guide is a drawer over Payments, named by its title, with the lead, four numbered steps each with a drawing, and the note
+      - The guide is a drawer over Invoicing, named by its title, with the lead, four numbered steps each with a drawing, the note, what to do if it goes wrong and the Tax Authority's page
       - In Arabic it reads right to left and the drawings are the Arabic ones
-      - Closing it with the cross leaves Payments and its posted filter exactly as they were
-      - In English it reads the same four steps; Done closes it and the page is as it was
+      - Closing it with the cross leaves step 5 exactly as it was, with Connect still there
+      - Escape closes it and focus is back on the button that opened it
+      - In English it reads the same four steps; Done closes it and step 5 is as it was
+  - id: guide-over-issue-drawer
+    title: The guide opens over the issue drawer from the allocation panel, and closing it returns to the invoice as it was
+    tier: secondary
+    tickets: [MUT-679]
+    paths:
+      - src/hosted/components/ManualAllocationPanel.tsx
+      - src/hosted/components/IssueDocumentDrawer.tsx
+    steps:
+      - Open Issue a document, choose Client 1 and a line of 6,000, and type the allocation number
+      - Press How to connect in the panel
+      - Close the guide
+    expect:
+      - The panel offers How to connect only where the person can connect, and the guide opens over the invoice, which stays open behind it
+      - Closing the guide returns to the invoice with the client, the line and the typed allocation number as they were
