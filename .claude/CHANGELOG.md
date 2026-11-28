@@ -28,6 +28,18 @@
 
 ---
 
+## 2026-11-28 · TD-361: Checkout's email no longer stays on an unclaimed account's Stripe customer (MUT-766, ADR-292 R5)
+
+### Fixed
+- A sandbox activation (Take card before the claim) showed Stripe Checkout asking for an email and saving it on the Stripe customer, against R5 (no email until the claim). The `checkout.session.completed` handler now clears it when the payer is an unclaimed account (no password and a provisioned origin) and Checkout collected one; a claimed or self-made account is never touched. A failed clear is an error, so Stripe redelivers (`STRIPE_EMAIL_NOT_CLEARED`). The claim still sets the verified address.
+- Checked against the Stripe sandbox: replaying the event emptied the customer's email.
+
+### Technical
+- `CheckoutGateway.clearCustomerEmail` (`email: ''`), `createStripeSync` dependency `customerEmails`. Files: `billing/stripe/sync.ts`, `checkout-gateway.ts`, `app.ts`, and tests in `sync.test.ts`, `checkout-gateway.test.ts`, `fake.ts`.
+- Left open: Stripe may mail the first receipt before the clear runs, and Checkout also saves the cardholder name on the customer (`customer_update.name: 'auto'`); TD-361 part 1 (no retry for the claim's email) stays.
+
+---
+
 ## 2026-11-28 · MUT-780: phone push reminders for the accountant desk, server half (epic MUT-762)
 
 ### Added

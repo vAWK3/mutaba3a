@@ -240,6 +240,13 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     if (found) found.email = email;
   }
 
+  /** MUT-766 TD-361: Checkout saved the email typed in the room; an unclaimed account's customer holds none (R5). */
+  async clearCustomerEmail(customer: string): Promise<void> {
+    this.take(`clearEmail:${customer}`);
+    const found = this.customers.get(customer);
+    if (found) found.email = null;
+  }
+
   async createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }> {
     this.take(`checkout:${String(params.customer)}`);
     this.checkoutSessions.push(params);

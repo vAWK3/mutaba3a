@@ -234,7 +234,7 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
 - [ ] **Stage 3:** every person who issues (sader@, review@) has turned two-step sign-in on.
 - [x] 2026-11-28: **Stage 4:** the restricted key has Write on Subscription Schedules. Its UI is built: Change plan (MUT-734) and the gift notice (MUT-733) in the portal, the gift sheet in the phone (MUT-706).
 - [ ] **Stage 4:** `npm run billing:uncovered -- --url "$URL"` and Operator › Usage for Solo, Business and Firm payers over their count, on the released API.
-- [ ] **Stage 5:** one activation in Stripe test mode to settle TD-361; the partner accountant approved in the Operator console.
+- [x] 2026-11-28: **Stage 5:** one activation in Stripe test mode to settle TD-361 (done: Checkout saved the typed email, now cleared by the webhook, see CHANGELOG); the partner accountant approved in the Operator console.
 - [x] 2026-11-28: **Stage 5:** the restricted key allows Customers search; `mutaba3a-account-purge` is ENABLED in production.
 - [ ] **Before the first Israeli charge:** Barmajiyat's Israeli VAT file open (MUT-749, ADR-286).
 - Stage 6 waits for Malafat's MAL-1539 and MAL-1541.
@@ -319,7 +319,7 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   - The API with MUT-764..767 (1.158.0 to 1.170.0) and MUT-769's dead-link flag (1.211.0: `provisioned` on the setup-link check), and MUT-763's migration `20261127150000_mut763_accountant_provisioning`. No migration since.
   - **The accountant screens, in the same API image (the portal ships in it):** the desk with Add customer, the Customer drawer and Take card (MUT-768), CodeReveal and Activating (MUT-770), and `/setup`'s claim branch with the code step (MUT-769). Release QA: `portal.accountant-desk.{add,code,take-card,claimed,a11y}` and `portal.setup.{claim-code,claim-refused}`. The plan's order is migrate → server (switch off) → portal → switch on for the partner → widen. Phone surfaces are a later follow-up (plan T10/DT8), not part of this stage.
 - **Operator steps:**
-  1. One activation in Stripe test mode to settle TD-361: does Checkout store an email on a customer that has none?
+  1. ~~One activation in Stripe test mode to settle TD-361~~ **Done 2026-11-28:** Checkout does store the typed email (and the cardholder name); the `checkout.session.completed` handler now clears the email of an unclaimed account.
   2. The live restricted key allows Customers search.
   3. The hourly account purge is running. It deletes what the sweep expires at day 60.
   4. Approve the partner accountant ahead in the Operator console (`PUT /v1/operator/accounts/{id}/accountant-provisioning`; this works while the switch is off).

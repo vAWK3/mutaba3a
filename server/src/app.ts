@@ -844,7 +844,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const stripe = deps.stripe
     ? {
         webhookGateway: deps.stripe.webhookGateway,
-        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway } : {}), ...(taxFollowsAddress ? { taxFollowsAddress } : {}), logger: deps.logger, now }),
+        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway, customerEmails: deps.stripe.checkoutGateway } : {}), ...(taxFollowsAddress ? { taxFollowsAddress } : {}), logger: deps.logger, now }),
       }
     : null;
   app.route(
