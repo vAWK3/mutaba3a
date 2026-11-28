@@ -43,6 +43,66 @@
 
 ### Files
 `server/prisma/{schema.prisma,migrations/20261128150000_mut780_push_devices}`, `server/src/push/*`, `server/src/routes/{push-devices,accountant-sweep,device-sessions}.ts`, `server/src/accountants/unclaimed-sweep.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/{app,index,config,schemas}.ts`, `server/openapi/openapi.yaml`, tests under `server/src/push/__tests__`, `server/src/__tests__/routes-push-devices.test.ts`, `server/src/repositories/__tests__/store-*-push-devices*`.
+## 2026-11-28 · MUT-782: VAT period per client, period-end reminders, "all receipts sent" (server, dark)
+
+### Added
+- **Israel pack:** `jurisdictions/il/vat-periods.ts` (`pack.vat.periods`): default kind by business type, the latest ended period, period keys, the filing day (15th; yearly states none). Neutral types in `vat-periods/types.ts`.
+- **Store:** migration `20261128120000_mut782_vat_periods` (two additive tables, `vat_period_settings`, `vat_period_records`), `store.vatPeriods` (memory and Prisma on one contract), store-guard classes, purge list.
+- **Daily sweep:** `vat-periods/run.ts` and `POST /jobs/v1/vat-periods/sweep`: announces a period on the first day after it ends (10-day window), mails the owners, one digest a day per accountant, one follow-up 5 days later.
+- **Routes:** client `GET .../vat-periods/current` and `POST .../{periodKey}/done`; accountant `GET /v1/clients/vat-periods`, `PUT /v1/clients/{profileId}/vat-period`, `POST /v1/clients/{profileId}/vat-periods/{periodKey}/review` (ADR-343; the accountant never writes through a profile).
+- **Mail:** `vat-period-client`, `vat-period-accountant-digest` (ar and en, existing calendar art).
+- **Flag and infra:** `VAT_PERIOD_REMINDERS` (default off), Terraform `vat_period_reminders` with the daily Scheduler job (prepared, not applied). API 1.215.0-mut782.
+
+### Technical
+- Files: `server/src/{vat-periods,jurisdictions/il/vat-periods.ts,routes/vat-periods.ts,routes/vat-period-sweep.ts,repositories,auth/store-guard.ts,email,schemas.ts,app.ts,config.ts,index.ts,errors.ts}`, `server/prisma`, `server/openapi/openapi.yaml`, `server/infrastructure/terraform`.
+- Tests: pack (`il/__tests__/vat-periods.test.ts`), store contract (`store-contract-vat-periods.ts`, Memory and Postgres), sweep (`vat-periods/__tests__/run.test.ts`), routes (`routes-vat-periods.test.ts`), mail registries, store-guard pins.
+- After review (adversarial pass): the accountant routes and the desk read honour the Accountant plan lock (ADR-251); a kind changed right after an announcement no longer mails the same months twice; follow-ups tolerate a scheduler firing up to an hour early; who acted is forgotten on purge (`PURGE_UNKEYED_USER_COLUMNS`); the sweep cap is logged (TD-375; the sweep's plan lock is TD-376).
+- Why: accountants chased every client by hand each period for the receipts. The portal (MUT-783) and the phone (MUT-784) build on this.
+
+## 2026-11-28 · MUT-785 and MUT-786: the invoice guide and the accountant guide (epic MUT-672)
+
+### Added
+- `issue-first-invoice.json` (four steps on `guide-invoice-*`, note, `ifStuck`): a "How to issue" `GuideButton` under the empty line of the Issued documents list (`IssuedDocuments.tsx`) and in the invoicing setup's ready block (`InvoicingSetupPage.tsx`). Its lead names no document type, so an exempt dealer (receipts only) is not told they can issue one they cannot; this is one word of change from the signed deck, approved by Basel.
+- `accountant-access.json` (three steps on `guide-accountant-*`, note, `ifStuck`): a "How to invite" `GuideButton` in the Sharing page's empty state and in the Accountants column's head. Step 3 uses the Sharing page's own wording (`AccessScopeList`), not the deck's, approved by Basel.
+- Analytics contract 2.16.0: the `guide` enum of `guide_opened` and `guide_finished` gains `issue_first_invoice` and `accountant_access`.
+- QA: `portal.guides.invoice-from-issued-and-setup`, `portal.guides.accountant-from-sharing`, and `portal.guides.tax-guide-ended-state` (MUT-679's AC3c; `FakeApi` `taxAuthority.ended` reads `expired`).
+
+### Files
+`src/content/guides/{issue-first-invoice,accountant-access}.json`, `src/hosted/pages/{views/IssuedDocuments,invoicing/InvoicingSetupPage,sharing/SharingPage,sharing/AccountantsColumn}.tsx`, `src/hosted/hosted.css` (`.hp-sharing-head-actions`), `src/hosted/i18n/{ar,en}.json` (`hosted.issue.guide`, `hosted.sharing.guide`), `docs/analytics/events.json`, `scripts/__tests__/analytics-taxonomy.test.ts`, `qa/support/portalApi.ts`, `qa/features/portal/guides.yaml`, `qa/specs/portal/guides.spec.ts`, tests `guides.test.ts`, `SharingPage.test.tsx`.
+
+## 2026-11-28 · MUT-679: the Tax Authority guide, opened from Connect and from the allocation panel (epic MUT-672)
+
+### Added
+- The guide format gains an optional `ifStuck` line (`types.ts`, `guideSchema.ts`), shown by `GuideDrawer` after the note.
+- A "How to connect" `GuideButton` beside Connect on step 5 of the invoicing setup (`TaxAuthorityStep`: not connected, ended, or ending soon; never on a plan without the connection, never when the status fails) and in `ManualAllocationPanel` when `allocation.automaticOn` is null. Label `hosted.invoicing.taxAuthority.guide` (ar + en).
+- `tax-authority.json`: the deck's revised copy (lead, four steps, note, `ifStuck`) and the Tax Authority's page as the source link. The Arabic is not read by a native speaker and the copy is not signed off (MUT-673): before-release.
+- Tests: `GuideButton.router.test.tsx` (the real shell: `?guide=` pushed on the page's search, Back, focus returns), `guides.test.ts` (no rate or currency in a guide, a declared neutral-scene list), the step and panel tests.
+- QA: `portal.guides.guide-open-read-close` repointed at the button (Arabic, Escape and focus, English, Done) and `portal.guides.guide-over-issue-drawer`.
+
+### Files
+`src/content/guides/*`, `src/hosted/components/{GuideDrawer,ManualAllocationPanel}.tsx`, `src/hosted/pages/invoicing/InvoicingSteps.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{ar,en}.json`, `DESIGN.md`, `qa/features/portal/guides.yaml`, `qa/specs/portal/guides.spec.ts`.
+
+## 2026-11-28 · Operator: Basel's checklist first in before-release.md, and one command for the production secrets
+
+### Added
+- `scripts/prod-env.sh` (`source` it from `mini-crm/`): exports the project, the gcloud account from `deploy.env`, the API's `URL`, and `MUTABA3A_ADMIN_TOKEN`, `STRIPE_SECRET_KEY` and `MUTABA3A_JOB_TOKEN` from Secret Manager, printing ✓/✗ per name, never a value. Why: the operator scripts kept stopping on "not set".
+- `docs/operations/before-release.md` › "Basel's checklist", at the top: what's done (with dates), what's left before the next release, what waits on others, and every secret's name. `make release` still prints only `## server` and `## web`.
+
+### Files
+`scripts/prod-env.sh`, `docs/operations/before-release.md`.
+
+## 2026-11-28 · MUT-785: the invoice guide's art, from Claude Design (epic MUT-672)
+
+### Added
+- Nine scenes for the "Issue your first invoice" guide, imported from Claude Design's delivery and generated into `src/components/illustrations/generated/`: `guide-invoice-hero` (120 × 96) and `guide-invoice-1`, `-2`, `-3`, `-4` (160 × 160, subject inside the central 120 × 96), each with an `-rtl` drawing except `guide-invoice-2`, which Claude Design drew direction-neutral.
+- Checked before import: the repo's scene validator (9 of 9 valid), no script, image or external reference in any file, every step inside the safe area, and each `-rtl` drawing differs from its twin.
+
+### Notes for the guide's build (MUT-785)
+- `guide-invoice-2` has no `-rtl` twin by design: the guide content test's declared neutral-scene list (`NEUTRAL_SCENES` in `guides.test.ts`, added by MUT-679) must name it when `issue-first-invoice.json` lands.
+- The brief is `.claude/designs/guides-and-help/claude-design-brief-invoice-guide.md`; the copy is `copy-deck-first-three.md` §2.
+
+### Files
+`assets/illustrations/source/guide-invoice-*.svg`, `src/components/illustrations/generated/GuideInvoice*Scene.tsx` and `index.ts`, `DESIGN.md`.
 
 ## 2026-11-28 · MUT-674: the portal guide viewer and its one content format (epic MUT-672)
 

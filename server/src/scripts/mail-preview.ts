@@ -49,6 +49,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/setup#sample-token`, validDays: 14 },
   'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
   'accountant-unclaimed-digest': { waiting: 7, removingSoon: 2, deskLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/client-books` },
+  'vat-period-client': { businessName: 'Café Nour', period: { kind: 'BIMONTHLY', year: 2026, firstMonth: 9, lastMonth: 10 }, dueOn: { year: 2026, month: 11, day: 15 }, link: SAMPLE_SIGN_IN, reminder: false },
+  'vat-period-accountant-digest': { ended: 4, deskLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/client-books` },
   // MUT-618
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },

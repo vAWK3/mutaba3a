@@ -2,6 +2,7 @@ import type { DealerType, IssuedDocType } from '../issuing/types.js';
 import type { IssuedDocumentRecord, IssuerDetailsRecord } from '../repositories/ports.js';
 import type { aboveAllocationThreshold, allocationNumberRequired, normalizeAllocationNumber } from './il/allocation-number.js';
 import type * as TaxAuthorityService from './il/tax-authority/service.js';
+import type { defaultVatPeriodKind, latestEndedVatPeriod, vatFilingDueDate, vatPeriodFromKey } from './il/vat-periods.js';
 import type { UniformFile, UniformFileHouse } from './il/uniform-file/export.js';
 
 
@@ -50,6 +51,13 @@ export interface JurisdictionPack {
     readonly rateOn: (date: string) => number;
     /** Whether a single line of a document may be marked VAT-exempt (MUT-743). */
     readonly perLineExemption: boolean;
+    /** MUT-782: the periods a client files VAT for (Israel: monthly, 2-monthly, yearly) and what each business type starts with. */
+    readonly periods: {
+      readonly defaultKind: typeof defaultVatPeriodKind;
+      readonly latestEnded: typeof latestEndedVatPeriod;
+      readonly fromKey: typeof vatPeriodFromKey;
+      readonly dueDate: typeof vatFilingDueDate;
+    };
   };
   readonly retention: {
     /** Years an issued document is kept from its date. */

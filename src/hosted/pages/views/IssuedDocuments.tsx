@@ -21,6 +21,7 @@ import { profileKey, useWritableFor } from '../../session/me';
 import { useAttemptKey } from '../../data/attemptKey';
 import { parseAmountToMinor } from '../../../lib/utils';
 import { minorDigitsToDecimal } from '../../lib/receiptSuggestion';
+import { GuideButton } from '../../components/GuideButton';
 import { DocIssuedArt, DocTypeIcon } from './docTypeIcons';
 import { documentTabs } from './issuedTabs';
 import { PageHeader, useBackTo } from './shared';
@@ -119,9 +120,13 @@ export function IssuedDocumentsPage({ profile, customerId }: { profile: HostedPr
       {!documents.data ? (
         <Skeleton />
       ) : documents.data.items.length === 0 ? (
-        <p className="hp-muted" data-testid="issued-empty">
-          {t('hosted.issue.empty')}
-        </p>
+        <>
+          <p className="hp-muted" data-testid="issued-empty">
+            {t('hosted.issue.empty')}
+          </p>
+          {/* MUT-785: the first-invoice guide, where nothing has been issued yet */}
+          <GuideButton guide="issue-first-invoice" label={t('hosted.issue.guide')} />
+        </>
       ) : (
         <table className="hp-issued-table">
           <thead>

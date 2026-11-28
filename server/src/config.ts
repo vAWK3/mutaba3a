@@ -294,6 +294,8 @@ const envSchema = z.object({
    * POST /v1/accountant/customers answers 404 for everyone (the server deploys dark). Only "true" turns it on.
    */
   ACCOUNTANT_PROVISIONING: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-782 (ADR-343): VAT period reminders and "all receipts sent". Off: every route and the daily job answer 404. */
+  VAT_PERIOD_REMINDERS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-780 (ADR-350): phone push through Firebase Cloud Messaging. `FCM_PROJECT_ID` turns it on; unset = push is dark
    * (POST /v1/push-devices answers 404, the sweep sends no push). Sending uses the runtime's own identity (Cloud Run's

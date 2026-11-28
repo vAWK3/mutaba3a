@@ -109,6 +109,9 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'customer-setup-cancelled': { mood: 'safety', header: 'customer-setup-cancelled', chip: 'person' },
   // MUT-767. Header: Claude Design, 2026-11-27.
   'accountant-unclaimed-digest': { mood: 'hello', header: 'accountant-unclaimed-digest', chip: 'pending' },
+  // MUT-782: a VAT period that ended on a day; the existing calendar art only (no new header drawn).
+  'vat-period-client': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
+  'vat-period-accountant-digest': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   // MUT-535: a month's summary, so the calendar.
   'monthly-summary': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   // MUT-571 AC3: the existing art only: a consent that ends on a day.

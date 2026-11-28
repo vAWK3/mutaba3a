@@ -67,6 +67,8 @@ const vars = {
   'customer-setup': { accountantName: 'Hadi Khatib', businessName: 'Café Nour', link: 'https://portal.example.test/setup#tok_ABC123def', validDays: 14 },
   'customer-setup-cancelled': { accountantName: 'Hadi Khatib', businessName: 'Café Nour' },
   'accountant-unclaimed-digest': { waiting: 7, removingSoon: 2, deskLink: 'https://portal.example.test/client-books' },
+  'vat-period-client': { businessName: 'Café Nour', period: { kind: 'MONTHLY', year: 2026, firstMonth: 10, lastMonth: 10 }, dueOn: null, link: 'https://portal.example.test/sign-in', reminder: true },
+  'vat-period-accountant-digest': { ended: 4, deskLink: 'https://portal.example.test/client-books' },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
   'two-factor-code': { code: '482913', validMinutes: 10 },

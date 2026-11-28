@@ -2,6 +2,8 @@ import { usagePruneRoutes } from './routes/usage-prune.js';
 import { accountantSweepRoutes } from './routes/accountant-sweep.js';
 import { PUSH_DEVICE_ORGANIZATION_INDEPENDENT_ROUTES, pushDeviceRoutes } from './routes/push-devices.js';
 import { DISABLED_PUSH, type PushService } from './push/service.js';
+import { VAT_PERIOD_ENDPOINTS, VAT_PERIOD_ORGANIZATION_INDEPENDENT_ROUTES, vatPeriodRoutes } from './routes/vat-periods.js';
+import { vatPeriodSweepRoutes } from './routes/vat-period-sweep.js';
 import { OPERATOR_USAGE_ROUTES, operatorUsageRoutes } from './routes/operator-usage.js';
 import { OPERATOR_PROVISIONING_ROUTES, operatorProvisioningRoutes } from './routes/operator-provisioning.js';
 import { routeKeyOf } from './usage/route-key.js';
@@ -313,6 +315,8 @@ export interface AppDependencies {
   accountantProvisioning?: boolean;
   /** MUT-780 (ADR-350): the phone push path. Absent = push is dark: the register routes answer 404 and nothing is sent. */
   push?: PushService;
+  /** MUT-782 (VAT_PERIOD_REMINDERS): VAT period reminders and "all receipts sent". Absent or false = every route and the daily job answer 404. */
+  vatPeriodReminders?: boolean;
   /**
    * MUT-593 (MALAFAT_DELEGATION, ADR-254): Malafat acting as each person. Absent or false = delegated tokens are
    * refused, the token endpoint serves no confidential client, and Connected apps and the operator switch answer 404.
@@ -360,7 +364,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_GIFT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...OPERATOR_PROVISIONING_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, ...PUSH_DEVICE_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_GIFT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...OPERATOR_PROVISIONING_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...VAT_PERIOD_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, ...PUSH_DEVICE_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -541,6 +545,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const darkLaunches: ReadonlyArray<{ endpoints: ReadonlySet<string>; on: boolean; refusal: () => ApiError }> = [
     { endpoints: ACCOUNTANT_ENDPOINTS, on: accountantAccess, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     { endpoints: ACCOUNTANT_CUSTOMER_ENDPOINTS, on: deps.accountantProvisioning ?? false, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    { endpoints: VAT_PERIOD_ENDPOINTS, on: deps.vatPeriodReminders ?? false, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
     { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     // MUT-593 (ADR-254 D10): Connected apps and the operator's per-firm switch.
@@ -669,6 +674,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   app.route('/', accountantCustomerRoutes({ store, settings: sessions, mailer, logger: deps.logger }));
+  // MUT-782 (ADR-343): the client's Done and the accountant's period and review, on the store the routes check themselves.
+  app.route('/', vatPeriodRoutes({ store, baseStore: deps.store, accountantPlan }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
@@ -821,6 +828,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', accountantSweepRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, enabled: deps.accountantProvisioning ?? false, push: deps.push ?? DISABLED_PUSH }));
   // MUT-780 (ADR-351): a signed-in phone's push token.
   app.route('/', pushDeviceRoutes({ store, enabled: (deps.push ?? DISABLED_PUSH).enabled }));
+  app.route('/', vatPeriodSweepRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, enabled: deps.vatPeriodReminders ?? false }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   // MUT-750 (ADR-290): the tax follows an address that moves into or out of Israel (needs the plan and checkout doors).

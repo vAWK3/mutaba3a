@@ -41,6 +41,15 @@ import { GuideClaude4RtlScene } from './GuideClaude4RtlScene';
 import { GuideClaude4Scene } from './GuideClaude4Scene';
 import { GuideClaudeHeroRtlScene } from './GuideClaudeHeroRtlScene';
 import { GuideClaudeHeroScene } from './GuideClaudeHeroScene';
+import { GuideInvoice1RtlScene } from './GuideInvoice1RtlScene';
+import { GuideInvoice1Scene } from './GuideInvoice1Scene';
+import { GuideInvoice2Scene } from './GuideInvoice2Scene';
+import { GuideInvoice3RtlScene } from './GuideInvoice3RtlScene';
+import { GuideInvoice3Scene } from './GuideInvoice3Scene';
+import { GuideInvoice4RtlScene } from './GuideInvoice4RtlScene';
+import { GuideInvoice4Scene } from './GuideInvoice4Scene';
+import { GuideInvoiceHeroRtlScene } from './GuideInvoiceHeroRtlScene';
+import { GuideInvoiceHeroScene } from './GuideInvoiceHeroScene';
 import { GuideScan1RtlScene } from './GuideScan1RtlScene';
 import { GuideScan1Scene } from './GuideScan1Scene';
 import { GuideScan2RtlScene } from './GuideScan2RtlScene';
@@ -140,6 +149,15 @@ export const SCENE_ART = {
   'guide-claude-4': GuideClaude4Scene,
   'guide-claude-hero-rtl': GuideClaudeHeroRtlScene,
   'guide-claude-hero': GuideClaudeHeroScene,
+  'guide-invoice-1-rtl': GuideInvoice1RtlScene,
+  'guide-invoice-1': GuideInvoice1Scene,
+  'guide-invoice-2': GuideInvoice2Scene,
+  'guide-invoice-3-rtl': GuideInvoice3RtlScene,
+  'guide-invoice-3': GuideInvoice3Scene,
+  'guide-invoice-4-rtl': GuideInvoice4RtlScene,
+  'guide-invoice-4': GuideInvoice4Scene,
+  'guide-invoice-hero-rtl': GuideInvoiceHeroRtlScene,
+  'guide-invoice-hero': GuideInvoiceHeroScene,
   'guide-scan-1-rtl': GuideScan1RtlScene,
   'guide-scan-1': GuideScan1Scene,
   'guide-scan-2-rtl': GuideScan2RtlScene,

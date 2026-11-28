@@ -4130,6 +4130,318 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profiles/{profileId}/vat-periods/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest VAT period announced for this profile, and where it stands
+         * @description MUT-782 (ADR-343). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.215.0-mut782.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The period, or null */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CurrentVatPeriodResponse"];
+                    };
+                };
+                /** @description READ_ONLY_PROFILE, details.reason NOT_OWNER */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such profile for you, or VAT period reminders are off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/{profileId}/vat-periods/{periodKey}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * All receipts for this period are sent
+         * @description MUT-782 (ADR-343). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.215.0-mut782.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                    periodKey: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The period now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["VatPeriodView"];
+                    };
+                };
+                /** @description READ_ONLY_PROFILE, details.reason NOT_OWNER */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such profile or period for you, or VAT period reminders are off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VAT_PERIOD_STATE: the period is confirmed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/clients/vat-periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your active clients: how often each files VAT, and where its latest period stands
+         * @description MUT-782 (ADR-343). One read for the whole desk (three queries however many clients). Ended and closing clients, and those past the free client books of a lapsed Accountant plan (ADR-251), are not listed. Additive since 1.215.0-mut782.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One item per active client */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClientVatPeriodsResponse"];
+                    };
+                };
+                /** @description VAT period reminders are off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/clients/{profileId}/vat-period": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose how often this client files VAT
+         * @description MUT-782 (ADR-343). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.215.0-mut782.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetVatPeriodKindRequest"];
+                };
+            };
+            responses: {
+                /** @description The kind now chosen */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetVatPeriodKindResponse"];
+                    };
+                };
+                /** @description ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books */
+                402: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not one of your clients, or VAT period reminders are off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/clients/{profileId}/vat-periods/{periodKey}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm that the receipts are all in, or ask the client for more
+         * @description MUT-782 (ADR-343). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client's reminder five days out, and lets the client say Done again. Additive since 1.215.0-mut782.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                    periodKey: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReviewVatPeriodRequest"];
+                };
+            };
+            responses: {
+                /** @description The period now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["VatPeriodView"];
+                    };
+                };
+                /** @description ACCOUNTANT_PLAN_REQUIRED: this client is past the free client books */
+                402: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not one of your clients, no such period, or VAT period reminders are off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VAT_PERIOD_STATE: the period is already confirmed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/integration": {
         parameters: {
             query?: never;
@@ -26748,7 +27060,7 @@ export interface paths {
         put?: never;
         /**
          * Daily: reminders for accounts an accountant created that nobody claimed, and removal of the unpaid ones after 60 days (Cloud Scheduler)
-         * @description Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant, and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
+         * @description Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant (with a phone push the same day when the accountant has a device, MUT-780), and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
          */
         post: {
             parameters: {
@@ -26766,6 +27078,197 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["UnclaimedSweepSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The feature is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/push-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register this phone’s push token (MUT-780)
+         * @description Stores the FCM token for the signed-in session, replacing the session’s earlier token and any other row holding the same token (a phone handed to another person). Idempotent. A session signed out or revoked never receives a push. Additive since 1.216.0-mut780.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RegisterPushDeviceRequest"];
+                };
+            };
+            responses: {
+                /** @description Registered */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: push is not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Remove this phone’s push token (MUT-780)
+         * @description Removes the signed-in session’s token. 204 also when there was none. Signing out (DELETE /v1/device-sessions/current) does the same.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed, or none was held */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: push is not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/v1/vat-periods/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily: announce the VAT periods that ended, follow up, and mail each accountant one digest (Cloud Scheduler)
+         * @description On the first day after a client's VAT period ends (in the profile's own zone), every owner is asked whether all receipts are sent and each accountant gets one digest; a period that ended more than 10 days ago is never announced. The client is reminded once, 5 days later, while the period is still open (and 5 days after each Ask for more). A second run the same day does nothing more. Additive since 1.215.0-mut782.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["VatPeriodSweepSummary"];
                     };
                 };
                 /** @description JOB_UNAUTHORIZED */
@@ -31060,6 +31563,53 @@ export interface components {
         ProvisionChangeEmailRequest: {
             /** Format: email */
             email: string;
+        };
+        CurrentVatPeriodResponse: {
+            period: components["schemas"]["VatPeriodView"];
+        };
+        VatPeriodView: {
+            /** @example 2026-B5 */
+            periodKey: string;
+            /** @enum {string} */
+            kind: "MONTHLY" | "BIMONTHLY" | "YEARLY";
+            year: number;
+            firstMonth: number;
+            lastMonth: number;
+            /** @example 2026-09-01 */
+            startDate: string;
+            /** @example 2026-10-31 */
+            endDate: string;
+            due: string | null;
+            state: components["schemas"]["VatPeriodState"];
+            note: string | null;
+            /** Format: date-time */
+            announcedAt: string;
+            /** Format: date-time */
+            doneAt: string | null;
+        } | null;
+        /** @enum {string} */
+        VatPeriodState: "OPEN" | "CLIENT_DONE" | "CONFIRMED" | "MORE_NEEDED";
+        ClientVatPeriodsResponse: {
+            items: {
+                /** Format: uuid */
+                profileId: string;
+                kind: components["schemas"]["VatPeriodKind"];
+                chosenKind: components["schemas"]["VatPeriodKind"] & unknown;
+                period: components["schemas"]["VatPeriodView"];
+            }[];
+        };
+        /** @enum {string} */
+        VatPeriodKind: "MONTHLY" | "BIMONTHLY" | "YEARLY" | "NONE";
+        SetVatPeriodKindResponse: {
+            kind: components["schemas"]["VatPeriodKind"];
+        };
+        SetVatPeriodKindRequest: {
+            kind: components["schemas"]["VatPeriodKind"];
+        };
+        ReviewVatPeriodRequest: {
+            /** @enum {string} */
+            decision: "CONFIRMED" | "MORE_NEEDED";
+            note?: string;
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
@@ -36203,6 +36753,22 @@ export interface components {
             reminded: number;
             removed: number;
             flagged: number;
+            digests: number;
+            pushed: number;
+            failed: number;
+            incomplete: boolean;
+        };
+        RegisterPushDeviceRequest: {
+            /** @enum {string} */
+            platform: "ios" | "android";
+            token: string;
+            /** @enum {string} */
+            environment?: "production" | "sandbox";
+        };
+        VatPeriodSweepSummary: {
+            looked: number;
+            announced: number;
+            followUps: number;
             digests: number;
             failed: number;
             incomplete: boolean;

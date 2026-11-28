@@ -14,8 +14,9 @@ const files = import.meta.glob('../*.json', { eager: true, import: 'default' }) 
 const fileIdOf = (path: string) => path.replace(/^\.\.\/(.+)\.json$/, '$1');
 const entries = Object.entries(files).map(([path, raw]) => ({ id: fileIdOf(path), raw }));
 
-/** A scene with no `-rtl` twin is direction-neutral (an object, not a reading direction). */
-const hasRtlTwin = (scene: string) => Object.hasOwn(SCENE_ART, `${scene}-rtl`);
+/** A scene with no `-rtl` twin is direction-neutral (an object, not a reading direction): it is declared here, with its guide. */
+const NEUTRAL_SCENES: readonly string[] = ['guide-invoice-2'];
+const hasRtlTwin = (scene: string) => Object.hasOwn(SCENE_ART, `${scene}-rtl`) || NEUTRAL_SCENES.includes(scene);
 
 const contract = JSON.parse(readFileSync(resolve(__dirname, '../../../../docs/analytics/events.json'), 'utf8')) as {
   events: Record<string, { emitters: string[]; properties?: { guide?: { type: string; values: string[] } } }>;
@@ -51,6 +52,12 @@ describe('the guide files', () => {
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it('states no rate, amount or currency: a guide says what MTB3A does and links the authority\'s own page (MUT-673)', () => {
+    const lines = guidesOf().flatMap((g) => JSON.stringify(g).match(/"(?:ar|en|he)":"([^"]*)"/g) ?? []);
+    const offending = lines.filter((line) => /[%₪$€]|\bNIS\b|\bILS\b/i.test(line));
+    expect(offending).toEqual([]);
   });
 
   it('every portal guide is in the analytics contract, and the contract names no guide without a file', () => {

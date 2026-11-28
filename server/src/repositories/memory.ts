@@ -4,6 +4,7 @@ import { hardCapOf } from '../usage/caps.js';
 import { UsageCapReached } from '../usage/cap-reached.js';
 import { usageEvent } from '../usage/event.js';
 import { MemoryUsage } from './memory-usage.js';
+import type { VatPeriodKind } from '../vat-periods/types.js';
 import { randomUUID } from 'node:crypto';
 import { CLAIM_CODE_MAX_ATTEMPTS } from '../auth/claim-code.js';
 import { KeyedQueue } from './keyed-queue.js';
@@ -31,6 +32,11 @@ import type {
   IssuedDocumentCancellationRecord,
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
+  VatClientView,
+  VatPeriodRecord,
+  VatPeriodRepository,
+  VatSweepPerson,
+  VatSweepTarget,
   IssuingRepository,
   JsonObject,
   IssuingRetentionAction,
@@ -1009,6 +1015,93 @@ export class MemoryLedgerStore implements LedgerStore {
    * MUT-763: an approved accountant creates a customer's account. Every check runs before the first write (the in-memory
    * stand-in for the Postgres transaction), so a refusal or a duplicate leaves nothing behind.
    */
+  /** MUT-782 (ADR-343): the chosen VAT period kind per profile, and each profile's announced periods (key: `${organizationId}|${periodKey}`). */
+  private readonly vatKinds = new Map<string, VatPeriodKind>();
+  private readonly vatRecords = new Map<string, VatPeriodRecord>();
+
+  private vatPerson(userId: string): VatSweepPerson | null {
+    const u = this.people.get(userId);
+    // Claimed (has a password), active and not closing: the people a reminder may reach.
+    if (!u || u.status !== 'ACTIVE' || u.passwordHash === null || u.closure !== null) return null;
+    return { userId: u.id, email: u.email, displayName: u.displayName, locale: u.locale };
+  }
+
+  readonly vatPeriods: VatPeriodRepository = {
+    settingOf: async (organizationId) => this.vatKinds.get(organizationId) ?? null,
+    setKind: async ({ organizationId, kind, at, audit }) => {
+      if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('vat_period_settings.organizationId');
+      this.vatKinds.set(organizationId, kind);
+      this.pushEvents(audit ?? [], at);
+    },
+    sweepTargets: async ({ limit, after }) => {
+      const withAccountant = new Set([...this.accountantGrantMap.values()].filter((g) => g.status === 'ACTIVE' && g.accountantUserId !== null).map((g) => g.organizationId));
+      const out: VatSweepTarget[] = [];
+      for (const organizationId of [...withAccountant].filter((id) => this.orgs.has(id) && (after === undefined || id > after)).sort()) {
+        if (out.length >= limit) break;
+        const owners = [...this.members.values()].filter((m) => m.organizationId === organizationId && m.role === 'OWNER').flatMap((m) => this.vatPerson(m.userId) ?? []);
+        const accountants = [...this.accountantGrantMap.values()]
+          .filter((g) => g.organizationId === organizationId && g.status === 'ACTIVE' && g.accountantUserId !== null)
+          .flatMap((g) => this.vatPerson(g.accountantUserId!) ?? []);
+        if (owners.length === 0 || accountants.length === 0) continue;
+        const org = this.orgs.get(organizationId)!;
+        out.push({ organizationId, name: org.name, timezone: org.timezone, country: this.issuerMap.get(organizationId)?.country ?? null, dealerType: this.issuerMap.get(organizationId)?.dealerType ?? null, chosenKind: this.vatKinds.get(organizationId) ?? null, owners, accountants });
+      }
+      return out;
+    },
+    announce: async ({ organizationId, periodKey, at, followUpDueAt, audit }) => {
+      if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('vat_period_records.organizationId');
+      const id = `${organizationId}|${periodKey}`;
+      if (this.vatRecords.has(id)) return false;
+      this.vatRecords.set(id, { organizationId, periodKey, state: 'OPEN', announcedAt: at, followUpDueAt, followUpSentAt: null, doneAt: null, doneByUserId: null, reviewedAt: null, reviewedByUserId: null, note: null });
+      this.pushEvents(audit ?? [], at);
+      return true;
+    },
+    recordOf: async (organizationId, periodKey) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      return r ? { ...r } : null;
+    },
+    latestOf: async (organizationIds) => {
+      const wanted = new Set(organizationIds);
+      const out = new Map<string, VatPeriodRecord>();
+      for (const r of this.vatRecords.values()) {
+        if (!wanted.has(r.organizationId)) continue;
+        const seen = out.get(r.organizationId);
+        if (!seen || r.announcedAt.getTime() > seen.announcedAt.getTime()) out.set(r.organizationId, { ...r });
+      }
+      return out;
+    },
+    viewsOf: async (organizationIds) => {
+      const latest = await this.vatPeriods.latestOf(organizationIds);
+      const out = new Map<string, VatClientView>();
+      for (const organizationId of organizationIds) {
+        const issuer = this.issuerMap.get(organizationId);
+        out.set(organizationId, { chosenKind: this.vatKinds.get(organizationId) ?? null, dealerType: issuer?.dealerType ?? null, country: issuer?.country ?? null, latest: latest.get(organizationId) ?? null });
+      }
+      return out;
+    },
+    markDone: async ({ organizationId, periodKey, userId, at, audit }) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      if (!r) return 'not_found';
+      if (r.state === 'CLIENT_DONE') return 'unchanged';
+      if (r.state === 'CONFIRMED') return 'state';
+      Object.assign(r, { state: 'CLIENT_DONE', doneAt: at, doneByUserId: userId });
+      this.pushEvents(audit ?? [], at);
+      return 'done';
+    },
+    review: async ({ organizationId, periodKey, userId, decision, note, at, followUpDueAt, audit }) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      if (!r) return 'not_found';
+      if (r.state === 'CONFIRMED') return 'state';
+      Object.assign(r, { state: decision, reviewedAt: at, reviewedByUserId: userId, note: decision === 'MORE_NEEDED' ? note : null, followUpDueAt: decision === 'CONFIRMED' ? null : followUpDueAt, followUpSentAt: null });
+      this.pushEvents(audit ?? [], at);
+      return 'ok';
+    },
+    markFollowUpSent: async (organizationId, periodKey, at) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      if (r) r.followUpSentAt = at;
+    },
+  };
+
   readonly provision: ProvisionRepository = {
     create: async (input) => {
       const approval = this.provisionApprovals.get(input.accountantUserId);
@@ -4906,6 +4999,9 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
     // MUT-559: ON DELETE CASCADE, as in Postgres.
     for (const [key, grant] of this.accountantGrantMap) if (deleted.has(grant.organizationId)) this.accountantGrantMap.delete(key);
+    // MUT-782: ON DELETE CASCADE, the profile's VAT period choice and records.
+    for (const organizationId of deleted) this.vatKinds.delete(organizationId);
+    for (const [key, record] of this.vatRecords) if (deleted.has(record.organizationId)) this.vatRecords.delete(key);
     // MUT-560: ON DELETE CASCADE, links and then their viewers.
     for (const [key, link] of this.shareLinkMap) if (deleted.has(link.organizationId)) this.shareLinkMap.delete(key);
     for (const [key, viewer] of this.shareLinkViewerMap) if (!this.shareLinkMap.has(viewer.shareLinkId)) this.shareLinkViewerMap.delete(key);
@@ -4962,6 +5058,11 @@ export class MemoryLedgerStore implements LedgerStore {
       // Only an invite still PENDING to the address: one a colleague accepted is theirs, and stays (review C).
       if (grant.accountantUserId === id || (grant.status === 'PENDING' && grant.inviteEmail === person.email)) this.accountantGrantMap.delete(key);
       else if (grant.invitedByUserId === id) grant.invitedByUserId = null;
+    }
+    // MUT-782: who said Done or reviewed a VAT period on a profile that survives loses the name (PURGE_UNKEYED_USER_COLUMNS).
+    for (const record of this.vatRecords.values()) {
+      if (record.doneByUserId === id) record.doneByUserId = null;
+      if (record.reviewedByUserId === id) record.reviewedByUserId = null;
     }
     // MUT-560: links the person created on profiles that survive stay, revocable by the remaining owners (SET NULL).
     for (const link of this.shareLinkMap.values()) if (link.createdByUserId === id) link.createdByUserId = null;

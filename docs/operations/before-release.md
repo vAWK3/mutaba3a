@@ -4,12 +4,89 @@
 before they ask to deploy. One item per line, starting with `- `. Delete an item once it's done, and
 record the date where the item says.
 
+## Basel's checklist
+
+What only Basel can do, in order. Tick a line with its date when it's done. Each line points to the item below
+that has the detail. `make release` doesn't print this section.
+
+### Every shell
+
+From `mini-crm/`: `source scripts/prod-env.sh`. It exports `GCP_PROJECT_ID`, `CLOUDSDK_CORE_ACCOUNT`, `URL`,
+`MUTABA3A_ADMIN_TOKEN`, `STRIPE_SECRET_KEY` and `MUTABA3A_JOB_TOKEN` from Secret Manager (`mtb3a-production`)
+and prints ✓ or ✗ per name, never a value. Then run the scripts from `server/`. The `users` scripts
+(`billing:*`, `signups:*`, `users`) talk to localhost unless you pass `--url "$URL"`.
+
+Any other secret: `gcloud secrets versions access latest --secret=<name> --project=mtb3a-production`.
+The names are `mutaba3a-api-` + `admin-token`, `database-url`, `forwarder-token`, `front-door-token`, `job-token`,
+`oauth-derive-key`, `resend-api-key`, `resend-webhook-secret`, `sentry-dsn`, `session-pepper`, `stripe-secret-key`,
+`stripe-webhook-secret`, `turnstile-secret`, `two-factor-seal-key`. A `gcloud` "permission denied" means sign in
+again: `gcloud auth login barmajiyatltd@gmail.com`.
+
+### Done
+
+- [x] 2026-11-26: the auth-events sink checked (MUT-710).
+- [x] 2026-11-26: `software_house_vat_id` and `software_house_name` in `production.tfvars` (MUT-569).
+- [x] 2026-11-27: the live catalog, `billing:plans -- --apply --live`: nothing to change (Stage 1, step 3).
+- [x] 2026-11-28: `billing:product-tiers`: 4 live products, each with its tier (business, solo, firm, freelancer), 0 subscriptions.
+
+### Before the next release (Stage 1)
+
+- [x] 2026-11-28: **Stripe › Developers › API keys › the API's restricted live key, in one edit.** Write on Products, Prices,
+      Tax Rates, Coupons, Subscription Schedules, Invoices and Invoice items; Write on Subscriptions, Customers (with
+      search), Checkout Sessions and Customer portal kept. (MUT-702 B, 703, 734, 532, 531, 764.)
+- [x] 2026-11-28: Stripe Tax head office: Barmajiyat's UK address (Stage 1, step 2).
+- [x] 2026-11-28: Stripe › Customer Portal: customers can edit their billing address (Stage 1, step 5).
+- [x] 2026-11-28: the plans' offer coupons (MUT-703): `mtb3a_launch_yearly_plans_2026` (50% once, until 2027-02-21),
+      `mtb3a_stay_monthly_plans_50` (50% for 2 months), `mtb3a_comeback_first_month_plans_67` (67% once), on Solo,
+      Business and Firm; the dry run after says "nothing to do". (npm passes flags only after `--`:
+      `npm run billing:plans -- --apply --live`.)
+- [x] 2026-11-28: the Tax Authority guide's copy signed off by Basel (MUT-674).
+- [x] 2026-11-28: the revised Tax Authority guide copy (MUT-679) signed off by Basel, after the first sign-off on the MUT-674 draft. The Arabic native read is not recorded.
+- [x] 2026-11-28: the privacy policy's 7-year deletion wording approved by Basel (MUT-644).
+- [x] 2026-11-28: phone 0.2.1+25 (it parses `PLAN_LIMIT`) is the live version (Basel).
+- [x] 2026-11-28: Apple Developer › the MTB3A App ID: Push Notifications on. No SSL certificate: push uses the auth keys below.
+- [x] 2026-11-28: two APNs auth keys, Sandbox and Production, team scoped, saved as `~/Work/_keys/apple/Barmajiyat_{Sandbox,Prod}_AuthKey_….p8`.
+- [x] 2026-11-28: Firebase project `mtb3a-barmajiyat` (FCM v1 on), with apps MTB3A Web, iOS and Android (`com.barmajiyat.mutaba3a`).
+      Its config files and admin SDK key are in `~/Work/_keys/barmajiyat/firebase/`, never in a repo.
+- [x] 2026-11-28: Firebase › Cloud Messaging › MTB3A iOS: the Sandbox `.p8` as the Development APNs auth key, the Prod `.p8` as the Production one.
+- [ ] Later: move Malafat's Firebase to the Barmajiyat APNs keys, send a test push, then revoke the three Malafat keys.
+
+### Then: release, and one switch stage per release
+
+- [ ] `make release server` and `make release web`, with every switch off.
+- [ ] After that API is live (they read MUT-731's fields), from `server/`: `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6),
+      then `npm run billing:uncovered -- --url "$URL"` and Operator › Usage: who moves to Starter and who must pick a business (step 7).
+- [ ] Stages 1–5 together in one switch release (Basel, 2026-11-28), once "Before flipping 1–5" in "Switch rollout" is all ticked. Stage 6 later.
+
+### Waiting on someone else
+
+- [ ] Barmajiyat's Israeli VAT file open, before the first Israeli charge (MUT-749).
+- [ ] The Tax Authority's registration number → `uniform_file_registration_number` (MUT-567, the MUT-569 item).
+- [ ] The signing certificate, three releases (the MUT-641 item).
+- [ ] Malafat's MAL-1539 and MAL-1541, then Stage 6.
+- [ ] MUT-780's server push values (FCM_PROJECT_ID = mtb3a-barmajiyat, and the API's access to it): the exact steps come with MUT-780's merge.
+
+### Later, by date
+
+- [ ] From 2026-12-26 (a month of checked logs): `auth_log_bucket_locked = true`. This can't be undone (MUT-710).
+- [ ] The move's C5: record the IAM policy, the copy output, the downtime and the cost, then revoke the old Stripe,
+      Resend, webhook and Turnstile keys (MUT-487).
+
+### Not confirmed done (tick or keep)
+
+- [ ] The Stripe dashboard steps from older releases: the come-back coupons (MUT-534), the retry window and Stripe's
+      failed-payment email off (MUT-533), the stay coupon (MUT-532), the launch coupon and its end date (MUT-525).
+- [ ] The hand checks: the MCP connectors in Claude.ai and Claude Code (MUT-434/436), the mail preview across clients
+      (MUT-484/468), the attachments-bucket CORS (portal receipt uploads), and a real-iPhone accountant invite (MUT-558).
+
 ## server
 
 - **Switch rollout (Basel, 2026-11-27):** the feature switches go on one stage per release, in the order of the "Switch rollout" section at the end of this file. Before each server release, check which stage is next and whether everything it needs is live. Delete this item when stage 6 is done.
 - **MUT-780 (API 1.216.0-mut780, ADR-350..352): phone push for the accountant desk, dark until `FCM_PROJECT_ID` is set.** Migration `20261128150000_mut780_push_devices` (additive: one new table, `push_devices`; merging it restarts the shared dev API). Without `FCM_PROJECT_ID` the register routes answer 404 and the sweep sends nothing, so the deploy is safe before the keys. The Firebase project is `mtb3a-barmajiyat` (apps: iOS `1:823127926717:ios:00f4482fea8a68bdeb94d4`, Android `1:823127926717:android:73fd8b37cc0a7352eb94d4`, bundle and package `com.barmajiyat.mutaba3a`, sender id `823127926717`); FCM v1 is enabled. **To turn it on (Basel):** (1) Firebase console › Project settings › Cloud Messaging › Apple app: the Sandbox and Production APNs auth keys (`.p8`, Key ID, Team ID `4LCWA596X7`) are uploaded (done by Basel; check both show). (2) Apple Developer: Push Notifications is enabled on the App ID `com.barmajiyat.mutaba3a` (the phone's entitlement needs it, or signing fails). (3) **Server identity, preferred (no key):** let the API's Cloud Run service account send as itself: `gcloud projects add-iam-policy-binding mtb3a-barmajiyat --member=serviceAccount:<api-run-sa>@mtb3a-production.iam.gserviceaccount.com --role=roles/firebasecloudmessaging.admin` (Terraform, in `server/infrastructure/terraform`: a `google_project_iam_member` with `project = "mtb3a-barmajiyat"`, `role = "roles/firebasecloudmessaging.admin"`, `member = "serviceAccount:${google_service_account.api.email}"`; TD-380). Then set one plain env on the Cloud Run service: `FCM_PROJECT_ID=mtb3a-barmajiyat` (`gcloud run services update <api> --update-env-vars FCM_PROJECT_ID=mtb3a-barmajiyat`, or the Terraform env block). No secret. **Fallback with a key (local runs, or if the cross-project grant is refused):** put the service-account JSON (`~/Work/_keys/barmajiyat/firebase/mtb3a-barmajiyat-firebase-adminsdk-*.json`) in Secret Manager as `mutaba3a-api-fcm-service-account` and mount it as `FCM_SERVICE_ACCOUNT_JSON` beside `FCM_PROJECT_ID`; never in a repo or `.env`. (4) Phone release: the five `FIREBASE_*` values are in the git-ignored `.env`/`.env.local` of `mutaba3a-flutter` (names in its `.env.example`; the release lanes must pass the same `--dart-define-from-file`). The `GoogleService-Info.plist` and `google-services.json` are not used and stay out of both repos. Check after deploy: sign in on a phone as an approved accountant, add a first customer, Allow; send a test message to the registered token from Firebase console › Messaging. Delete this item after the release.
+- **Switch rollout (Basel, 2026-11-28):** stages 1–5 go on together in one server release, after the release that ships their code with every switch off; stage 6 waits for Malafat. Before that release, check the "Before flipping 1–5" list in the "Switch rollout" section at the end of this file. Delete this item when stage 6 is done.
 - **MUT-752 (API 1.162.0-mut752, ADR-296): pilot grants and `pilot` on Billing.** Migration `20261127210000_mut752_pilot_grants` (additive: three nullable columns, one key, two CHECKs every old row passes; merging it restarts the shared dev API). No new env. After the deploy, a pilot is `npm run billing:grant -- --email <tester> --tier BUSINESS --reason "pilot <accountant>" --cohort <slug> --accountant <accountant email>` (runbook `docs/operations/pilot-runbook.md`). Delete this item after the release.
 - **MUT-733 (API 1.159.0-mut733, ADR-293): paid plans' monthly caps after one gift, dark.** No migration. The deploy adds no env: `paid_hard_caps` defaults off (Solo and Business are counted, never refused, as today). **Turn it on only after:** `plan_checkout` on, MUT-734's plan change live (a subscriber at the cap must be able to upgrade), and the phone build that shows the gift live in both stores. To undo: `paid_hard_caps = false`. Delete this item after the release.
+- **MUT-782 (API 1.215.0-mut782, ADR-343): VAT period reminders, dark.** Apply migration `20261128120000_mut782_vat_periods` first (additive: two tables, two enums). Leave `VAT_PERIOD_REMINDERS` off in production (Terraform `vat_period_reminders`, default false) until the portal desk (MUT-783) ships and two facts are confirmed with an accountant: the 15th as the filing day, and the yearly period's due date (the mail names none until then). Turning it on also creates `google_cloud_scheduler_job.vat_period_sweep` (`mutaba3a-vat-period-sweep`, daily 08:00 Jerusalem, `POST /jobs/v1/vat-periods/sweep` with the job token); it needs the mailer on. Only a period that ended in the last 10 days is announced, so nothing goes out about older ones. Check with `gcloud scheduler jobs run mutaba3a-vat-period-sweep --location=europe-west1` (200, counts only). Delete this item after the release.
 - **MUT-764 (API 1.158.0-mut764, ADR-292): an accountant creates a customer's account, dark.** No migration of its own (MUT-763's `20261127150000_mut763_accountant_provisioning` must be applied first). Leave `ACCOUNTANT_PROVISIONING` off in production until "Switch rollout" stage 5 (Terraform `accountant_provisioning`, default false). The operator can approve the partner ahead of time (Operator console, `PUT /v1/operator/accounts/{id}/accountant-provisioning`). **MUT-765/766 (API 1.160.0, 1.161.0; ADR-294, ADR-295), same switch:** the claim code, fresh links and the activation Checkout (also needs `plan_checkout`). Before turning the switch on: one activation in Stripe test mode to settle TD-361 (does Checkout store an email on a customer with none?), and the restricted key must allow Customers search. **MUT-767 (API 1.170.0, ADR-300):** the daily Cloud Scheduler job `POST /jobs/v1/accountants/unclaimed-sweep` comes with `accountant_provisioning = true` (Terraform creates it only then); the hourly account purge must be running. **MUT-769 (API 1.211.0-mut769, ADR-320):** the setup-link check adds `provisioned: true` on a dead accountant's link (additive; the claim page ships with it); nothing to set. Delete this item after the release.
 - **MUT-734 (API 1.157.0-mut734, ADR-291): change plan, dark.** Migration `20261127180000_mut734_plan_changes` (additive: one new table; merging it restarts the shared dev API). The deploy adds no env: plan changes need `plan_checkout`, and `paid_business_caps` defaults off. **Before turning `paid_business_caps` on** (with the pricing release): `billing:uncovered` and Operator › Usage for Solo/Business/Firm payers over their count (they will be asked to pick). The restricted live key needs Write on Subscription Schedules. To undo: `paid_business_caps = false`. Delete this item after the release.
 - **MUT-750 slice A (API 1.156.0-mut750, ADR-290): the Israeli VAT follows plan changes and address moves.** No migration, no new env. Nothing changes for anyone until plan Checkouts sell (`plan_checkout`): only Solo/Business/Firm subscriptions are re-taxed, and the legacy Freelancer plan keeps Stripe Tax. The webhook endpoint already receives `customer.updated`. Delete this item after the release.
@@ -137,8 +214,6 @@ record the date where the item says.
 
 - **The legal pages rewrite (privacy policy + terms 2026-11-25) is HELD BACK from this release (Basel, 2026-11-25): no terms re-acceptance, no wording approval step.** The live terms stay 2026-10-26 (`CURRENT_TERMS`), the live privacy page is the one from before the rewrite plus one factual addition (the come-back offer is labelled «פרסומת», names the sender and carries an Unsubscribe link that also works with the email app's own button). The rewritten texts sit unpublished, with their remaining `[TODO(...)]` lawyer notes (terms: VAT file / payment provider / consumer VAT / price-change notice, IP assignment to Narabnd; privacy: data outside Israel and a copy in Israel), in `docs/legal/drafts/` (`terms-2026-11-25.{en,ar}.json`, `privacy-policy-2026-11-25.{en,ar}.json`); neither the site nor the server loads them and the web preflight's `[TODO` guard does not scan them. Publishing them is tracked in **the legal publication ticket** (also: the Tax Authority registration number from MUT-567 goes into the terms' Tax Authority section, and the sha256 rows in `server/src/legal.ts` and `scripts/__tests__/legal-terms.test.ts` are recomputed from the published files). Nothing to do for this release; `make release web` still refuses any published legal text that carries a `[TODO`.
 
-- **MUT-644: the privacy policy's deletion section now says each issued invoice and receipt is kept 7 years from its date, the business details until the last goes, and that a former owner who has their copy can ask for earlier deletion** (en + ar, "Last updated November 25, 2026"; Basel's decisions of 2026-11-25). Legal wording is Basel's: approve it before this web release, or revert the sentence in `src/lib/i18n/translations/{en,ar}/landing.json`. The phone's Close my account line still says "after the end of the year of the last one" until the Flutter follow-up.
-
 - **MUT-535 (ADR-259): the privacy policy names the monthly summary; You › Account gets its switch and `/mail-off` its page.** Release after the server's MUT-535 step 1 (the switch reads `GET /v1/me/monthly-summary-mail`; on an older API the row stays hidden). Nothing to set. Check: You › Account shows "Monthly summary email" for a paying or trialling account, and `https://mtb3a.com/privacy` says "Last updated November 21, 2026" (adjust the date in `landing.json` en + ar if the policy ships later). Delete this item and record the date on MUT-535.
 
 - **MUT-532 (ADR-240): Billing's own cancel flow.** Release the server first (its MUT-532 item above, steps 1–3). **After `make release web`:** in the live Stripe Customer Portal settings turn **off** "Cancel subscriptions" (pilot runbook §1.7 step 3a); keep the payment method, invoice history and business details, and still no plan switching or pausing. Doing it before the release would leave nobody able to cancel in between. Check: a portal session from Billing shows no cancel, and Billing › Cancel plan opens the Why? step. Delete this item and record the date on MUT-532.
@@ -146,25 +221,33 @@ record the date where the item says.
 - MUT-402 ships the outlined MTB3A logotype (`src/assets/brand/wordmark.svg`). Attach Thmanyah's written OK for the outlined logotype to MUT-401 (Basel reports they confirmed it on 2026-10-22; brand-v2 decision 4 keeps this a guardrail, not a blocker). Delete this item and record the date on MUT-402.
 - MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. `make release web` now waits for the live document and checks it (`npm run release:oauth-client`); it printed ✓ for web-v0.3.4 on 2026-11-13. Left: in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.
 
-- **MUT-674 (epic MUT-672): the portal guide viewer ships with one draft guide, `tax-authority`, reachable only by typing `?guide=tax-authority` (no button on any screen until MUT-679).** Its Arabic and English copy comes from the draft in `.claude/designs/guides-and-help/guides-draft.md` and is not signed off. **Before the next `make release server` (the portal ships in the API image), have MUT-673's copy deck sign the Tax Authority guide**, or drop `src/content/guides/tax-authority.json` (and its value in the `guide` enum of `docs/analytics/events.json`) from the release. No operator step otherwise: no server change, no migration.
+## Switch rollout (Basel, 2026-11-27; one release for stages 1–5, 2026-11-28)
 
-## Switch rollout (Basel, 2026-11-27)
-
-Target: **on** `STARTER_PLAN`, `PLAN_CHECKOUT`, `OPEN_SIGNUP`, `PAID_BUSINESS_CAPS`, `PAID_HARD_CAPS`, `ACCOUNTANT_PROVISIONING`, `TWO_FACTOR_ISSUING_GATE_ENABLED`, `MALAFAT_SIGN_IN`, `MALAFAT_DELEGATION`; **off** `INVOICING_FOR_ALL` and `ACCOUNTANT_PLAN` (until MUT-747); **removed** `PORTAL_LEGACY_REDIRECT` (its own ticket). One stage per server release, in this order. Each switch is one line in the git-ignored `server/infrastructure/terraform/production.tfvars`, then `make release server`; the plan must change only `google_cloud_run_v2_service.api`'s env (stage 5 also adds one Scheduler job). To undo a stage, set its lines back to `false` and release.
+Target: **on** `STARTER_PLAN`, `PLAN_CHECKOUT`, `OPEN_SIGNUP`, `PAID_BUSINESS_CAPS`, `PAID_HARD_CAPS`, `ACCOUNTANT_PROVISIONING`, `TWO_FACTOR_ISSUING_GATE_ENABLED`, `MALAFAT_SIGN_IN`, `MALAFAT_DELEGATION`; **off** `INVOICING_FOR_ALL` and `ACCOUNTANT_PLAN` (until MUT-747); **removed** `PORTAL_LEGACY_REDIRECT` (its own ticket). **Stages 1–5 go on together, in one server release** (Basel, 2026-11-28: it replaces one stage per release); stage 6 follows when Malafat is ready. Each switch is one line in the git-ignored `server/infrastructure/terraform/production.tfvars`, then `make release server`; the plan must change only `google_cloud_run_v2_service.api`'s env, plus stage 5's one Scheduler job. To undo a stage, set its lines back to `false` and release; each stage's own rollback still works alone.
 
 This section isn't printed by `make release` (only `## server` and `## web` are); the first item under `## server` points here. The facts below come from the items above, ADR-284, 288, 289, 291–300 and the plans in `.claude/designs` and `docs/designs`. As of 2026-11-27 production runs API 1.141.0 (`api-v0.21.0`) and web `web-v0.4.0`: none of the code these switches turn on is released yet.
 
-**WAITING FOR UI** marks a stage that needs screens that aren't built yet.
+### Before flipping 1–5 (one release)
+
+- [ ] **Their code is live, switches off:** api-v0.22.0 and web-v0.5.0 (main, with MUT-780, 782–786), and phone 0.3.0 **live in both stores** (it carries the gift sheet, MUT-706; stage 4 needs it, and stage 1 needs `PLAN_LIMIT` parsing, which 0.2.1+25 already has).
+- [ ] **Stage 2's Solo trial (TD-344):** a live-API QA flow of the trial Checkout, then the portal's `SOLO_TRIAL_CHECKOUT = true` (a code change in `SoloTrialStep.tsx`, so it ships in the web release) and `solo_trial_offer_since` in tfvars. Or Basel decides open sign-up goes on without the trial (the MUT-737 item's "all together", plan Q2).
+- [ ] **Stage 3:** every person who issues (sader@, review@) has turned two-step sign-in on.
+- [x] 2026-11-28: **Stage 4:** the restricted key has Write on Subscription Schedules. Its UI is built: Change plan (MUT-734) and the gift notice (MUT-733) in the portal, the gift sheet in the phone (MUT-706).
+- [ ] **Stage 4:** `npm run billing:uncovered -- --url "$URL"` and Operator › Usage for Solo, Business and Firm payers over their count, on the released API.
+- [ ] **Stage 5:** one activation in Stripe test mode to settle TD-361; the partner accountant approved in the Operator console.
+- [x] 2026-11-28: **Stage 5:** the restricted key allows Customers search; `mutaba3a-account-purge` is ENABLED in production.
+- [ ] **Before the first Israeli charge:** Barmajiyat's Israeli VAT file open (MUT-749, ADR-286).
+- Stage 6 waits for Malafat's MAL-1539 and MAL-1541.
 
 ### Stage 1: `STARTER_PLAN` + `PLAN_CHECKOUT` (MUT-731, MUT-702 Part B; ADR-284, ADR-288)
 
 - **Live first:**
   - The API with MUT-731 (1.145.0), MUT-702 Part B (1.146.0) and MUT-750 slice A (1.156.0), released with both switches off. Their migrations: `20261126120000_mut731_starter` and `20261127120000_mut702b_provider`.
   - The web release with the portal's Starter notices, business pick and plan Subscribe step. These are built on main but not in `web-v0.4.0`.
-  - The phone build that parses `PLAN_LIMIT`, live in both stores. Released phones treat an unknown 409 as terminal. The Flutter checkout (0.2.1+25) handles it; confirm that build is live.
+  - The phone build that parses `PLAN_LIMIT`, live in both stores. Released phones treat an unknown 409 as terminal. 0.2.1+25 handles it: **live, confirmed by Basel 2026-11-28.**
   - **MUT-703 (API `1.210.0-mut703`, ADR-340): offers on Solo, Business and Firm.** No migration, no new env. `offers.json` names three new coupons on the plans' products: launch 50% off the first year until 21 Feb 2027, stay 50% for 2 months, come-back 67% off the first month (monthly only). The legacy Freelancer coupons stay as they are. Until the coupons exist the plans simply have no offer (warned), so the API can go out before step 1–2 below, but all of it comes before `plan_checkout = true`.
-    1. The live restricted key adds **Write on Coupons** (it has Read only, ADR-237).
-    2. `STRIPE_SECRET_KEY=<rk_live_…> npm --prefix server run billing:plans` (dry run: it lists the three coupons to create), then `-- --apply --live`, then the dry run again must say "nothing to do". A coupon of another shape already under one of the ids stops the run (exit 2, "give the spec a new id"); nothing is written.
+    1. ~~The live restricted key adds **Write on Coupons**~~ **Done 2026-11-28.**
+    2. ~~`billing:plans -- --apply --live`~~ **Done 2026-11-28:** the three coupons created; the dry run after says "nothing to do". A coupon of another shape already under one of the ids stops the run (exit 2, "give the spec a new id"); nothing is written.
     3. Release the web with the picker's offer lines (MUT-705 + MUT-703's UI half).
     4. Check: `GET /v1/billing` for a never-subscribed account lists `plans[].launch` with the first-year amounts (Solo ₪195 / $60, Business ₪445 / $135, Firm ₪1,245 / $375); a yearly Business Checkout in the sandbox reaches Stripe's page with the launch line; `npm --prefix server run billing:renewal-mail -- --dry-run` counts plan subscriptions.
     5. Before 21 Feb 2027 nothing to do: the coupon stops on its own. To end it early, list it in `RETIRED_COUPON_IDS` (`server/src/scripts/stripe-plans.ts`) and run the script.
@@ -173,7 +256,7 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   1. The live restricted key adds Write on Products, Prices and Tax Rates, and keeps Customers, Checkout Sessions and Customer portal.
   2. Stripe Tax's head office in the live account is Barmajiyat's UK address. Barmajiyat's Israeli VAT file must be open before the first Israeli charge (ADR-286, MUT-749; Backlog).
   3. ~~The catalog: `npm --prefix server run billing:plans -- --apply --live`~~ **Done 2026-11-27, nothing to change.** The run found the Israeli VAT rate, the 3 products and all 12 prices already right.
-  4. `npm --prefix server run billing:product-tiers`.
+  4. ~~`npm --prefix server run billing:product-tiers`~~ **Done 2026-11-28:** 4 live products, each with its tier, 0 subscriptions.
   5. In the Customer Portal settings, let customers edit their billing address.
   6. `npm --prefix server run billing:reconcile`, so every lapsed subscription has `endedReason` and `trialEnd`. A null reason reads as a deliberate cancel, which stays read-only.
   7. A dry look: run `npm run billing:uncovered` and open Operator › Usage to see who moves to Starter and who will be asked to pick a business. Check `monthly_summary_daily_sends` against the Starter people the summary now reaches.
@@ -213,13 +296,13 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   - sader@ issues a document after signing in with the second step.
   - An issuer without two-step sign-in gets 403 `TWO_FACTOR_SETUP_REQUIRED` on `PUT /v1/issuer` and sees the portal's prompt.
 
-### Stage 4: `PAID_BUSINESS_CAPS` + `PAID_HARD_CAPS` (MUT-734, MUT-733; ADR-291, ADR-293). **WAITING FOR UI**
+### Stage 4: `PAID_BUSINESS_CAPS` + `PAID_HARD_CAPS` (MUT-734, MUT-733; ADR-291, ADR-293)
 
 - **Live first:**
   - Stage 1 (`plan_checkout`).
   - The API with MUT-734 (1.157.0; migration `20261127180000_mut734_plan_changes`) and MUT-733 (1.159.0).
-  - **Change plan in the portal:** the Change-plan pane, the scheduled line with Undo, and "Move to Starter instead". The MUT-734 plan calls these "left for the UI half"; not built. A subscriber at the cap must be able to upgrade.
-  - **The gift screens:** the portal's gift notice and held-request retry (MUT-733's portal slice; not built), and the phone build with the gift sheet live in both stores (MUT-706; Backlog). Older phone builds would show a hard cap where a gift was due.
+  - **Change plan in the portal:** the Change-plan pane, the scheduled line with Undo, and "Move to Starter instead": built (MUT-734 portal, merged 2026-11-28). A subscriber at the cap must be able to upgrade.
+  - **The gift screens:** the portal's gift notice and held-request retry (MUT-733 portal, merged 2026-11-28), and phone 0.3.0 with the gift sheet (MUT-706, merged) **live in both stores**. Older phone builds would show a hard cap where a gift was due.
 - **Operator steps:**
   1. The live restricted key adds Write on Subscription Schedules.
   2. Before `paid_business_caps`: `npm run billing:uncovered` and Operator › Usage for Solo, Business and Firm payers over their count. They will be asked to pick.

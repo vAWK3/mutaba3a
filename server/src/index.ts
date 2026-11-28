@@ -254,6 +254,7 @@ const app = createApp({
   accountantAccess: config.ACCOUNTANT_ACCESS,
   accountantProvisioning: config.ACCOUNTANT_PROVISIONING,
   push: pushService,
+  vatPeriodReminders: config.VAT_PERIOD_REMINDERS,
   malafatDelegation: config.MALAFAT_DELEGATION,
   oauthClientLocalHttp: config.OAUTH_CLIENT_LOCAL_HTTP,
   malafatSignIn: config.MALAFAT_SIGN_IN ? { originTemplate: config.MALAFAT_ORIGIN_TEMPLATE, clientId: config.MALAFAT_SIGN_IN_CLIENT_ID } : null,

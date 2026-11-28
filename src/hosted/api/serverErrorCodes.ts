@@ -81,6 +81,7 @@ export const SERVER_ERROR_CODES = [
   'CLAIM_CODE_WRONG',
   'CLAIM_CODE_LOCKED',
   'CUSTOMER_CLAIMED',
+  'VAT_PERIOD_STATE',
 ] as const;
 
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];

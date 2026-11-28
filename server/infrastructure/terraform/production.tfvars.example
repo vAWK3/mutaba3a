@@ -55,6 +55,7 @@ live_label          = false
 # period_downloads_enabled  = true
 # accountant_plan_enabled   = false   # only with live Accountant prices and stripe_enabled (pilot runbook §1.12)
 # Switch rollout (Basel, 2026-11-27; docs/operations/before-release.md): off until that section's stage says so.
+# vat_period_reminders = false      # MUT-782: VAT period reminders and "all receipts sent"; adds the daily sweep job (after the migration)
 # accountant_provisioning = false   # stage 5: the portal desk and claim page live, TD-361 settled; adds the daily sweep job
 # malafat_sign_in         = false   # stage 6: once Malafat lists the callback (MAL-1539)
 # malafat_delegation      = false   # stage 6: once Malafat's JWKS is published and its client registered (MAL-1541)

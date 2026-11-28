@@ -56,6 +56,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   // MUT-674: guide_opened and guide_finished (portal), one `guide` property: the id of a guide file. Each new portal guide
   // adds its id to that enum, which is a new minor and a new row here (guides.test.ts names the line to add).
   '2.15.0': '6ac51fbff81d3a073da666a30e0b27a3a39ee97c722237d17a6f1c008cd2eb4f',
+  // MUT-785 and MUT-786: two more portal guides in the `guide` enum (issue_first_invoice, accountant_access).
+  '2.16.0': '9a768f83fbe37498763e5a70a0380e6701096234e05f497accb2b115e6600474',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -302,8 +304,8 @@ describe('docs/analytics/events.json (ADR-090)', () => {
     expect(shape('pilot_first_invoice_issued')).toEqual({ hours_since_start: 'integer' });
     expect(shape('pilot_usage_near_cap')).toEqual({ limit: ['documents', 'scans', 'businesses', 'partners'] });
     // MUT-674: a guide file's id with dashes as underscores (snake_case, like every enum value), one per portal guide.
-    expect(shape('guide_opened')).toEqual({ guide: ['tax_authority'] });
-    expect(shape('guide_finished')).toEqual({ guide: ['tax_authority'] });
+    expect(shape('guide_opened')).toEqual({ guide: ['tax_authority', 'issue_first_invoice', 'accountant_access'] });
+    expect(shape('guide_finished')).toEqual({ guide: ['tax_authority', 'issue_first_invoice', 'accountant_access'] });
   });
 
   it('MUT-575: the accountant and share-link events carry exactly their agreed properties', () => {

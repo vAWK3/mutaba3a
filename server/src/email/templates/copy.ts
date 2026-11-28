@@ -992,6 +992,53 @@ const accountantUnclaimedDigest: Copy<'accountant-unclaimed-digest'> = {
   }),
 };
 
+/** MUT-782: the period in words: a month, two months, or the year (Levantine month names in Arabic, ADR-253). */
+function vatPeriodLabel(period: TemplateVars['vat-period-client']['period'], locale: UserLocale): string {
+  if (period.kind === 'YEARLY') return String(period.year);
+  if (period.kind === 'MONTHLY') return monthName({ year: period.year, month: period.firstMonth }, locale, true);
+  return `${monthName({ year: period.year, month: period.firstMonth }, locale, false)} – ${monthName({ year: period.year, month: period.lastMonth }, locale, true)}`;
+}
+
+const vatPeriodClient: Copy<'vat-period-client'> = {
+  en: ({ period, dueOn, link, reminder }) => {
+    const label = vatPeriodLabel(period, 'en');
+    return {
+      subject: reminder ? `Reminder: all receipts for ${label} sent?` : `All receipts for ${label} sent?`,
+      preheader: dueOn ? `VAT is due ${mailDay(dueOn, 'en')}.` : 'Open MTB3A and tap Done.',
+      headline: `All receipts for ${label} sent?`,
+      intro: [[dueOn ? `VAT for ${label} is due ${mailDay(dueOn, 'en')}.` : `${label} has ended.`], ['Send every receipt, then tap Done.']],
+      action: { label: 'Open MTB3A', href: link },
+    };
+  },
+  ar: ({ period, dueOn, link, reminder }) => {
+    const label = vatPeriodLabel(period, 'ar');
+    return {
+      subject: reminder ? `تذكير: هل أُرسلت كل إيصالات ${label}؟` : `هل أُرسلت كل إيصالات ${label}؟`,
+      preheader: dueOn ? `موعد ضريبة القيمة المضافة ${mailDay(dueOn, 'ar')}.` : 'افتح متابعة واضغط «تم».',
+      headline: `هل أُرسلت كل إيصالات ${label}؟`,
+      intro: [[dueOn ? `موعد ضريبة القيمة المضافة عن ${label}: ${mailDay(dueOn, 'ar')}.` : `انتهت فترة ${label}.`], ['أرسل كل الإيصالات ثم اضغط «تم».']],
+      action: { label: 'فتح متابعة', href: link },
+    };
+  },
+};
+
+const vatPeriodAccountantDigest: Copy<'vat-period-accountant-digest'> = {
+  en: ({ ended, deskLink }) => ({
+    subject: ended === 1 ? 'A VAT period ended for 1 client' : `VAT periods ended for ${ended} clients`,
+    preheader: 'Open your desk to see who has sent receipts.',
+    headline: 'VAT periods ended',
+    intro: [[ended === 1 ? 'A VAT period ended for 1 client.' : `VAT periods ended for ${ended} clients.`]],
+    action: { label: 'Open my desk', href: deskLink },
+  }),
+  ar: ({ ended, deskLink }) => ({
+    subject: ended === 1 ? 'انتهت فترة ضريبة القيمة المضافة لعميل واحد' : `انتهت فترة ضريبة القيمة المضافة لـ${ended} من عملائك`,
+    preheader: 'افتح مكتبك لترى من أرسل إيصالاته.',
+    headline: 'فترات ضريبة منتهية',
+    intro: [[ended === 1 ? 'انتهت فترة ضريبة القيمة المضافة لعميل واحد.' : `انتهت فترة ضريبة القيمة المضافة لـ${ended} من عملائك.`]],
+    action: { label: 'فتح مكتبي', href: deskLink },
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -1021,4 +1068,6 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'customer-setup': customerSetup,
   'customer-setup-cancelled': customerSetupCancelled,
   'accountant-unclaimed-digest': accountantUnclaimedDigest,
+  'vat-period-client': vatPeriodClient,
+  'vat-period-accountant-digest': vatPeriodAccountantDigest,
 };

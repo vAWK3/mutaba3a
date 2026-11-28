@@ -6290,3 +6290,63 @@ export const UsagePruneSummarySchema = z
     retention: z.object({ eventMonths: z.number().int(), counterMonths: z.number().int(), routeDays: z.number().int() }),
   })
   .openapi('UsagePruneSummary');
+
+// ---- MUT-782 (ADR-343): VAT periods and "all receipts sent". Additive since 1.215.0-mut782. -----------------------
+
+export const VatPeriodKindSchema = z.enum(['MONTHLY', 'BIMONTHLY', 'YEARLY', 'NONE']).openapi('VatPeriodKind');
+export const VatPeriodStateSchema = z.enum(['OPEN', 'CLIENT_DONE', 'CONFIRMED', 'MORE_NEEDED']).openapi('VatPeriodState');
+
+/** A period and where it stands. Months, not words: each client writes them in its own language. */
+export const VatPeriodViewSchema = z
+  .object({
+    periodKey: z.string().openapi({ example: '2026-B5' }),
+    kind: z.enum(['MONTHLY', 'BIMONTHLY', 'YEARLY']),
+    year: z.number().int(),
+    firstMonth: z.number().int().min(1).max(12),
+    lastMonth: z.number().int().min(1).max(12),
+    startDate: z.string().openapi({ example: '2026-09-01' }),
+    endDate: z.string().openapi({ example: '2026-10-31' }),
+    /** The filing day; null where none is stated (a yearly period). */
+    due: z.string().nullable(),
+    state: VatPeriodStateSchema,
+    /** The accountant's note on Ask for more; null otherwise. */
+    note: z.string().nullable(),
+    announcedAt: z.string().datetime(),
+    doneAt: z.string().datetime().nullable(),
+  })
+  .openapi('VatPeriodView');
+
+export const CurrentVatPeriodResponseSchema = z.object({ period: VatPeriodViewSchema.nullable() }).openapi('CurrentVatPeriodResponse');
+
+export const VatPeriodKeyParamSchema = ProfileIdParamSchema.extend({ periodKey: z.string().min(1).max(16).openapi({ param: { name: 'periodKey', in: 'path' }, example: '2026-B5' }) });
+
+export const SetVatPeriodKindRequestSchema = z.object({ kind: VatPeriodKindSchema }).openapi('SetVatPeriodKindRequest');
+export const SetVatPeriodKindResponseSchema = z.object({ kind: VatPeriodKindSchema }).openapi('SetVatPeriodKindResponse');
+
+export const VAT_PERIOD_NOTE_MAX = 200;
+export const ReviewVatPeriodRequestSchema = z
+  .object({
+    decision: z.enum(['CONFIRMED', 'MORE_NEEDED']),
+    /** Only read with MORE_NEEDED. */
+    note: z.string().trim().max(VAT_PERIOD_NOTE_MAX).optional(),
+  })
+  .openapi('ReviewVatPeriodRequest');
+
+export const ClientVatPeriodsResponseSchema = z
+  .object({
+    items: z.array(
+      z.object({
+        profileId: z.string().uuid(),
+        /** What the client files: the accountant's choice, else the business type's default, else NONE. */
+        kind: VatPeriodKindSchema,
+        /** The accountant's own choice; null follows the business type. */
+        chosenKind: VatPeriodKindSchema.nullable(),
+        period: VatPeriodViewSchema.nullable(),
+      }),
+    ),
+  })
+  .openapi('ClientVatPeriodsResponse');
+
+export const VatPeriodSweepSummarySchema = z
+  .object({ looked: z.number().int(), announced: z.number().int(), followUps: z.number().int(), digests: z.number().int(), failed: z.number().int(), incomplete: z.boolean() })
+  .openapi('VatPeriodSweepSummary');

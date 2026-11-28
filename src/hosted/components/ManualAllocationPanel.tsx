@@ -4,6 +4,7 @@ import { useLanguage } from '../../lib/i18n/core';
 import { copyToClipboard } from '../../lib/utils';
 import type { IssuedDocumentPreview } from '../api/client';
 import { formatDecimal } from '../format/DecimalAmount';
+import { GuideButton } from './GuideButton';
 
 export type ManualAllocation = NonNullable<IssuedDocumentPreview['allocation']>;
 
@@ -67,6 +68,8 @@ export function ManualAllocationPanel(props: {
         <a className="hp-link" href={allocation.requestUrl} target="_blank" rel="noopener noreferrer" data-testid="issue-allocation-link">
           {t('hosted.issue.allocation.open')} <span className="sr-only">{t('common.opensInNewTab')}</span>
         </a>
+        {/* MUT-679: only where the person can connect; on Starter the plan is why the number is manual */}
+        {allocation.automaticOn === null && <GuideButton guide="tax-authority" label={t('hosted.invoicing.taxAuthority.guide')} />}
       </div>
       <p className="form-hint" role="status" aria-live="polite">
         {copied === 'failed' ? t('hosted.copyField.failed') : copied ? t('hosted.copyField.copied') : ''}
