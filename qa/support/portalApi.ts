@@ -812,7 +812,7 @@ export interface StarterSeed {
    * MUT-702 Part B: Solo, Business and Firm on sale (PLAN_CHECKOUT on): GET /v1/billing lists them, with this saved
    * billing address for the prefill, and Checkout answers a Stripe URL. Absent: none on sale (the Freelancer step).
    */
-  plans?: { billingAddress?: { country: string; line1: string; city: string; postalCode: string } | null };
+  plans?: { billingAddress?: { country: string; line1: string; city: string; postalCode: string } | null; /** MUT-703: the launch offer is open on every plan (50% off the first year). */ launch?: boolean };
 }
 
 /** MUT-705: a paying person's plan and month, as the fake server holds them. */
@@ -849,6 +849,11 @@ const QA_PLANS = [
   { plan: 'business', catalog: { ILS: { month: 8900, year: 89000 }, USD: { month: 2700, year: 27000 } }, limits: { businesses: 3, partners: 2, documentsPerMonth: 250, scansPerMonth: 500 } },
   { plan: 'firm', catalog: { ILS: { month: 24900, year: 249000 }, USD: { month: 7500, year: 75000 } }, limits: { businesses: 6, partners: 2, documentsPerMonth: 1000, scansPerMonth: 2000 } },
 ];
+
+/** MUT-703: GET /v1/billing `offer` and `plans[].launch` for the plans' launch, half the yearly list in the first year. */
+const QA_LAUNCH_ID = 'launch-plans-2026';
+const QA_PLANS_LAUNCH = QA_PLANS.map((p) => ({ ...p, launch: { id: QA_LAUNCH_ID, firstYear: { ILS: p.catalog.ILS.year / 2, USD: p.catalog.USD.year / 2 } } }));
+const QA_LAUNCH_OFFER = { id: QA_LAUNCH_ID, percentOff: 50, endsAt: '2027-02-21T22:59:00.000Z', interval: 'year', eligible: true, firstYear: { ILS: 19500, USD: 6000 } };
 
 const STARTER_CAPS = { documents: 3, scans: 12 } as const;
 /** MUT-750 slice A: `billing-countries.json` `vatRates.IL`, as GET /v1/billing `vatRate` sends it. */
@@ -1170,7 +1175,7 @@ export class FakeApi {
         starter: { chosenAt: null, canContinueFree: s.cancelled === true },
         activeBusinesses: plan.businesses,
         countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
-        ...(s.plans ? { plans: QA_PLANS, billingAddress: s.plans.billingAddress ?? null, vatRate: QA_VAT_RATE } : {}),
+        ...(s.plans ? { plans: s.plans.launch ? QA_PLANS_LAUNCH : QA_PLANS, ...(s.plans.launch ? { offer: QA_LAUNCH_OFFER } : {}), billingAddress: s.plans.billingAddress ?? null, vatRate: QA_VAT_RATE } : {}),
       });
     }
     // MUT-702 Part B: Stripe's side is not driven here; the spec stubs checkout.stripe.com.

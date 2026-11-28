@@ -124,3 +124,20 @@ features:
       - As a Starter person on See plans, type Jordan as the country
     expect:
       - One line, Price a month $12.00, and no VAT line
+  - id: plan-launch-yearly
+    title: With the launch open, Yearly opens with the first year under each plan, Monthly drops it, and Continue sends the offer
+    tier: secondary
+    tickets: [MUT-703]
+    paths:
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/data/billingView.ts
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+    steps:
+      - As a Starter person with the launch open, open Billing and choose See plans
+      - Choose Business and an Israeli address
+      - Switch to Monthly, then back to Yearly, and choose Continue to payment
+    expect:
+      - The step opens on Yearly and each plan says "First year" with half its yearly price
+      - Monthly shows no first-year line
+      - The portal sent plan business, interval year and the launch offer as expectedOffer

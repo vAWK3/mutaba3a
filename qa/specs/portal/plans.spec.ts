@@ -256,3 +256,31 @@ test('With a Jordanian address the Subscribe step shows the price alone', { tag:
     await expect(lines).not.toContainText('VAT');
   });
 });
+
+test('With the launch open, Yearly opens with the first year under each plan, Monthly drops it, and Continue sends the offer', { tag: '@portal.plans.plan-launch-yearly' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), personal], starter: { plans: { launch: true } } });
+  let plans!: import('@playwright/test').Locator;
+
+  await step('As a Starter person with the launch open, open Billing and choose See plans', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    plans = await seePlans(page);
+    await expect(plans.getByText(/First year ₪195\.00 or \$60\.00/)).toBeVisible();
+    await expect(plans.getByText(/First year ₪445\.00 or \$135\.00/)).toBeVisible();
+  });
+
+  await step('Choose Business and an Israeli address', async () => {
+    await plans.getByRole('radio', { name: /^Business/ }).check();
+    await fillAddress(plans, 'Israel', 'Az-Zahra St. 18', 'Jerusalem', '9100000');
+    await expect(plans.getByText(/First year ₪445\.00/)).toBeVisible();
+  });
+
+  await step('Switch to Monthly, then back to Yearly, and choose Continue to payment', async () => {
+    await plans.getByRole('radio', { name: 'Monthly' }).check();
+    await expect(plans.getByText(/First year/)).toHaveCount(0);
+    await plans.getByRole('radio', { name: /^Yearly/ }).check();
+    await page.route('https://checkout.stripe.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Stripe Checkout (QA)</title>' }));
+    await page.getByRole('button', { name: 'Continue to payment' }).click();
+    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    expect(api.calls('POST', CHECKOUT)[0]!.body).toMatchObject({ plan: 'business', interval: 'year', expectedOffer: 'launch-plans-2026' });
+  });
+});
