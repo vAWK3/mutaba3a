@@ -31,13 +31,14 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 
 ### Before the next release (Stage 1)
 
-- [ ] **Stripe › Developers › API keys › the API's restricted live key, in one edit.** Add Write on Products, Prices,
-      Tax Rates, Coupons, Subscription Schedules, Invoices and Invoice items. Keep Write on Subscriptions, and keep
-      Customers (with search), Checkout Sessions and Customer portal. (MUT-702 B, 703, 734, 532, 531, 764.)
-- [ ] Stripe Tax head office: Barmajiyat's UK address (Stage 1, step 2).
-- [ ] Stripe › Customer Portal: customers can edit their billing address (Stage 1, step 5).
-- [ ] The plans' offer coupons: `npm run billing:plans` (dry run), then `-- --apply --live`, then the dry run says
-      "nothing to do". Needs Write on Coupons first (MUT-703).
+- [x] 2026-11-28: **Stripe › Developers › API keys › the API's restricted live key, in one edit.** Write on Products, Prices,
+      Tax Rates, Coupons, Subscription Schedules, Invoices and Invoice items; Write on Subscriptions, Customers (with
+      search), Checkout Sessions and Customer portal kept. (MUT-702 B, 703, 734, 532, 531, 764.)
+- [x] 2026-11-28: Stripe Tax head office: Barmajiyat's UK address (Stage 1, step 2).
+- [x] 2026-11-28: Stripe › Customer Portal: customers can edit their billing address (Stage 1, step 5).
+- [ ] The plans' offer coupons (MUT-703), from `server/`. npm passes flags to the script only after `--`:
+      `npm run billing:plans -- --live` (dry run), then `npm run billing:plans -- --apply --live`, then the dry run
+      again says "nothing to do".
 - [ ] `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6).
 - [ ] `npm run billing:uncovered -- --url "$URL"`, then Operator › Usage: who moves to Starter and who must pick a business (Stage 1, step 7).
 - [ ] The Tax Authority guide's copy signed, or the guide dropped from the release (the MUT-674 item under `## web`).
