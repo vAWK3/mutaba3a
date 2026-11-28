@@ -181,6 +181,9 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
   useLateVendorDefaults(form, receipt.vendorDefaults, readFields, profile.firm, vendorFilled, setVendorFilled);
   const late = useLateSuggestion(form, receipt.suggested, profile.firm, vendorFilled);
   const current = useWatch({ control: form.control, name: SUGGESTED_FORM_FIELDS });
+  // MUT-775: the category the vendor filled, while the field still holds it (its hint and the autofill underline).
+  const categoryId = useWatch({ control: form.control, name: 'categoryId' });
+  const categoryFilled = vendorFilled.categoryId !== undefined && categoryId === vendorFilled.categoryId;
 
   const hints = useMemo(() => {
     const out: Partial<Record<HostedExpenseHintField, string>> = {};
@@ -194,6 +197,8 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
     if (prefill.unsupported) out.amount = receiptSays(prefill.unsupported);
     // MUT-302 (D6): a VAT amount with no usable rate is only said, beside the empty rate.
     if (prefill.vatRead) out.vat = t('hosted.receipts.review.vatRead', { amount: prefill.vatRead });
+    // MUT-775: the vendor's last category, said once under the field it filled.
+    if (categoryFilled) out.category = t('hosted.receipts.review.fromVendor');
     if (late) {
       // R10 #9: a hint only where the late suggestion's value is what the field holds (it filled it).
       const now = Object.fromEntries(SUGGESTED_FORM_FIELDS.map((name, i) => [name, current[i]]));
@@ -205,7 +210,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
       if (late.vatRead && !out.vat && now.vatTreatment === '') out.vat = t('hosted.receipts.review.vatRead', { amount: late.vatRead });
     }
     return out;
-  }, [prefill, late, current, t]);
+  }, [prefill, late, current, categoryFilled, t]);
 
   const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
 
@@ -276,6 +281,8 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
       {/* noValidate, as the drawer: the schema and the server say what is wrong at the field. */}
       <form id={FORM_ID} onSubmit={picks.guard(form.handleSubmit(onSubmit))} noValidate>
         <ReadOnlyFields readOnly={!writable}>
+          {/* MUT-775 (motion-autofill): the peach underline under the category the vendor filled, keyed so a late fill replays it. */}
+          <div className="hp-autofill-scope" data-autofill={categoryFilled ? 'category' : undefined} key={categoryFilled ? `fill-${vendorFilled.categoryId}` : 'none'}>
           <HostedExpenseFields
             expenseForm={expenseForm}
             profileId={profile.id}
@@ -291,6 +298,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
             vendorFilled={vendorFilled}
             onVendorFill={(fills) => setVendorFilled((prev) => ({ ...prev, ...fills }))}
           />
+          </div>
         </ReadOnlyFields>
       </form>
       <div className="hp-receipt-actions">
@@ -336,7 +344,7 @@ function useLateVendorDefaults(
   if (defaults !== seen) {
     setSeen(defaults);
     const values = form.getValues();
-    const changed = (name: 'currency' | 'vatTreatment' | 'vatRate') => {
+    const changed = (name: 'currency' | 'vatTreatment' | 'vatRate' | 'categoryId') => {
       const state = form.getFieldState(name);
       return state.isDirty || state.isTouched;
     };
@@ -344,10 +352,10 @@ function useLateVendorDefaults(
     const fills = vendorDefaultFills(
       defaults,
       { ...values, vatTreatment: vendorsVat ? '' : values.vatTreatment },
-      { currency: readFields.currency || changed('currency'), vat: readFields.vat || changed('vatTreatment') || changed('vatRate') },
+      { currency: readFields.currency || changed('currency'), vat: readFields.vat || changed('vatTreatment') || changed('vatRate'), category: changed('categoryId') },
       firm,
     );
-    if (fills.currency || fills.vatTreatment) {
+    if (fills.currency || fills.vatTreatment || fills.categoryId) {
       setPending(fills);
       setVendorFilled((prev) => ({ ...prev, ...fills }));
     }
@@ -355,6 +363,7 @@ function useLateVendorDefaults(
   useEffect(() => {
     if (!pending) return;
     if (pending.currency) form.setValue('currency', pending.currency);
+    if (pending.categoryId) form.setValue('categoryId', pending.categoryId);
     if (pending.vatTreatment) {
       form.setValue('vatTreatment', pending.vatTreatment);
       form.setValue('vatRate', pending.vatRate ?? '');

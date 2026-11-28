@@ -5205,3 +5205,11 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Portal | `session/__tests__/AuthGate.soloTrial.test.tsx` | `onboarding_plan_shown` once, `onboarding_plan_chosen { choice: starter }` |
 | Contract | `scripts/__tests__/analytics-taxonomy.test.ts` | 2.14.0 pinned; the new events' emitters and properties |
 | QA | with TD-371 | `portal-selfservice.signup.webmail-starter`, `portal-selfservice.operator.signups-history` |
+
+## MUT-775 (portal) — the vendor's last category on the receipt review (2026-11-28)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `src/hosted/lib/__tests__/vendorDefaults.test.ts` | fills an empty untouched category; never a chosen or touched one; none without a category |
+| Portal | `src/hosted/pages/__tests__/Receipts.test.tsx` | the fill, its hint and the autofill scope; a person's change removes both |
+| QA | `qa/specs/portal/receipts.spec.ts` | `portal.receipts.vendor-category` (en, then ar with a hand-picked category) |

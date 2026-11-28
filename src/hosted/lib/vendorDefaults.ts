@@ -7,9 +7,11 @@ import { basisPointsToPercent } from './expenseVat';
 export interface VendorDefaults {
   currency: components['schemas']['Currency'] | null;
   vat: components['schemas']['VendorVat'] | null;
+  /** MUT-775: the vendor's last category on this profile (a registration-no. match only; the server decides). */
+  categoryId?: string | null;
 }
 
-type Fills = Partial<Pick<HostedExpenseFormValues, 'currency' | 'vatTreatment' | 'vatRate'>>;
+type Fills = Partial<Pick<HostedExpenseFormValues, 'currency' | 'vatTreatment' | 'vatRate' | 'categoryId'>>;
 
 /**
  * MUT-303 (plan §3, R4–R6, R10): the form values a vendor's defaults fill. Pure. A field fills only when it is
@@ -19,12 +21,14 @@ type Fills = Partial<Pick<HostedExpenseFormValues, 'currency' | 'vatTreatment' |
  */
 export function vendorDefaultFills(
   defaults: VendorDefaults | null | undefined,
-  form: Pick<HostedExpenseFormValues, 'currency' | 'amount' | 'vatTreatment'>,
-  locked: { currency: boolean; vat: boolean },
+  form: Pick<HostedExpenseFormValues, 'currency' | 'amount' | 'vatTreatment'> & Partial<Pick<HostedExpenseFormValues, 'categoryId'>>,
+  locked: { currency: boolean; vat: boolean; category?: boolean },
   firm: boolean,
 ): Fills {
   const fills: Fills = {};
   if (!defaults) return fills;
+  // MUT-775 (D4): the vendor's last category fills only an empty category nobody touched.
+  if (defaults.categoryId && !locked.category && (form.categoryId ?? '') === '') fills.categoryId = defaults.categoryId;
   const currency = HOSTED_CURRENCIES.find((c) => c === defaults.currency);
   if (currency && currency !== form.currency && !locked.currency && form.amount === '') fills.currency = currency;
   if (firm && defaults.vat && !locked.vat && form.vatTreatment === '') {

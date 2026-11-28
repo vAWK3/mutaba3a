@@ -52,7 +52,7 @@ export interface HostedExpenseFieldsProps {
 }
 
 /** MUT-303: the values a vendor's defaults put in the form, so they can be said and later replaced. */
-export type VendorFilled = { currency?: string; vatTreatment?: string };
+export type VendorFilled = { currency?: string; vatTreatment?: string; categoryId?: string };
 
 export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddClient = false, readOnly = false, currencyDisabled = false, idPrefix = 'hosted-expense', hints, firm = false, allocationNumberNeeded = false, prefillDefaults = false, readFields, vendorFilled: keptFilled, onVendorFill }: HostedExpenseFieldsProps) {
   const { t } = useLanguage();
