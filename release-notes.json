@@ -1,4 +1,22 @@
 {
+  "0.5.0": {
+    "en": [
+      "New free plan, Starter: 1 business and your personal profile, 3 documents and 12 scans a month. When a trial ends, you continue on Starter.",
+      "Subscribe to Solo, Business or Firm from Billing.",
+      "Turn on two-step sign-in under You › Account: each sign-in then asks for a code from your authenticator app or your email.",
+      "Hebrew receipts in shekels are read more reliably.",
+      "Shorter wording across the app, and form errors now appear in Arabic too.",
+      "Business details for invoicing now ask for the business's country."
+    ],
+    "ar": [
+      "خطة مجانية جديدة، «البداية»: ملف تجاري واحد وملفك الشخصي، و3 مستندات و12 مسحًا في الشهر. وعند انتهاء الفترة التجريبية تتابع على خطة البداية.",
+      "اشترك في خطة «مستقل» أو «تجاري» أو «مؤسسة» من «الاشتراك».",
+      "فعّل الدخول بخطوتين من «أنت › الحساب»: يطلب كل تسجيل دخول بعدها رمزًا من تطبيق المصادقة أو من بريدك.",
+      "صارت قراءة الإيصالات العبرية بالشيكل أدق.",
+      "نصوص أقصر في أنحاء التطبيق، وتظهر أخطاء النماذج بالعربية أيضًا.",
+      "تطلب بيانات المصلحة للفوترة الآن دولة المصلحة."
+    ]
+  },
   "0.4.0": {
     "en": [
       "Credit a paid invoice: when the client has already paid, choose whether the money was refunded or stays as their credit.",
