@@ -2291,3 +2291,10 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-scheduled-inner { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-block-size: 0; overflow: hidden; }
 .hp-scheduled-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: 0; }
 @media (prefers-reduced-motion: reduce) { .hp-scheduled { transition: opacity 150ms linear; } }
+
+/* MUT-733: a scene in the banner slot (the gift, the hard cap after it) takes the icon's place. */
+.hp-banner-scene { flex: none; align-self: flex-start; }
+.hp-gift-notice { align-items: center; }
+/* MUT-733 (wireframe mut-733 A): on a paid plan 80% is a plain line, butter only from 90%; the gift's line is mint. */
+.hp-issue-usage[data-paid][data-level="near"] { color: var(--muted); font-weight: var(--weight-normal); }
+.hp-issue-usage[data-paid][data-level="grace"] { color: var(--success); }

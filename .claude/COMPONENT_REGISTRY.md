@@ -2676,3 +2676,10 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/components/Toast.tsx` | option `motion: 'undo'` (undo-toast spec) | scheduled plan change |
 | `src/hosted/components/Scene.tsx` | motions `plan-upgraded`, `gift-month` | done pane, MUT-733's gift notice |
 | `src/hosted/pages/operator/OperatorPlanHistory.tsx` | `OperatorPlanHistory` | operator account page |
+
+## MUT-733 — the gift and paid hard caps (portal)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `src/hosted/data/usePlanUsage.ts` | `usePlanUsage`, `giftBeforeTyping`, `useAcceptGift` | Issue drawer, `useReceiptFiles` |
+| `src/hosted/components/PlanLimitNotice.tsx` | `GiftNotice`; `PlanLimitNotice` `onContinue` / `continuing` (the gift), the `gift-used` still on a paid hard cap | Issue drawer, receipts gallery, Home drop zone |

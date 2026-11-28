@@ -849,6 +849,8 @@ export const api = {
   previewPlanChange: (plan: Schemas['PlanChangeTarget']) => request<Schemas['PlanChangePreview']>('POST', '/v1/billing/plan-change/preview', { body: { plan } }),
   /** MUT-734: change plan at the preview's `prorationAt` and amount; past the target's business count, the ones kept. */
   changePlan: (body: Schemas['PlanChangeRequest']) => request<Schemas['PlanChangeResult']>('POST', '/v1/billing/plan-change', { body }),
+  /** MUT-733: take the once-ever over-cap gift for a meter at its cap (a partner names the business: the owner's gift). */
+  acceptOverCapGift: (body: Schemas['OverCapGiftRequest']) => request<Schemas['OverCapGift']>('POST', '/v1/billing/over-cap-gift', { body }),
   /** MUT-734: take a scheduled change back before its day. */
   undoPlanChange: () => request<{ change: Schemas['PlanChange'] }>('DELETE', '/v1/billing/plan-change'),
   /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */

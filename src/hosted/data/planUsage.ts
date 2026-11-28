@@ -74,6 +74,8 @@ export interface PlanLimit {
   resetsOn?: string;
   nextPlan: string | null;
   canUpgrade: boolean;
+  /** MUT-733: the first refusal on a paid plan carries the once-ever gift (`details.gift: 'available'`). */
+  gift?: boolean;
 }
 
 const LEVELS: readonly UsageLevel[] = ['ok', 'near', 'nudge', 'at_cap'];
@@ -129,9 +131,17 @@ export function starterUsageOf(billing: Pick<BillingOverview, 'usage'> | null | 
 /** The details of a 409 PLAN_LIMIT, or null for any other answer. */
 export function planLimitOf(error: unknown): PlanLimit | null {
   if (!(error instanceof ApiError) || error.code !== 'PLAN_LIMIT') return null;
-  const details = (error.details ?? {}) as Partial<PlanLimit>;
+  const details = (error.details ?? {}) as Partial<Omit<PlanLimit, 'gift'>> & { gift?: unknown };
   if (!details.limit) return null;
-  return { limit: details.limit, used: details.used, cap: details.cap, resetsOn: details.resetsOn, nextPlan: details.nextPlan ?? 'solo', canUpgrade: details.canUpgrade === true };
+  return {
+    limit: details.limit,
+    used: details.used,
+    cap: details.cap,
+    resetsOn: details.resetsOn,
+    nextPlan: details.nextPlan === undefined ? 'solo' : details.nextPlan,
+    canUpgrade: details.canUpgrade === true,
+    ...(details.gift === 'available' ? { gift: true } : {}),
+  };
 }
 
 /**

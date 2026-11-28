@@ -3698,7 +3698,18 @@
       },
       "upgradeTo": "Upgrade to {plan}",
       "includes": "{plan} includes {items}",
-      "reached": "Limit reached: {usage}"
+      "reached": "Limit reached: {usage}",
+      "gift": {
+        "documents": {
+          "title": "Congratulations: {count} invoices this month.",
+          "body": "This month, issue as many as you need. From {date} the limit is {count}; past it, you'll need a bigger plan."
+        },
+        "scans": {
+          "title": "Congratulations: {count} scans this month.",
+          "body": "This month, scan as many as you need. From {date} the limit is {count}; past it, you'll need a bigger plan."
+        },
+        "continue": "Continue"
+      }
     },
     "onboarding": {
       "trial": {
