@@ -142,7 +142,7 @@ test('Manage billing opens Stripe’s Customer Portal for the card and invoices;
   const drawer = await step('Open Billing as a subscriber', async () => {
     const d = await openBilling(page, person.personalId);
     await expect(d.getByText('Active')).toBeVisible({ timeout: 45_000 });
-    await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible();
+    await expect(d.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible();
     await expect(d.getByText("Change your card or see invoices.")).toBeVisible();
     return d;
   });
@@ -158,7 +158,7 @@ test('Manage billing opens Stripe’s Customer Portal for the card and invoices;
     await page.getByRole('link', { name: /return to/i }).first().click();
     await page.waitForURL(/billing=true/, { timeout: 60_000 });
     const back = page.getByRole('dialog', { name: 'Billing' });
-    await expect(back.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(back.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     const me = await (await page.request.get('/v1/me')).json();
     expect(me.profiles.find((p: { id: string }) => p.id === person.personalId)?.billing).toMatchObject({ state: 'ACTIVE', source: 'STRIPE' });
   });
@@ -599,7 +599,7 @@ test('Switch to yearly - no line before the 2nd payment', { tag: '@portal-live.b
   await untilSubscriptionMirrored(page);
   await step('Open Billing after the first payment: Active, Manage billing, no switch line', async () => {
     const d = await openBilling(page, person.personalId);
-    await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(d.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     await expect(d.getByRole('button', { name: 'Manage billing' })).toBeVisible();
     await expect(d.getByRole('button', { name: 'Switch to yearly' })).toHaveCount(0);
     const res = await page.request.get('/v1/billing/yearly-switch');
@@ -650,7 +650,7 @@ test('Pause instead of cancelling - booked from the paid month’s end, read-onl
 
   const drawer = await step('Open Billing and press Cancel plan', async () => {
     const d = await openBilling(page, person.personalId);
-    await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(d.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     return d;
   });
   const flow = await step('Pick "I don’t use it enough" and press Continue', async () => {
@@ -705,7 +705,7 @@ test('Pause instead of cancelling - booked from the paid month’s end, read-onl
     await expect.poll(async () => (await invoicesOf(customerId)).at(-1)?.total, { timeout: 60_000, intervals: [2_000] }).toBe(2900);
     await expect.poll(async () => (await billingOf(page, person.personalId))?.state, { timeout: 60_000, intervals: [2_000] }).toBe('ACTIVE');
     await page.goto(`/p/${person.personalId}?billing=true`);
-    await expect(page.getByRole('dialog', { name: 'Billing' }).getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole('dialog', { name: 'Billing' }).getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
   });
 });
 
@@ -732,7 +732,7 @@ test('Resume now during a pause - a month charged today, writable again', { tag:
   });
   await step('Press Resume now again: ₪29.00 charged today, Active, and adding works again', async () => {
     await drawer.getByRole('group').getByRole('button', { name: 'Resume now' }).click();
-    await expect(drawer.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(drawer.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
     expect(sub.pause_collection).toBeNull();
     const last = (await invoicesOf(customerId)).at(-1)!;
@@ -758,7 +758,7 @@ test('A second Cancel within 12 months of a pause offers no pause', { tag: '@por
   });
   await step('Cancel plan again: after the reason comes the stay offer, not the pause', async () => {
     const drawer = await openBilling(page, person.personalId);
-    await expect(drawer.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(drawer.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     const flow = await startCancel(page, drawer, 'Something else');
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(flow.getByRole('heading', { name: 'Stay with 50% off for 2 months' })).toBeVisible({ timeout: 30_000 });
@@ -776,7 +776,7 @@ test('The stay offer - half price for 2 months, once per person ever', { tag: '@
   await untilSubscriptionMirrored(page);
   const drawer = await step('Open Billing as a monthly subscriber', async () => {
     const d = await openBilling(page, person.personalId);
-    await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(d.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     return d;
   });
   const flow = await step('Cancel plan: "It costs too much", Continue, then No, keep cancelling on the pause', async () => {
@@ -821,7 +821,7 @@ test('Cancel with a reason - the plan stays on to the period end, and Keep my pl
   await untilSubscriptionMirrored(page);
   const drawer = await step('Open Billing as a monthly subscriber', async () => {
     const d = await openBilling(page, person.personalId);
-    await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(d.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     return d;
   });
   await step('Cancel plan: "I’m moving to another tool" and a comment, Continue', async () => {
@@ -845,7 +845,7 @@ test('Cancel with a reason - the plan stays on to the period end, and Keep my pl
   await step('Press Keep my plan: it renews again', async () => {
     const back = page.getByRole('dialog', { name: 'Billing' });
     await back.getByRole('button', { name: 'Keep my plan' }).click();
-    await expect(back.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(back.getByRole('heading', { name: /^Previous plan, renews/ })).toBeVisible({ timeout: 45_000 });
     expect((await stripeApi('GET', `subscriptions/${subscriptionId}`)).cancel_at_period_end).toBe(false);
   });
 });

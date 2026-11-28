@@ -154,7 +154,8 @@ export async function pendingSignup(label: string): Promise<string> {
     body: JSON.stringify({ token, password: SIGNUP_PASSWORD, acceptedTermsVersion: CURRENT_TERMS.version, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }),
   });
   expect(set.ok, `finish signup ${set.status}`).toBe(true);
-  expect(((await set.json()) as { status: string }).status).toBe('PENDING_REVIEW');
+  // MUT-737: with open sign-up (the QA API runs OPEN_SIGNUP) the account opens at once; there is no review queue.
+  expect(((await set.json()) as { status: string }).status).toBe('ACTIVE');
   return email;
 }
 

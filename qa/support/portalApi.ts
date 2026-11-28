@@ -1101,11 +1101,12 @@ export class FakeApi {
   }
 
   /** Every logged call to method + path, in order. */
-  calls(method: string, path: RegExp): Logged[] {
-    return this.log.filter((entry) => entry.method === method && path.test(entry.path));
+  calls(method: string, path: RegExp | string): Logged[] {
+    const matches = typeof path === 'string' ? (entry: Logged) => entry.path === path : (entry: Logged) => path.test(entry.path);
+    return this.log.filter((entry) => entry.method === method && matches(entry));
   }
 
-  last(method: string, path: RegExp): Logged | undefined {
+  last(method: string, path: RegExp | string): Logged | undefined {
     return this.calls(method, path).at(-1);
   }
 

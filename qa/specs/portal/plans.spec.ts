@@ -205,7 +205,8 @@ test('On Solo, a second business names Business and its price with Upgrade to Bu
 
   await step('Choose Upgrade to Business', async () => {
     await page.getByTestId('plan-limit-notice').getByRole('button', { name: 'Upgrade to Business' }).click();
-    await expect(page.getByRole('dialog', { name: 'Billing' })).toBeVisible();
+    // MUT-734: a subscriber changes plan in Change plan, never a second Checkout.
+    await expect(page.getByRole('dialog', { name: 'Change plan' })).toBeVisible();
   });
 });
 

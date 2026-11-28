@@ -67,15 +67,15 @@ features:
       - One analytics_opted_out is sent and the switch reads off
       - Nothing more is sent after the reload, the notice does not come back, and no PostHog key is left in storage
   - id: sign-out-resets
-    title: Signing out forgets the choice and the random ID without sending anything
+    title: Signing out sends nothing and keeps an accepted choice and the random ID for the next sign-in (ADR-301)
     paths:
       - src/hosted/session/endSession.ts
     steps:
       - With sharing on, sign out from You › Account
       - Sign in again
     expect:
-      - Nothing is sent at sign-out and no PostHog key is left in storage
-      - After signing in again the notice asks again, and nothing is sent until it is answered
+      - Nothing is sent at sign-out, and the accepted choice and ID stay on the browser
+      - After signing in again the notice does not ask, and the portal is counted as opened
   - id: other-tab-silenced
     title: Turning sharing off in one tab silences another open tab (MUT-155 review F1)
     steps:
