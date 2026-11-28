@@ -43,7 +43,13 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 - [x] 2026-11-28: the Tax Authority guide's copy signed off by Basel (MUT-674).
 - [x] 2026-11-28: the privacy policy's 7-year deletion wording approved by Basel (MUT-644).
 - [x] 2026-11-28: phone 0.2.1+25 (it parses `PLAN_LIMIT`) is the live version (Basel).
-- [ ] Apple Developer › the MTB3A App ID: turn on Push Notifications before the phone build that carries MUT-780.
+- [x] 2026-11-28: Apple Developer › the MTB3A App ID: Push Notifications on. No SSL certificate: push uses the auth keys below.
+- [x] 2026-11-28: two APNs auth keys, Sandbox and Production, team scoped, saved as `~/Work/_keys/apple/Barmajiyat_{Sandbox,Prod}_AuthKey_….p8`.
+- [x] 2026-11-28: Firebase project `mtb3a-barmajiyat` (FCM v1 on), with apps MTB3A Web, iOS and Android (`com.barmajiyat.mutaba3a`).
+      Its config files and admin SDK key are in `~/Work/_keys/barmajiyat/firebase/`, never in a repo.
+- [ ] Firebase › Project settings › Cloud Messaging › MTB3A iOS: upload the Sandbox `.p8` as the Development APNs auth key and
+      the Prod `.p8` as the Production one (each with its Key ID, Team ID `4LCWA596X7`).
+- [ ] Later: move Malafat's Firebase to the Barmajiyat APNs keys, send a test push, then revoke the three Malafat keys.
 
 ### Then: release, and one switch stage per release
 
@@ -58,7 +64,7 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 - [ ] The Tax Authority's registration number → `uniform_file_registration_number` (MUT-567, the MUT-569 item).
 - [ ] The signing certificate, three releases (the MUT-641 item).
 - [ ] Malafat's MAL-1539 and MAL-1541, then Stage 6.
-- [ ] MUT-780's push keys: the APNs auth key and the Firebase project files. The exact list comes with MUT-780's merge.
+- [ ] MUT-780's server push values (FCM_PROJECT_ID = mtb3a-barmajiyat, and the API's access to it): the exact steps come with MUT-780's merge.
 
 ### Later, by date
 
