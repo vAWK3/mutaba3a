@@ -562,6 +562,7 @@ export const STORE_ACCESS: StoreAccess = {
     sweepTargets: 'operator',
     announce: 'operator',
     recordOf: 'sessionOnly',
+    viewsOf: 'sessionOnly',
     latestOf: 'sessionOnly',
     markDone: 'sessionOnly',
     review: 'sessionOnly',

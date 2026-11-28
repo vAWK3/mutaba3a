@@ -70,6 +70,18 @@ export function describeLedgerStoreVatPeriodContract(name: string, makeStore: ()
       expect((await store.vatPeriods.latestOf([])).size).toBe(0);
     });
 
+    it('viewsOf answers each profile\'s chosen kind, issuer facts and latest period together', async () => {
+      const store = await makeStore();
+      const a = await client(store);
+      const b = await client(store);
+      await store.vatPeriods.setKind({ organizationId: a.organizationId, kind: 'YEARLY', userId: a.ownerId, at: at(3) });
+      await store.vatPeriods.announce({ organizationId: a.organizationId, periodKey: '2026-Y', at: at(5), followUpDueAt: at(100) });
+      const views = await store.vatPeriods.viewsOf([a.organizationId, b.organizationId]);
+      expect(views.get(a.organizationId)).toMatchObject({ chosenKind: 'YEARLY', dealerType: null, country: null, latest: { periodKey: '2026-Y', state: 'OPEN' } });
+      expect(views.get(b.organizationId)).toEqual({ chosenKind: null, dealerType: null, country: null, latest: null });
+      expect((await store.vatPeriods.viewsOf([])).size).toBe(0);
+    });
+
     describe('transitions', () => {
       async function open(store: LedgerStore) {
         const c = await client(store);

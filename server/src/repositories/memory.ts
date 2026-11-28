@@ -32,6 +32,7 @@ import type {
   IssuedDocumentCancellationRecord,
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
+  VatClientView,
   VatPeriodRecord,
   VatPeriodRepository,
   VatSweepPerson,
@@ -1064,6 +1065,15 @@ export class MemoryLedgerStore implements LedgerStore {
         if (!wanted.has(r.organizationId)) continue;
         const seen = out.get(r.organizationId);
         if (!seen || r.announcedAt.getTime() > seen.announcedAt.getTime()) out.set(r.organizationId, { ...r });
+      }
+      return out;
+    },
+    viewsOf: async (organizationIds) => {
+      const latest = await this.vatPeriods.latestOf(organizationIds);
+      const out = new Map<string, VatClientView>();
+      for (const organizationId of organizationIds) {
+        const issuer = this.issuerMap.get(organizationId);
+        out.set(organizationId, { chosenKind: this.vatKinds.get(organizationId) ?? null, dealerType: issuer?.dealerType ?? null, country: issuer?.country ?? null, latest: latest.get(organizationId) ?? null });
       }
       return out;
     },

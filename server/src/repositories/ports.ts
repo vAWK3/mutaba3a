@@ -5652,6 +5652,14 @@ export interface VatSweepTarget {
   accountants: VatSweepPerson[];
 }
 
+/** One client profile as the accountant's desk reads it: what it files, and where its latest period stands. */
+export interface VatClientView {
+  chosenKind: VatPeriodKind | null;
+  dealerType: DealerType | null;
+  country: string | null;
+  latest: VatPeriodRecord | null;
+}
+
 export type VatDoneResult = 'done' | 'unchanged' | 'not_found' | 'state';
 export type VatReviewResult = 'ok' | 'not_found' | 'state';
 
@@ -5665,6 +5673,8 @@ export interface VatPeriodRepository {
   /** Inserts the period as OPEN unless it exists. True only when this call inserted it (the idempotency of the daily mail); `audit` is written with the insert. */
   announce(input: { organizationId: string; periodKey: string; at: Date; followUpDueAt: Date; audit?: AuditEventInput[] }): Promise<boolean>;
   recordOf(organizationId: string, periodKey: string): Promise<VatPeriodRecord | null>;
+  /** The desk's read: for each profile its chosen kind, issuer facts and latest period, in three queries however many profiles. */
+  viewsOf(organizationIds: readonly string[]): Promise<Map<string, VatClientView>>;
   /** The most recently announced period of each profile (one query), for the client's home and the desk rows. */
   latestOf(organizationIds: readonly string[]): Promise<Map<string, VatPeriodRecord>>;
   /** The client says all receipts are sent: OPEN or MORE_NEEDED becomes CLIENT_DONE; CLIENT_DONE again is `unchanged`; CONFIRMED is `state`. */

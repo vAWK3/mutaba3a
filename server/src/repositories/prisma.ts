@@ -36,6 +36,7 @@ import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision }
 import type { DealerType } from '../issuing/types.js';
 import type { VatPeriodKind } from '../vat-periods/types.js';
 import type {
+  VatClientView,
   VatPeriodRecord,
   VatPeriodRepository,
   VatSweepPerson,
@@ -932,6 +933,23 @@ export class PrismaLedgerStore implements LedgerStore {
       if (organizationIds.length === 0) return out;
       const rows = await this.prisma.vatPeriodRecord.findMany({ where: { organizationId: { in: [...organizationIds] } }, orderBy: [{ organizationId: 'asc' }, { announcedAt: 'desc' }], distinct: ['organizationId'] });
       for (const row of rows) out.set(row.organizationId, toVatPeriodRecord(row));
+      return out;
+    },
+    viewsOf: async (organizationIds) => {
+      const out = new Map<string, VatClientView>();
+      if (organizationIds.length === 0) return out;
+      const ids = [...organizationIds];
+      const [settings, issuers, latest] = await Promise.all([
+        this.prisma.vatPeriodSetting.findMany({ where: { organizationId: { in: ids } }, select: { organizationId: true, kind: true } }),
+        this.prisma.issuerDetails.findMany({ where: { organizationId: { in: ids } }, select: { organizationId: true, dealerType: true, country: true } }),
+        this.vatPeriods.latestOf(ids),
+      ]);
+      const kindOf = new Map(settings.map((r) => [r.organizationId, r.kind as VatPeriodKind]));
+      const issuerOf = new Map(issuers.map((r) => [r.organizationId, r]));
+      for (const organizationId of ids) {
+        const issuer = issuerOf.get(organizationId);
+        out.set(organizationId, { chosenKind: kindOf.get(organizationId) ?? null, dealerType: (issuer?.dealerType as DealerType | undefined) ?? null, country: issuer?.country ?? null, latest: latest.get(organizationId) ?? null });
+      }
       return out;
     },
     markDone: ({ organizationId, periodKey, userId, at, audit }) =>
