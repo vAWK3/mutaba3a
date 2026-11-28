@@ -216,6 +216,9 @@ describe('STORE_ACCESS', () => {
       'provision.setApproval',
       'provision.setupLinkOf',
       'provision.sweepRows',
+      // MUT-780: the sender's device read and its pruning of dead tokens run on the store beneath the guard.
+      'pushDevices.listLive',
+      'pushDevices.removeByIds',
       // MUT-461: the operator's account view counts a person's live sessions.
       'sessions.countLiveForUser',
       // MUT-314: the period download's stream checks, on the base store, that the minting session still works.

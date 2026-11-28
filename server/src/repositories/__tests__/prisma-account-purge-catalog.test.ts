@@ -35,6 +35,8 @@ if (!url) {
     'malafat_sign_ins',
     // MUT-618: emailed sign-in codes; the person's own go with them (PURGE_USER_COLUMNS), the rest name an address for a day.
     'sign_in_codes',
+    // MUT-780: a person's phone push tokens go with them (PURGE_USER_COLUMNS).
+    'push_devices',
     // MUT-710: a person's two-step sign-in, recovery codes and challenges go with them (PURGE_USER_COLUMNS).
     'two_factor', 'two_factor_recovery_codes', 'two_factor_challenges',
     // MUT-735 (ADR-281): a payer's counters go by subjectKey in the purge; route statistics name no person.

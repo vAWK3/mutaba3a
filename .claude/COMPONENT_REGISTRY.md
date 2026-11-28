@@ -2694,3 +2694,4 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |
 | `src/hosted/data/billingPlans.ts` | `useOfferLine` (MUT-703) | Subscribe step's `PlanRow` `offerNote` |
 | `src/hosted/data/billingView.ts` | `planLaunchOf`, `planOfferFor`, `planComebackOf` (MUT-703) | Subscribe step, opening interval |
+| `server/src/push/service.ts` | `createPushService().notifyUser` (MUT-780) | the unclaimed sweep; MUT-782's VAT reminders may add a kind |

@@ -133,6 +133,8 @@ import type {
   PasskeyPromptState,
   PasskeyRecord,
   PasskeyRepository,
+  PushDeviceRecord,
+  PushDeviceRepository,
   FeaturesRepository,
   OAuthAuthorizationRequestRecord,
   ExternalIdentityRecord,
@@ -4620,6 +4622,36 @@ export class MemoryLedgerStore implements LedgerStore {
   // ---- MUT-735 (ADR-281): usage metering ----
   readonly usage = new MemoryUsage();
 
+  // ---- MUT-780 (ADR-351): phone push tokens, by session id; outside the snapshot like sessions ----
+  private readonly pushDeviceBySession = new Map<string, PushDeviceRecord>();
+
+  readonly pushDevices: PushDeviceRepository = {
+    register: async (input) => {
+      if (!this.sessionsById.has(input.sessionId)) throw new ForeignKeyViolation('push_devices.sessionId');
+      for (const [key, d] of this.pushDeviceBySession) if (d.token === input.token || key === input.sessionId) this.pushDeviceBySession.delete(key);
+      this.pushDeviceBySession.set(input.sessionId, { id: randomUUID(), userId: input.userId, sessionId: input.sessionId, platform: input.platform, token: input.token, environment: input.environment, createdAt: input.at, updatedAt: input.at });
+    },
+    removeForSession: async (sessionId) => this.pushDeviceBySession.delete(sessionId),
+    listLive: async (userId, now) =>
+      [...this.pushDeviceBySession.values()]
+        .filter((d) => {
+          const s = this.sessionsById.get(d.sessionId);
+          return d.userId === userId && s !== undefined && s.revokedAt === null && s.idleExpiresAt.getTime() > now.getTime() && s.absoluteExpiresAt.getTime() > now.getTime();
+        })
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .map((d) => ({ ...d })),
+    removeByIds: async (ids) => {
+      let removed = 0;
+      for (const [key, d] of this.pushDeviceBySession) {
+        if (ids.includes(d.id)) {
+          this.pushDeviceBySession.delete(key);
+          removed += 1;
+        }
+      }
+      return removed;
+    },
+  };
+
   readonly recordsExport: RecordsExportRepository = {
     profilePage: async (organizationId, field, afterKey, limit) => {
       const map = this.exportMaps()[field] as Map<string, unknown>;
@@ -4910,6 +4942,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private dropPerson(person: UserRecord): void {
     const id = person.id;
     for (const [key, m] of this.members) if (m.userId === id) this.members.delete(key);
+    for (const [key, d] of this.pushDeviceBySession) if (d.userId === id) this.pushDeviceBySession.delete(key);
     for (const [key, s] of this.sessionsById) if (s.userId === id) this.sessionsById.delete(key);
     for (const [key, p] of this.passkeyMap) if (p.userId === id) this.passkeyMap.delete(key);
     this.passkeyPrompts.delete(id);

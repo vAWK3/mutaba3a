@@ -114,6 +114,8 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'inbox_entries.userId': 'delete',
   'memberships.userId': 'delete',
   'passkeys.userId': 'delete',
+  // MUT-780: the person's phone push tokens (also ON DELETE CASCADE).
+  'push_devices.userId': 'delete',
   'sessions.userId': 'delete',
   'signup_reviews.userId': 'delete',
   'terms_acceptances.userId': 'delete',

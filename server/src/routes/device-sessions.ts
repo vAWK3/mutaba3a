@@ -195,7 +195,10 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
       },
     }),
     async (c) => {
-      await store.sessions.revoke(personSession(c).session.id, 'signed_out', c.get('now')());
+      const { session } = personSession(c);
+      // MUT-780 (ADR-351): signing out removes this phone's push token with the session.
+      await store.pushDevices.removeForSession(session.id);
+      await store.sessions.revoke(session.id, 'signed_out', c.get('now')());
       return c.body(null, 204);
     },
   );

@@ -3190,6 +3190,8 @@ export interface LedgerStore {
   refunds: RefundRepository;
   /** MUT-735 (ADR-281): the usage ledger, its per-payer counters and the route statistics. Written by the server; read by the operator. */
   usage: UsageRepository;
+  /** MUT-780 (ADR-351): phone push tokens; the person's own register/remove (sessionOnly), the sender reads them unguarded. */
+  pushDevices: PushDeviceRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------
@@ -5602,4 +5604,46 @@ export interface UsageRepository {
   prune(before: UsagePruneBefore): Promise<{ events: number; counters: number; routes: number }>;
   /** Account closure (MUT-333): the payer's events and counters. */
   purgeSubject(subjectKey: string): Promise<{ events: number; counters: number }>;
+}
+
+// ---- MUT-780 (ADR-351): phone push tokens ---------------------------------------
+
+export const PUSH_PLATFORMS = ['ios', 'android'] as const;
+export type PushPlatform = (typeof PUSH_PLATFORMS)[number];
+export const PUSH_ENVIRONMENTS = ['production', 'sandbox'] as const;
+export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
+
+/** One phone's push token, held by one signed-in session. Never returned to a client. */
+export interface PushDeviceRecord {
+  id: string;
+  userId: string;
+  sessionId: string;
+  platform: PushPlatform;
+  token: string;
+  environment: PushEnvironment;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RegisterPushDeviceInput {
+  userId: string;
+  sessionId: string;
+  platform: PushPlatform;
+  token: string;
+  environment: PushEnvironment;
+  at: Date;
+}
+
+export interface PushDeviceRepository {
+  /**
+   * One transaction: removes any other row holding this token (a phone handed to another person) and this session's
+   * previous row (a rotated token), then stores this one. Idempotent. ForeignKeyViolation on an unknown session.
+   */
+  register(input: RegisterPushDeviceInput): Promise<void>;
+  /** Sign-out and the explicit remove: this session's row, if any. True when one was removed. */
+  removeForSession(sessionId: string): Promise<boolean>;
+  /** The person's devices whose session is live at `now` (not revoked, inside both deadlines), oldest first. */
+  listLive(userId: string, now: Date): Promise<PushDeviceRecord[]>;
+  /** A send found these tokens invalid. Returns how many rows went. */
+  removeByIds(ids: readonly string[]): Promise<number>;
 }

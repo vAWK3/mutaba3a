@@ -5226,3 +5226,8 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 - `src/hosted/components/__tests__/GuideDrawer.test.tsx` (through the real portal): opens over the page, ar right to left with the `-rtl` art, source link attributes, help link, no note or source when absent, ✕ and Escape close and keep the page and count nothing, Done counts finished, an unknown id closes itself, a load failure shows Retry, one opening under StrictMode. `GuideButton.test.tsx`: opens its guide.
 - `src/hosted/analytics/__tests__/portalAnalytics.test.ts`, `src/lib/analytics/__tests__/guard.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts`: `trackGuide` for opted-in people only, the guard keeps a listed guide and drops an unlisted one, contract 2.15.0 pinned.
 - QA `portal.guides.guide-open-read-close` (Arabic then English, the page kept, Done).
+
+## MUT-780: phone push (server)
+- `server/src/push/__tests__/push.test.ts`: ar/en copy and the Arabic counted noun; the service sends to every live device, removes tokens the platform refuses, keeps the ones that failed, survives a throwing sender, does nothing for no device; FCM sender: service-account parse, RS256 assertion verifies, access token reused and renewed, error mapping.
+- `server/src/__tests__/routes-push-devices.test.ts`: dark 404, 401, register (idempotent, replaces on rotation, two phones, a handed-over token moves), 422, remove, sign-out removes, a revoked session never receives; the sweep pushes once on the digest day with counts only and the customer in the data, ar copy, no push when dark or no device, failure and invalid tokens.
+- `server/src/repositories/__tests__/store-contract-push-devices.ts` on memory and Postgres; `config.test.ts` pair rule.

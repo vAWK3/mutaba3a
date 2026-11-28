@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.214.0-mut777
+  version: 1.215.0-mut780
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -81,6 +81,8 @@ tags:
     description: Money received, its allocations, reversals, and the operations lookup
   - name: Sessions
     description: Hosted-portal sign-in, sign-out and the signed-in person
+  - name: Push
+    description: A signed-in phone's push token (MUT-780)
   - name: Passkeys
     description: A signed-in person's passkeys, and the challenge passkey sign-in starts from (MUT-115)
   - name: Profiles
@@ -15791,6 +15793,8 @@ components:
           type: integer
         digests:
           type: integer
+        pushed:
+          type: integer
         failed:
           type: integer
         incomplete:
@@ -15801,8 +15805,30 @@ components:
         - removed
         - flagged
         - digests
+        - pushed
         - failed
         - incomplete
+    RegisterPushDeviceRequest:
+      type: object
+      properties:
+        platform:
+          type: string
+          enum:
+            - ios
+            - android
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        environment:
+          type: string
+          enum:
+            - production
+            - sandbox
+      required:
+        - platform
+        - token
+      additionalProperties: false
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -36175,7 +36201,7 @@ paths:
       tags:
         - Accountants
       summary: "Daily: reminders for accounts an accountant created that nobody claimed, and removal of the unpaid ones after 60 days (Cloud Scheduler)"
-      description: Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant, and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
+      description: Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant (with a phone push the same day when the accountant has a device, MUT-780), and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
       security:
         - jobToken: []
       responses:
@@ -36199,6 +36225,77 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/push-devices:
+    post:
+      tags:
+        - Push
+      summary: Register this phone’s push token (MUT-780)
+      description: Stores the FCM token for the signed-in session, replacing the session’s earlier token and any other row holding the same token (a phone handed to another person). Idempotent. A session signed out or revoked never receives a push. Additive since 1.215.0-mut780.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushDeviceRequest"
+      responses:
+        "204":
+          description: Registered
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: push is not configured on this server"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Push
+      summary: Remove this phone’s push token (MUT-780)
+      description: Removes the signed-in session’s token. 204 also when there was none. Signing out (DELETE /v1/device-sessions/current) does the same.
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "204":
+          description: Removed, or none was held
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: push is not configured on this server"
           content:
             application/json:
               schema:

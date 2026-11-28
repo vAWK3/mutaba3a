@@ -451,6 +451,17 @@ describe('loadConfig — reference exchange rates (MUT-228)', () => {
   });
 });
 
+describe('loadConfig — phone push (MUT-780)', () => {
+  it('is off by default, on with a project id alone, and a key needs the project id', () => {
+    const config = loadConfig(base);
+    expect(config.FCM_PROJECT_ID).toBeUndefined();
+    expect(config.FCM_SERVICE_ACCOUNT_JSON).toBeUndefined();
+    expect(loadConfig({ ...base, FCM_PROJECT_ID: 'mtb3a-barmajiyat' }).FCM_PROJECT_ID).toBe('mtb3a-barmajiyat');
+    expect(loadConfig({ ...base, FCM_PROJECT_ID: 'mtb3a-barmajiyat', FCM_SERVICE_ACCOUNT_JSON: '{"client_email":"x"}' }).FCM_SERVICE_ACCOUNT_JSON).toBe('{"client_email":"x"}');
+    expect(() => loadConfig({ ...base, FCM_SERVICE_ACCOUNT_JSON: '{"client_email":"x"}' })).toThrow(/FCM_PROJECT_ID/);
+  });
+});
+
 describe('loadConfig — Stripe and the job token (MUT-360)', () => {
   const stripe = { STRIPE_SECRET_KEY: 'rk_test_mut360', STRIPE_WEBHOOK_SECRET: 'whsec_mut360' };
 

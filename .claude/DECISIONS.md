@@ -7614,3 +7614,39 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 7. 674 ships one draft guide (`tax-authority`) with no button on any screen, because the registry is a build-time glob and the release-QA flow needs a real file. "Copy deck MUT-673 signed off" is a before-release precondition.
 
 **Consequences**: A new portal guide is its file plus one enum value in the contract (a minor bump, a pinned hash, and the Flutter copy of the contract). A guide placed on the phone only (`surfaces` without `portal`) needs no enum value. The mockup's second footer action (a feature action such as Connect) is not built; MUT-679 adds an optional `action` to the same schema.
+
+---
+
+## ADR-350: Phone Push Goes Through Firebase Cloud Messaging on Both Platforms, One Sender Behind an Interface; APNs Is FCM's Transport on iOS (MUT-780, epic MUT-762; extends ADR-300 d5)
+
+**Status:** Accepted (2026-11-28; Basel approved going ahead with the recommended defaults).
+
+**Decision:**
+1. The phone uses `firebase_messaging` on iOS and Android. The token it registers is the FCM registration token on both. The server sends through FCM HTTP v1 only; FCM relays to APNs for iOS using the APNs auth key uploaded to the Firebase project. The ticket's "APNs (iOS) and FCM (Android)" is met at the transport level; no direct APNs HTTP/2 client is built.
+2. The server's `PushSender` interface (`server/src/push/ports.ts`) takes a device (`platform`, `token`) and a message and answers `sent`, `invalid_token` or `failed`. `FcmPushSender` is the only production implementation; `FakePushSender` records messages for tests. A direct APNs sender can be added behind the same interface (a `provider` column then) without touching callers.
+3. `FCM_PROJECT_ID` (the Firebase project `mtb3a-barmajiyat`, separate from the API's `mtb3a-production`) turns push on; unset it is dark (register answers 404, sends nothing). The sender authenticates as the runtime's own identity: on Cloud Run the metadata server gives the API's service account an access token, and that account is granted `roles/firebasecloudmessaging.admin` on the Firebase project (cross-project IAM, in Terraform; no key exists). `FCM_SERVICE_ACCOUNT_JSON` (Secret Manager, or a local run's key; it needs `FCM_PROJECT_ID`) is the fallback: its JWT for Google's OAuth endpoint is signed with `node:crypto`. No new dependency.
+4. The phone builds `FirebaseOptions` from dart-defines in gitignored `.env`/`.env.local`, so no `google-services.json` or `GoogleService-Info.plist` enters either repo and the Android build needs no google-services Gradle plugin. A missing define turns push off without a crash.
+
+**Why:** one key set instead of two (the APNs key lives in Firebase, the server holds none), one server code path to verify, no hand-rolled HTTP/2 or APNs JWT. **Reversible:** yes (interface). **Cost:** none (FCM is free).
+
+## ADR-351: Device Tokens: One Row per Signed-In Phone Session, Never Read Back, Removed on Sign-Out; Pushes Reach Live Sessions Only (MUT-780, epic MUT-762)
+
+**Status:** Accepted (2026-11-28).
+
+**Decision:**
+1. Table `push_devices` (user, session unique, platform, token unique, environment). `POST /v1/push-devices` replaces the session's row and any row holding the same token (a handed-over phone moves to the new person); `DELETE /v1/push-devices` removes the session's. Both are the signed-in person's own (store guard `sessionOnly`), never an API key's; no GET.
+2. Several devices per person: one row per session, a push goes to all.
+3. Token rotation: the phone registers at launch while signed in and on `onTokenRefresh`; the unique session key replaces the old token.
+4. `DELETE /v1/device-sessions/current` removes the session's token in the same step. A session revoked any other way keeps its row, but the send query joins live (unrevoked, unexpired) sessions, so no push reaches it, and a send that finds an invalid token deletes the row. Account purge deletes the person's rows (`push_devices.userId`).
+5. No per-person quiet hours or push settings in this ticket: pushes come only from daily jobs, whose Scheduler time is the control, and a person's control is the OS permission. A per-kind switch waits for a second kind of push (MUT-782).
+6. No analytics events are added (the contract stays at 2.15.0).
+
+## ADR-352: The Reminder Push: One a Day per Accountant on the Digest's Days, Counts Only, the Tap Opens One Customer (MUT-780, extends ADR-300 d3)
+
+**Status:** Accepted (2026-11-28).
+
+**Decision:**
+1. `PushService.notifyUser(userId, message)` is the one send path: `{ kind, vars, data }`, copy in Arabic and English by the person's locale (`push/messages.ts`), a send failure logged and never thrown. MUT-782's reminders use it with their own kind.
+2. The unclaimed sweep calls it once per accountant on exactly the days the digest mail is due (a customer of his was reminded today, or an unpaid one goes within a week), after the digest. Body: counts only, never a name or address. The sweep summary gains `pushed`.
+3. Payload `data`: `{ kind: 'unclaimed_digest', customerUserId }`, the customer reminded today, else the one nearest removal. The phone finds that customer in the desk list (`GET /v1/accountant/customers`) and opens its book; when it is not found (claimed or removed meanwhile) it opens the desk.
+4. The phone asks for permission once, after the first customer is added through Add customer, with a short sheet before the system dialog. Not now or a refusal registers nothing and is remembered; nothing else changes. A person who allowed earlier registers silently at launch.

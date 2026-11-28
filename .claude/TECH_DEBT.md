@@ -3484,3 +3484,8 @@ When resolving debt:
 **Where**: `docs/analytics/events.json` (2.15.0); the Flutter repo's `test/fixtures/analytics/events.json` and its fixtures README hash (docs/analytics/README.md "Changing the contract", step 3).
 **Why deferred**: the Flutter repo is separate and its copy was already behind 2.14.0 (the billing stack's bump). 2.15.0 adds only portal events, so no phone code is affected, but its parity test pins a version.
 **Cost**: each new portal guide adds a value to the `guide` enum (a minor bump, a pinned hash, a Flutter copy). A guide that is phone-only or website-only needs none. If guides multiply, move the guide id out of the enum into a closed list generated from the content files.
+
+### TD-380: The push grant and env are not in Terraform yet (MUT-780)
+**Where**: `server/infrastructure/terraform` (no `push.tf`): the cross-project grant `roles/firebasecloudmessaging.admin` to the API's service account on `mtb3a-barmajiyat`, and `FCM_PROJECT_ID` on the Cloud Run service.
+**Why deferred**: the grant is applied by an operator against another project, and push is dark until `FCM_PROJECT_ID` is set, so the first release needs neither. Exact `gcloud` lines are in `docs/operations/before-release.md`.
+**Cost**: until a `push.tf` (a `google_project_iam_member`, an env entry behind a `push_project_id` variable, a tftest) lands, the env is added to the service by hand and a later `make release server` would drop it. Do it in the release that turns push on.

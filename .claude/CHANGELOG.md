@@ -28,6 +28,22 @@
 
 ---
 
+## 2026-11-28 · MUT-780: phone push reminders for the accountant desk, server half (epic MUT-762)
+
+### Added
+- `push_devices` (migration `20261128150000_mut780_push_devices`): one phone's FCM token per signed-in session; `POST /v1/push-devices` registers or replaces it, `DELETE /v1/push-devices` removes it (API 1.216.0-mut780; 404 while push is not configured). `DELETE /v1/device-sessions/current` removes it too.
+- `server/src/push/`: `PushSender` interface, `FcmPushSender` (FCM HTTP v1, service-account JWT with node:crypto, fetch injected), `FakePushSender`, `renderPush` (ar/en copy, counts only) and `createPushService().notifyUser(userId, request, now)`, the one reusable send path (MUT-782 can add a kind).
+- The unclaimed sweep (MUT-767) pushes the accountant once on the days the digest mail is due; its summary gains `pushed`. The push names the customer a tap opens in `data.customerUserId`.
+- Env `FCM_PROJECT_ID` turns push on (the API's own identity sends; `FCM_SERVICE_ACCOUNT_JSON` is a local fallback; unset = push dark). Operator steps in `docs/operations/before-release.md`.
+- ADR-350, 351, 352. No analytics events (contract stays 2.15.0).
+
+### Technical
+- Store guard class `sessionOnly` for register/remove; `listLive` and `removeByIds` are operator (below the routes). Purge catalog: `push_devices.userId` delete. Contract tests run on memory and Postgres.
+- Phone half: `mutaba3a-flutter` branch `feature/mut-780-push`.
+
+### Files
+`server/prisma/{schema.prisma,migrations/20261128150000_mut780_push_devices}`, `server/src/push/*`, `server/src/routes/{push-devices,accountant-sweep,device-sessions}.ts`, `server/src/accountants/unclaimed-sweep.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/{app,index,config,schemas}.ts`, `server/openapi/openapi.yaml`, tests under `server/src/push/__tests__`, `server/src/__tests__/routes-push-devices.test.ts`, `server/src/repositories/__tests__/store-*-push-devices*`.
+
 ## 2026-11-28 · MUT-674: the portal guide viewer and its one content format (epic MUT-672)
 
 ### Added

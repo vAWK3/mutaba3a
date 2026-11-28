@@ -6,6 +6,7 @@ import type { Logger } from '../logger.js';
 import type { AuditEventInput, LedgerStore, UnclaimedSweepRow, UserLocale } from '../repositories/ports.js';
 import { PROVISION_LINK_TTL_MS } from '../routes/accountant-customers.js';
 import { personalOrganizationIdOf } from './provision.js';
+import { DISABLED_PUSH, type PushService } from '../push/service.js';
 
 /**
  * MUT-767 (accountant channel, ADR-300; eng R1, T6): the daily sweep of accounts an accountant created that nobody has
@@ -38,6 +39,8 @@ export interface UnclaimedSweepSummary {
   /** Paid and still unclaimed past the 60 days: kept, for the operator to follow up. */
   flagged: number;
   digests: number;
+  /** MUT-780: accountants a phone push reached on a digest day. */
+  pushed: number;
   failed: number;
   incomplete: boolean;
 }
@@ -50,17 +53,22 @@ export interface UnclaimedSweepOptions {
   /** Where links point (PORTAL_ORIGIN, else the request's origin). */
   origin: string;
   now: Date;
+  /** MUT-780 (ADR-352): the phone push on the digest's days; absent = none (push is dark). */
+  push?: PushService;
 }
 
 interface AccountantTally {
   waiting: number;
   removingSoon: number;
   remindedNow: boolean;
+  /** MUT-780: the customer a tap opens: one reminded today, else the one nearest removal (rows come oldest first). */
+  remindedFocus: string | null;
+  soonFocus: string | null;
 }
 
 export async function runUnclaimedSweep(options: UnclaimedSweepOptions): Promise<UnclaimedSweepSummary> {
   const { store } = options;
-  const summary: UnclaimedSweepSummary = { looked: 0, reminded: 0, removed: 0, flagged: 0, digests: 0, failed: 0, incomplete: false };
+  const summary: UnclaimedSweepSummary = { looked: 0, reminded: 0, removed: 0, flagged: 0, digests: 0, pushed: 0, failed: 0, incomplete: false };
   const tallies = new Map<string, AccountantTally>();
   let after: { provisionedAt: Date; userId: string } | undefined;
   for (;;) {
@@ -87,6 +95,7 @@ export async function runUnclaimedSweep(options: UnclaimedSweepOptions): Promise
   for (const [accountantUserId, tally] of tallies) {
     if (!tally.remindedNow && tally.removingSoon === 0) continue;
     if (await mailDigest(options, accountantUserId, tally)) summary.digests += 1;
+    if (await pushDigest(options, accountantUserId, tally)) summary.pushed += 1;
   }
   if (summary.flagged > 0) options.logger.warn({ flagged: summary.flagged, event: 'unclaimed_paid_accounts' }, 'paid accounts still unclaimed after 60 days; follow up in Operator › provisioned accounts');
   return summary;
@@ -106,17 +115,23 @@ async function sweepOne(options: UnclaimedSweepOptions, row: UnclaimedSweepRow, 
     if (await store.provision.expireUnclaimed({ userId: row.userId, provisionedBefore, at: now, audit })) summary.removed += 1;
     return;
   }
-  const tally = row.accountantUserId ? (tallies.get(row.accountantUserId) ?? { waiting: 0, removingSoon: 0, remindedNow: false }) : null;
+  const tally = row.accountantUserId ? (tallies.get(row.accountantUserId) ?? { waiting: 0, removingSoon: 0, remindedNow: false, remindedFocus: null, soonFocus: null }) : null;
   if (tally && row.accountantUserId) {
     tally.waiting += 1;
-    if (!paid && ageDays >= UNCLAIMED_POLICY.removeAfterDays - UNCLAIMED_POLICY.removingSoonDays) tally.removingSoon += 1;
+    if (!paid && ageDays >= UNCLAIMED_POLICY.removeAfterDays - UNCLAIMED_POLICY.removingSoonDays) {
+      tally.removingSoon += 1;
+      tally.soonFocus ??= row.userId;
+    }
     tallies.set(row.accountantUserId, tally);
   }
   const day = reminderDayDue(ageDays, sentDays);
   if (day === null || !row.accountantUserId) return;
   if (await remind(options, row, row.accountantUserId, day)) {
     summary.reminded += 1;
-    if (tally) tally.remindedNow = true;
+    if (tally) {
+      tally.remindedNow = true;
+      tally.remindedFocus ??= row.userId;
+    }
   }
 }
 
@@ -187,4 +202,20 @@ async function mailDigest(options: UnclaimedSweepOptions, accountantUserId: stri
     options.logger.error({ err, template: 'accountant-unclaimed-digest' }, 'digest not sent');
     return false;
   }
+}
+
+/**
+ * MUT-780 (ADR-352): the phone push on exactly the days the digest mail is due, counts only, with the customer a tap
+ * opens in its data. True when a device took it. Never throws (PushService swallows its own failures).
+ */
+async function pushDigest(options: UnclaimedSweepOptions, accountantUserId: string, tally: AccountantTally): Promise<boolean> {
+  const push = options.push ?? DISABLED_PUSH;
+  if (!push.enabled) return false;
+  const focus = tally.remindedFocus ?? tally.soonFocus;
+  const result = await push.notifyUser(
+    accountantUserId,
+    { kind: 'unclaimed_digest', vars: { waiting: tally.waiting, removingSoon: tally.removingSoon }, data: focus ? { customerUserId: focus } : {} },
+    options.now,
+  );
+  return result.sent > 0;
 }
