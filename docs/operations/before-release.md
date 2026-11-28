@@ -56,7 +56,7 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 - [ ] `make release server` and `make release web`, with every switch off.
 - [ ] After that API is live (they read MUT-731's fields), from `server/`: `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6),
       then `npm run billing:uncovered -- --url "$URL"` and Operator › Usage: who moves to Starter and who must pick a business (step 7).
-- [ ] Stage 1 → 6 in "Switch rollout" at the end of this file, each with its own tfvars lines and checks.
+- [ ] Stages 1–5 together in one switch release (Basel, 2026-11-28), once "Before flipping 1–5" in "Switch rollout" is all ticked. Stage 6 later.
 
 ### Waiting on someone else
 
@@ -81,7 +81,7 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 
 ## server
 
-- **Switch rollout (Basel, 2026-11-27):** the feature switches go on one stage per release, in the order of the "Switch rollout" section at the end of this file. Before each server release, check which stage is next and whether everything it needs is live. Delete this item when stage 6 is done.
+- **Switch rollout (Basel, 2026-11-28):** stages 1–5 go on together in one server release, after the release that ships their code with every switch off; stage 6 waits for Malafat. Before that release, check the "Before flipping 1–5" list in the "Switch rollout" section at the end of this file. Delete this item when stage 6 is done.
 - **MUT-752 (API 1.162.0-mut752, ADR-296): pilot grants and `pilot` on Billing.** Migration `20261127210000_mut752_pilot_grants` (additive: three nullable columns, one key, two CHECKs every old row passes; merging it restarts the shared dev API). No new env. After the deploy, a pilot is `npm run billing:grant -- --email <tester> --tier BUSINESS --reason "pilot <accountant>" --cohort <slug> --accountant <accountant email>` (runbook `docs/operations/pilot-runbook.md`). Delete this item after the release.
 - **MUT-733 (API 1.159.0-mut733, ADR-293): paid plans' monthly caps after one gift, dark.** No migration. The deploy adds no env: `paid_hard_caps` defaults off (Solo and Business are counted, never refused, as today). **Turn it on only after:** `plan_checkout` on, MUT-734's plan change live (a subscriber at the cap must be able to upgrade), and the phone build that shows the gift live in both stores. To undo: `paid_hard_caps = false`. Delete this item after the release.
 - **MUT-764 (API 1.158.0-mut764, ADR-292): an accountant creates a customer's account, dark.** No migration of its own (MUT-763's `20261127150000_mut763_accountant_provisioning` must be applied first). Leave `ACCOUNTANT_PROVISIONING` off in production until "Switch rollout" stage 5 (Terraform `accountant_provisioning`, default false). The operator can approve the partner ahead of time (Operator console, `PUT /v1/operator/accounts/{id}/accountant-provisioning`). **MUT-765/766 (API 1.160.0, 1.161.0; ADR-294, ADR-295), same switch:** the claim code, fresh links and the activation Checkout (also needs `plan_checkout`). Before turning the switch on: one activation in Stripe test mode to settle TD-361 (does Checkout store an email on a customer with none?), and the restricted key must allow Customers search. **MUT-767 (API 1.170.0, ADR-300):** the daily Cloud Scheduler job `POST /jobs/v1/accountants/unclaimed-sweep` comes with `accountant_provisioning = true` (Terraform creates it only then); the hourly account purge must be running. **MUT-769 (API 1.211.0-mut769, ADR-320):** the setup-link check adds `provisioned: true` on a dead accountant's link (additive; the claim page ships with it); nothing to set. Delete this item after the release.
@@ -218,13 +218,23 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 - MUT-402 ships the outlined MTB3A logotype (`src/assets/brand/wordmark.svg`). Attach Thmanyah's written OK for the outlined logotype to MUT-401 (Basel reports they confirmed it on 2026-10-22; brand-v2 decision 4 keeps this a guardrail, not a blocker). Delete this item and record the date on MUT-402.
 - MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. `make release web` now waits for the live document and checks it (`npm run release:oauth-client`); it printed ✓ for web-v0.3.4 on 2026-11-13. Left: in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.
 
-## Switch rollout (Basel, 2026-11-27)
+## Switch rollout (Basel, 2026-11-27; one release for stages 1–5, 2026-11-28)
 
-Target: **on** `STARTER_PLAN`, `PLAN_CHECKOUT`, `OPEN_SIGNUP`, `PAID_BUSINESS_CAPS`, `PAID_HARD_CAPS`, `ACCOUNTANT_PROVISIONING`, `TWO_FACTOR_ISSUING_GATE_ENABLED`, `MALAFAT_SIGN_IN`, `MALAFAT_DELEGATION`; **off** `INVOICING_FOR_ALL` and `ACCOUNTANT_PLAN` (until MUT-747); **removed** `PORTAL_LEGACY_REDIRECT` (its own ticket). One stage per server release, in this order. Each switch is one line in the git-ignored `server/infrastructure/terraform/production.tfvars`, then `make release server`; the plan must change only `google_cloud_run_v2_service.api`'s env (stage 5 also adds one Scheduler job). To undo a stage, set its lines back to `false` and release.
+Target: **on** `STARTER_PLAN`, `PLAN_CHECKOUT`, `OPEN_SIGNUP`, `PAID_BUSINESS_CAPS`, `PAID_HARD_CAPS`, `ACCOUNTANT_PROVISIONING`, `TWO_FACTOR_ISSUING_GATE_ENABLED`, `MALAFAT_SIGN_IN`, `MALAFAT_DELEGATION`; **off** `INVOICING_FOR_ALL` and `ACCOUNTANT_PLAN` (until MUT-747); **removed** `PORTAL_LEGACY_REDIRECT` (its own ticket). **Stages 1–5 go on together, in one server release** (Basel, 2026-11-28: it replaces one stage per release); stage 6 follows when Malafat is ready. Each switch is one line in the git-ignored `server/infrastructure/terraform/production.tfvars`, then `make release server`; the plan must change only `google_cloud_run_v2_service.api`'s env, plus stage 5's one Scheduler job. To undo a stage, set its lines back to `false` and release; each stage's own rollback still works alone.
 
 This section isn't printed by `make release` (only `## server` and `## web` are); the first item under `## server` points here. The facts below come from the items above, ADR-284, 288, 289, 291–300 and the plans in `.claude/designs` and `docs/designs`. As of 2026-11-27 production runs API 1.141.0 (`api-v0.21.0`) and web `web-v0.4.0`: none of the code these switches turn on is released yet.
 
-**WAITING FOR UI** marks a stage that needs screens that aren't built yet.
+### Before flipping 1–5 (one release)
+
+- [ ] **Their code is live, switches off:** api-v0.22.0 and web-v0.5.0 (main, with MUT-780, 782–786), and phone 0.3.0 **live in both stores** (it carries the gift sheet, MUT-706; stage 4 needs it, and stage 1 needs `PLAN_LIMIT` parsing, which 0.2.1+25 already has).
+- [ ] **Stage 2's Solo trial (TD-344):** a live-API QA flow of the trial Checkout, then the portal's `SOLO_TRIAL_CHECKOUT = true` (a code change in `SoloTrialStep.tsx`, so it ships in the web release) and `solo_trial_offer_since` in tfvars. Or Basel decides open sign-up goes on without the trial (the MUT-737 item's "all together", plan Q2).
+- [ ] **Stage 3:** every person who issues (sader@, review@) has turned two-step sign-in on.
+- [x] 2026-11-28: **Stage 4:** the restricted key has Write on Subscription Schedules. Its UI is built: Change plan (MUT-734) and the gift notice (MUT-733) in the portal, the gift sheet in the phone (MUT-706).
+- [ ] **Stage 4:** `npm run billing:uncovered -- --url "$URL"` and Operator › Usage for Solo, Business and Firm payers over their count, on the released API.
+- [ ] **Stage 5:** one activation in Stripe test mode to settle TD-361; the partner accountant approved in the Operator console.
+- [x] 2026-11-28: **Stage 5:** the restricted key allows Customers search; `mutaba3a-account-purge` is ENABLED in production.
+- [ ] **Before the first Israeli charge:** Barmajiyat's Israeli VAT file open (MUT-749, ADR-286).
+- Stage 6 waits for Malafat's MAL-1539 and MAL-1541.
 
 ### Stage 1: `STARTER_PLAN` + `PLAN_CHECKOUT` (MUT-731, MUT-702 Part B; ADR-284, ADR-288)
 
@@ -283,13 +293,13 @@ This section isn't printed by `make release` (only `## server` and `## web` are)
   - sader@ issues a document after signing in with the second step.
   - An issuer without two-step sign-in gets 403 `TWO_FACTOR_SETUP_REQUIRED` on `PUT /v1/issuer` and sees the portal's prompt.
 
-### Stage 4: `PAID_BUSINESS_CAPS` + `PAID_HARD_CAPS` (MUT-734, MUT-733; ADR-291, ADR-293). **WAITING FOR UI**
+### Stage 4: `PAID_BUSINESS_CAPS` + `PAID_HARD_CAPS` (MUT-734, MUT-733; ADR-291, ADR-293)
 
 - **Live first:**
   - Stage 1 (`plan_checkout`).
   - The API with MUT-734 (1.157.0; migration `20261127180000_mut734_plan_changes`) and MUT-733 (1.159.0).
-  - **Change plan in the portal:** the Change-plan pane, the scheduled line with Undo, and "Move to Starter instead". The MUT-734 plan calls these "left for the UI half"; not built. A subscriber at the cap must be able to upgrade.
-  - **The gift screens:** the portal's gift notice and held-request retry (MUT-733's portal slice; not built), and the phone build with the gift sheet live in both stores (MUT-706; Backlog). Older phone builds would show a hard cap where a gift was due.
+  - **Change plan in the portal:** the Change-plan pane, the scheduled line with Undo, and "Move to Starter instead": built (MUT-734 portal, merged 2026-11-28). A subscriber at the cap must be able to upgrade.
+  - **The gift screens:** the portal's gift notice and held-request retry (MUT-733 portal, merged 2026-11-28), and phone 0.3.0 with the gift sheet (MUT-706, merged) **live in both stores**. Older phone builds would show a hard cap where a gift was due.
 - **Operator steps:**
   1. The live restricted key adds Write on Subscription Schedules.
   2. Before `paid_business_caps`: `npm run billing:uncovered` and Operator › Usage for Solo, Business and Firm payers over their count. They will be asked to pick.
