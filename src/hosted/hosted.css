@@ -1171,6 +1171,8 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-operator-list + .hp-operator-list, .hp-operator-list + .hp-empty { margin-block-start: var(--space-3); }
 .hp-operator-chips { display: flex; flex-wrap: wrap; gap: var(--space-1-5); margin-block-start: var(--space-1-5); }
 .hp-operator-chips:empty { display: none; }
+/* MUT-757: the Pilot filter above the Accounts list. */
+.hp-operator-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-3); }
 .hp-operator-list .hp-banner, .hp-operator-list .hp-copy-field { flex: 1 1 100%; margin: 0; }
 /* MUT-461 (17A, 5A, 4A, 12A): accounts. The search field, then its button under it. */
 .hp-operator-search { display: grid; justify-items: start; gap: var(--space-2); margin-block-end: var(--space-4); }

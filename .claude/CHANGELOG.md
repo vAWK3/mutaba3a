@@ -46,6 +46,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-27 — MUT-757 console half: the Pilot filter, chip, accountant and ticks; the grant form's pilot
+
+### Added
+- Operator › Accounts: the Pilot filter (`?pilot=1`, `api.operatorAccounts({ pilot })`), the row chip ("Pilot · ends <date>", "N days left", "Ended", from `pilotChipOf`), the referring accountant, and with the filter the first-scan / first-invoice ticks (`src/hosted/operator/pilot.ts`, `OperatorAccountsPage.tsx`, `router.tsx`).
+- The grant drawer takes a pilot cohort (slug, checked before sending) and the referring accountant by email (`api.operatorAccountByEmail`, MUT-461's exact search); a pilot with no day says "Ends in 60 days".
+
+### Technical
+- Tests: `src/hosted/operator/__tests__/pilot.test.ts`, `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` (the pilot on Accounts).
+
+---
+
 ## [Unreleased] - 2026-11-27 — Pilot milestones: first scan, first invoice (ADR-332)
 
 ### Added

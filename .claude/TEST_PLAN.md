@@ -5073,6 +5073,13 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 |---|---|---|
 | Unit + portal | `src/hosted/shell/__tests__/PilotMilestones.test.tsx` | a first is reached only after a null read, once; not when made before the browser looked; hours since start; per-person memory and a broken store; the card shows on the next read with its scene, closes, never again; Arabic -rtl art |
 
+## MUT-757 (console half) — the Pilot filter, chip, accountant, ticks and the grant form's pilot (2026-11-27)
+
+| Level | File | What |
+|---|---|---|
+| Unit | `src/hosted/operator/__tests__/pilot.test.ts` | chip: ends / N days left (14) / Ended; no pilot; cohort slug rule |
+| Console | `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` | the filter in the address and the request; chip, accountant, ticks only with the filter; grant with cohort and accountant by email (unknown email refused before sending); slug and accountant-without-cohort errors |
+
 ## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
 
 | Layer | File | Covers |

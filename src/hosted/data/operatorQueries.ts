@@ -25,13 +25,13 @@ export function dropSignup(queryClient: QueryClient, userId: string): void {
  * MUT-527: every account, a page at a time ("Load more"), filtered by `q`; MUT-461: one account. Never the setup link:
  * that lives in the mutation only (12A). The list keeps the previous answer on screen while a new `q` loads.
  */
-export const operatorAccountListKey = (q: string) => ['operator', 'accounts', 'list', q] as const;
+export const operatorAccountListKey = (q: string, pilot = false) => ['operator', 'accounts', 'list', q, ...(pilot ? ['pilot'] : [])] as const;
 export const operatorAccountKey = (userId: string) => ['operator', 'accounts', userId] as const;
 
-export function useOperatorAccountList(q: string) {
+export function useOperatorAccountList(q: string, pilot = false) {
   return useInfiniteQuery({
-    queryKey: operatorAccountListKey(q),
-    queryFn: ({ pageParam, signal }) => api.operatorAccounts({ q, cursor: pageParam }, signal),
+    queryKey: operatorAccountListKey(q, pilot),
+    queryFn: ({ pageParam, signal }) => api.operatorAccounts({ q, cursor: pageParam, pilot }, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     placeholderData: keepPreviousData,

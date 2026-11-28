@@ -2396,6 +2396,26 @@
         "exportWithPasskey": "Export CSV with passkey",
         "personLevel": "Not on a profile",
         "profileThisMonth": "This month: {documents} documents, {scans} scans"
+      },
+      "pilot": {
+        "filter": "Pilot",
+        "empty": "No pilot testers yet",
+        "ended": "Ended",
+        "daysLeft": {
+          "one": "{count} day left",
+          "other": "{count} days left"
+        },
+        "ends": "Pilot · ends {date}",
+        "accountant": "Accountant: {name}",
+        "scan": "Scan",
+        "invoice": "Invoice",
+        "cohort": "Pilot cohort",
+        "cohortInvalid": "Lowercase letters, digits, dots and dashes only.",
+        "accountantEmail": "Referring accountant's email",
+        "accountantNeedsCohort": "Add a pilot cohort first.",
+        "accountantUnknown": "No account with this email.",
+        "accountantRefused": "This account can't be the accountant.",
+        "defaultEnd": "Ends in 60 days"
       }
     },
     "welcome": {

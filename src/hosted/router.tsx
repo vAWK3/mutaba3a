@@ -64,6 +64,11 @@ import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
 import { OperatorYouPage } from './pages/operator/OperatorYouPage';
 import { OperatorUsagePage } from './pages/operator/OperatorUsagePage';
 
+/** MUT-757: Accounts' address: the search text and the Pilot filter. */
+function operatorAccountsSearch(q: string, pilot: boolean): { q?: string; pilot?: 1 } {
+  return { ...(q ? { q } : {}), ...(pilot ? { pilot: 1 as const } : {}) };
+}
+
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
  * The active profile is in the path, so it is deep-linkable and safe across
@@ -535,15 +540,18 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/accounts',
-    validateSearch: (search: Record<string, unknown>): { q?: string } => {
+    validateSearch: (search: Record<string, unknown>): { q?: string; pilot?: 1 } => {
       const q = typeof search.q === 'string' ? search.q : typeof search.email === 'string' ? search.email : '';
-      return q.trim() ? { q: q.trim() } : {};
+      // MUT-757: `?pilot=1`, the Pilot filter.
+      const pilot = search.pilot === 1 || search.pilot === '1' || search.pilot === true || search.pilot === 'true';
+      return { ...(q.trim() ? { q: q.trim() } : {}), ...(pilot ? { pilot: 1 as const } : {}) };
     },
     component: function OperatorAccounts() {
-      const { q = '' } = operatorAccountsRoute.useSearch();
+      const { q = '', pilot } = operatorAccountsRoute.useSearch();
       const navigate = useNavigate();
-      const onSearch = useCallback((next: string) => void navigate({ to: '/operator/accounts', search: next ? { q: next } : {}, replace: true }), [navigate]);
-      return <OperatorPage>{() => <OperatorAccountsPage q={q} onSearch={onSearch} />}</OperatorPage>;
+      const onSearch = useCallback((next: string) => void navigate({ to: '/operator/accounts', search: operatorAccountsSearch(next, pilot === 1), replace: true }), [navigate, pilot]);
+      const onPilot = useCallback((next: boolean) => void navigate({ to: '/operator/accounts', search: operatorAccountsSearch(q, next), replace: true }), [navigate, q]);
+      return <OperatorPage>{() => <OperatorAccountsPage q={q} pilot={pilot === 1} onSearch={onSearch} onPilot={onPilot} />}</OperatorPage>;
     },
   });
 
