@@ -40,8 +40,6 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
       `mtb3a_stay_monthly_plans_50` (50% for 2 months), `mtb3a_comeback_first_month_plans_67` (67% once), on Solo,
       Business and Firm; the dry run after says "nothing to do". (npm passes flags only after `--`:
       `npm run billing:plans -- --apply --live`.)
-- [ ] `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6).
-- [ ] `npm run billing:uncovered -- --url "$URL"`, then Operator › Usage: who moves to Starter and who must pick a business (Stage 1, step 7).
 - [ ] The Tax Authority guide's copy signed, or the guide dropped from the release (the MUT-674 item under `## web`).
 - [ ] The privacy policy's 7-year deletion wording approved, or reverted (the MUT-644 item under `## web`).
 - [ ] The phone build 0.2.1+25 (it parses `PLAN_LIMIT`) is live in both stores.
@@ -50,6 +48,8 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
 ### Then: release, and one switch stage per release
 
 - [ ] `make release server` and `make release web`, with every switch off.
+- [ ] After that API is live (they read MUT-731's fields), from `server/`: `npm run billing:reconcile -- --url "$URL"` (Stage 1, step 6),
+      then `npm run billing:uncovered -- --url "$URL"` and Operator › Usage: who moves to Starter and who must pick a business (step 7).
 - [ ] Stage 1 → 6 in "Switch rollout" at the end of this file, each with its own tfvars lines and checks.
 
 ### Waiting on someone else
