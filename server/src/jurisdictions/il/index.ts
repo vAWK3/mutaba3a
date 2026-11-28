@@ -6,6 +6,7 @@ import { allocationInvoiceId, allocator, approvalRequest, DEFAULT_MANUAL_ALLOCAT
 import { IL_STATUTORY_FILE } from './uniform-file/statutory-file.js';
 import { normalizeTaxId } from './tax-id.js';
 import { ISRAEL_STANDARD_VAT_RATES, standardVatRateOn } from './vat.js';
+import { defaultVatPeriodKind, latestEndedVatPeriod, vatFilingDueDate, vatPeriodFromKey } from './vat-periods.js';
 
 /** The seven years the Tax Authority's rules keep a document (ADR-277, amended 2026-11-25). */
 const IL_RETENTION_YEARS = 7;
@@ -20,7 +21,11 @@ export const IL_PACK: JurisdictionPack = {
   taxId: { normalize: normalizeTaxId, scheme: 'IL_TAX_ID', pattern: '^\\d{9}$', maxLength: 9 },
   documentTypes: IL_DOCUMENT_TYPES,
   dealer: IL_DEALER,
-  vat: { rateOn: standardVatRateOn, perLineExemption: true },
+  vat: {
+    rateOn: standardVatRateOn,
+    perLineExemption: true,
+    periods: { defaultKind: defaultVatPeriodKind, latestEnded: latestEndedVatPeriod, fromKey: vatPeriodFromKey, dueDate: vatFilingDueDate },
+  },
   retention: { years: IL_RETENTION_YEARS },
   datedTables: [
     { name: 'vat.standardRate', starts: ISRAEL_STANDARD_VAT_RATES.map((step) => step.from) },
