@@ -41,6 +41,7 @@ again: `gcloud auth login barmajiyatltd@gmail.com`.
       Business and Firm; the dry run after says "nothing to do". (npm passes flags only after `--`:
       `npm run billing:plans -- --apply --live`.)
 - [x] 2026-11-28: the Tax Authority guide's copy signed off by Basel (MUT-674).
+- [ ] The revised Tax Authority guide copy (MUT-679, `copy-deck-first-three.md` §1): sign it, with the Arabic read by a native speaker; the 2026-11-28 sign-off above covered the first draft.
 - [x] 2026-11-28: the privacy policy's 7-year deletion wording approved by Basel (MUT-644).
 - [x] 2026-11-28: phone 0.2.1+25 (it parses `PLAN_LIMIT`) is the live version (Basel).
 - [ ] Apple Developer › the MTB3A App ID: turn on Push Notifications before the phone build that carries MUT-780.
