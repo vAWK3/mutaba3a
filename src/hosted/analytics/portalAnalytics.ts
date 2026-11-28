@@ -28,7 +28,7 @@ type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' |
  * (`plan_cap_reached`, `limit`), Upgrade shown (`plan_upgrade_offered`, `limit`) and pressed (`plan_upgrade_chosen`,
  * `from`, `to`), and Continue free on Starter after a cancel (`starter_continue_chosen`).
  */
-export type PlanEvent = 'plan_cap_reached' | 'plan_upgrade_offered' | 'plan_upgrade_chosen' | 'starter_continue_chosen';
+export type PlanEvent = 'plan_cap_reached' | 'plan_upgrade_offered' | 'plan_upgrade_chosen' | 'starter_continue_chosen' | 'plan_change_previewed' | 'plan_change_confirmed' | 'plan_change_undone';
 /**
  * MUT-758 (ADR-298, contract 2.13.0): the free pilot's events, tagged by the `pilot_` prefix and never carrying the
  * cohort. Billing opened (`days_left`), plans viewed, Write to us pressed, the first scan and first invoice

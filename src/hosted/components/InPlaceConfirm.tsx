@@ -26,6 +26,8 @@ export interface InPlaceConfirmProps {
   cancelWhileBusy?: boolean;
   /** Under the message: a refusal or a note in the row. */
   children?: ReactNode;
+  /** MUT-734: one more choice between Cancel and the action (the cancel flow's Move to Starter). */
+  extraAction?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -45,6 +47,7 @@ export function InPlaceConfirm({
   keepLabelWhileLoading = false,
   cancelWhileBusy = true,
   children,
+  extraAction,
   onCancel,
   onConfirm,
 }: InPlaceConfirmProps) {
@@ -68,6 +71,7 @@ export function InPlaceConfirm({
         <Button ref={cancelRef} type="button" variant="secondary" size={look.size} disabled={held} onClick={onCancel}>
           {cancelLabel}
         </Button>
+        {extraAction}
         <Button type="button" variant={variant} size={look.size} isLoading={busy} keepLabelWhileLoading={keepLabelWhileLoading} onClick={onConfirm}>
           {confirmLabel}
         </Button>

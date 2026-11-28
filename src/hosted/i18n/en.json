@@ -1613,6 +1613,32 @@
         "price": "Price",
         "line": "VAT {percent}%",
         "total": "Total"
+      },
+      "change": {
+        "title": "Change plan",
+        "free": "Free",
+        "perYear": "{price} a year",
+        "current": "Current",
+        "chargedNow": "Charged now",
+        "fromDate": "{plan} from {date}",
+        "readOnlyFrom": "Read-only from {date}",
+        "pay": "Pay {amount}",
+        "confirm": "Confirm",
+        "pending": "Waiting for the payment · {plan}",
+        "completePayment": "Complete payment",
+        "otherCard": "Pay with another card",
+        "upgraded": "You're on {plan}",
+        "done": "Done",
+        "scheduled": "Scheduled",
+        "undo": "Undo",
+        "undone": "{plan} renews {date}",
+        "moveToStarter": "Move to Starter",
+        "failure": {
+          "declined": "Card declined",
+          "changed": "Amount updated",
+          "chooseBusinesses": "Choose which businesses stay active",
+          "failed": "Couldn't change the plan"
+        }
       }
     },
     "selfService": {
@@ -2439,6 +2465,23 @@
         "watched": "Agreed to watching · {date}",
         "notWatched": "Not agreed to watching",
         "consentLabel": "The tester agreed to watched and recorded sessions"
+      },
+      "planHistory": {
+        "title": "Plan history",
+        "none": "No changes",
+        "on": "on {date}",
+        "kind": {
+          "UPGRADE": "Upgrade",
+          "DOWNGRADE": "Downgrade",
+          "TO_STARTER": "To Starter"
+        },
+        "state": {
+          "APPLIED": "Applied",
+          "SCHEDULED": "Scheduled",
+          "PENDING": "Pending",
+          "UNDONE": "Undone",
+          "FAILED": "Failed"
+        }
       }
     },
     "welcome": {

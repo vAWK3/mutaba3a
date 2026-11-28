@@ -103,7 +103,8 @@ export function UpgradeTo({ plan, size, variant = 'primary', asLink = false }: {
   const subscribed = from === 'solo' || from === 'business' || from === 'firm' || from === 'freelancer';
   const upgrade = () => {
     trackPlanEvent('plan_upgrade_chosen', { from, to: plan });
-    if (subscribed) drawers.openBilling();
+    // MUT-734: a subscriber changes plan in Billing (never a second Checkout).
+    if (subscribed) drawers.openChangePlan(plan);
     else drawers.openUpgrade(plan);
   };
   const label = t('hosted.planLimit.upgradeTo', { plan: t(`hosted.plan.name.${plan}`) });

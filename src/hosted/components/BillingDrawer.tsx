@@ -8,7 +8,7 @@ import { useLanguage, useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
 import { trackPortal } from '../analytics/portalAnalytics';
-import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type PauseEndResult, type YearlySwitchResult } from '../api/client';
+import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type PauseEndResult, type PlanChangeResult, type YearlySwitchResult } from '../api/client';
 import {
   assertStripeUrl,
   billingQuery,
@@ -66,6 +66,9 @@ import { OfferTopLine } from './OfferTopLine';
 import { activeBusinessesOf, billingStarterOf, planUsageOf, recommendedPlanOf, starterUsageOf } from '../data/planUsage';
 import { PickActiveBusinesses, ReadOnlyBusinesses } from './BusinessChecklist';
 import { PlanMeters } from './PlanMeters';
+import { ChangeDoneBody, ChangePlanBody, ChangePlanFooter, ScheduledChangeLine } from './ChangePlan';
+import { changeTargetsOf, useChangePlan, useScheduledToast } from '../data/planChangeQueries';
+import { useAccountDrawers } from '../shell/AccountDrawers';
 import { BillingAddressFields, PlanRow } from './BillingPlanPicker';
 import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, priceLinesOf, savedAddressOf, vatRateOf, type AddressDraft, type BillingPlan, type PlanName } from '../data/billingPlans';
 import { PriceLinesCard } from './PriceLinesCard';
@@ -84,22 +87,22 @@ import { Scene } from './Scene';
  * and skippable; adding one goes to Subscribe, which carries the rest of the trial into Stripe (ADR-170 R-D2).
  */
 
-export type BillingStep = 'subscribe' | 'welcome' | 'switch' | 'cancel';
+export type BillingStep = 'subscribe' | 'welcome' | 'switch' | 'cancel' | 'change';
 
 /** ADR-160 D3: the free trial's length, for the welcome's "has started" wording (the server's TRIAL_DAYS). */
 const TRIAL_LENGTH_DAYS = 14;
 
 export interface BillingDrawerProps {
   step: BillingStep | undefined;
-  /** MUT-705: the plan an Upgrade to <plan> asked for (`?billingPlan=`); the Subscribe step opens on it. */
-  wantedPlan?: PlanName;
+  /** MUT-705 / MUT-734: the plan an Upgrade asked for (`?billingPlan=`); the Subscribe step or Change plan opens on it. */
+  wantedPlan?: PlanName | 'starter';
   checkout: 'success' | 'cancelled' | undefined;
   /** Back from the Customer Portal (`?portal=returned`). */
   portalReturned?: boolean;
   /** MUT-533 (D5): back from its card form (`?portal=card`): pay the past-due invoice on the new card, once. */
   cardUpdated?: boolean;
   /** `replace`: the new step takes this one's history entry (the welcome never comes back on Back). */
-  onStep: (step: 'subscribe' | 'switch' | 'cancel' | undefined, replace?: boolean) => void;
+  onStep: (step: 'subscribe' | 'switch' | 'cancel' | 'change' | undefined, replace?: boolean) => void;
   onClose: () => void;
 }
 
@@ -151,10 +154,28 @@ export function BillingDrawer({ step, wantedPlan, checkout, portalReturned = fal
   // Render-time adjustment, not an effect (react-hooks v7): the poll ends once the mirror shows the change.
   if (awaiting !== null && billing.data && mirrored(awaiting, billing.data)) setAwaiting(null);
   usePollBilling(awaiting !== null, useCallback(() => setAwaiting(null), []));
+  // MUT-734: Change plan, its own step: the list and the preview, then the done pane (an upgrade) or back to Billing
+  // with the undo toast (a scheduled change).
+  const changing = step === 'change' && billing.data !== undefined;
+  const scheduledToast = useScheduledToast();
+  const changeFlow = useChangePlan(
+    changing ? billing.data : undefined,
+    wantedPlan,
+    useCallback(
+      (result: PlanChangeResult) => {
+        scheduledToast(result);
+        onStep(undefined);
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- the toast closes over the language only
+      [onStep],
+    ),
+  );
+  const changeDone = changing && changeFlow.confirm.data && changeFlow.confirm.data.state !== 'scheduled' ? changeFlow.confirm.data : null;
   // MUT-731: Billing's Change pane (the pick list), and the drawer's See plans on Starter (wireframe 1).
   const [picking, setPicking] = useState(false);
   const pickTitleId = useId();
   const me = useMe();
+  const drawers = useAccountDrawers();
   const activeBusinesses = activeBusinessesOf(billing.data);
   const pickable = activeBusinesses ? me.profiles.filter((p) => activeBusinesses.active.includes(p.id) || activeBusinesses.readOnly.includes(p.id)) : [];
   const onStarter = billing.data?.currentPlan === 'starter' && step === undefined && !picking;
@@ -170,6 +191,8 @@ export function BillingDrawer({ step, wantedPlan, checkout, portalReturned = fal
         ? t('hosted.billing.switch.title')
         : step === 'cancel'
           ? t('hosted.billing.cancel.action')
+          : step === 'change'
+            ? t('hosted.billing.change.title')
           : welcomeTitle
             ? t('hosted.billing.welcome.title')
             : t('hosted.billing.title');
@@ -199,8 +222,18 @@ export function BillingDrawer({ step, wantedPlan, checkout, portalReturned = fal
     body = <WelcomeBody welcome={welcome} />;
   } else if (switching) {
     body = <SwitchBody step={switchStep} />;
+  } else if (changeDone) {
+    body = <ChangeDoneBody result={changeDone} />;
+  } else if (changing) {
+    body = <ChangePlanBody billing={billing.data} flow={changeFlow} />;
   } else if (cancelling) {
-    body = <CancelBody flow={cancelFlow} onBack={() => onStep(undefined)} />;
+    body = (
+      <CancelBody
+        flow={cancelFlow}
+        onBack={() => onStep(undefined)}
+        onMoveToStarter={changeTargetsOf(billing.data).includes('starter') ? () => drawers.openChangePlan('starter') : undefined}
+      />
+    );
   } else if (subscribing) {
     body = <SubscribeBody billing={billing.data} title={title} form={subscribe} onBack={() => onStep(undefined)} />;
   } else if (picking) {
@@ -234,6 +267,7 @@ export function BillingDrawer({ step, wantedPlan, checkout, portalReturned = fal
         }}
         onAwait={setAwaiting}
         onChangeActive={() => setPicking(true)}
+        onChangePlan={() => onStep('change')}
       />
     );
   }
@@ -248,6 +282,12 @@ export function BillingDrawer({ step, wantedPlan, checkout, portalReturned = fal
           <WelcomeFooter welcome={welcome} />
         ) : subscribing ? (
           <SubscribeFooter form={subscribe} />
+        ) : changeDone ? (
+          <div className="drawer-footer-right">
+            <Button onClick={() => onStep(undefined)}>{t('hosted.billing.change.done')}</Button>
+          </div>
+        ) : changing ? (
+          <ChangePlanFooter flow={changeFlow} onBack={() => onStep(undefined)} />
         ) : switching ? (
           <SwitchFooter step={switchStep} onBack={() => onStep(undefined)} />
         ) : cancelling ? (
@@ -362,6 +402,7 @@ function StatusView({
   onCancelPlan,
   onAwait,
   onChangeActive,
+  onChangePlan,
 }: {
   billing: BillingOverview;
   phase: Phase;
@@ -373,6 +414,7 @@ function StatusView({
   onCancelPlan: () => void;
   onAwait: (awaiting: Awaiting) => void;
   onChangeActive: () => void;
+  onChangePlan: () => void;
 }) {
   const t = useT();
   const tp = useTp();
@@ -443,6 +485,8 @@ function StatusView({
       ) : (
         <PanelStatus panel={view.panel} plan={billing.currentPlan} renewal={renewalPriceOf(billing)} language={language} headlineRef={headline} />
       )}
+      {/* MUT-734 (wireframe "sched" A): a scheduled change under the plan, with Undo; or an upgrade waiting for the bank. */}
+      {settled && <ScheduledChangeLine billing={billing} />}
 
       {/* MUT-525 DD10c: the offer line in the context, right above Subscribe. */}
       {settled && view.action === 'subscribe' && !view.openSoon && offer && <OfferTopLine offer={offer} place="drawer" />}
@@ -452,6 +496,14 @@ function StatusView({
 
       {/* MUT-531 (AC2): the switch line under Manage billing, from the 2nd paid invoice of a monthly list price. */}
       {settled && !switched && switchLine && <SwitchLine yearlySwitch={switchLine} language={language} onSwitch={onSwitch} />}
+      {/* MUT-734: Change plan, while the server offers a move (none while one is scheduled, paused or past due). */}
+      {settled && changeTargetsOf(billing).length > 0 && (
+        <div>
+          <Button variant="secondary" onClick={onChangePlan}>
+            {t('hosted.billing.change.title')}
+          </Button>
+        </div>
+      )}
       {/* MUT-532: the plan's own changes, in MTB3A: undo a pause or resume, take a cancel back, or cancel. */}
       {settled && <PlanChanges billing={billing} panel={view.panel} onCancelPlan={onCancelPlan} onAwait={onAwait} />}
       {/* MUT-731 (wireframe 4): read-only after a cancel offers the free plan beside Subscribe. */}
@@ -932,7 +984,7 @@ function entitlementPanel(profile: BillingProfile): BillingPanel {
  * else Monthly), by a render-time adjustment; refetches never change it, only the person's tap does. DD4: an offer the
  * server says has ended is never shown or sent again in this drawer.
  */
-function useSubscribeForm(billing: BillingOverview | undefined, wantedPlan?: PlanName) {
+function useSubscribeForm(billing: BillingOverview | undefined, wantedPlan?: PlanName | 'starter') {
   const { pathname } = useLocation();
   const { language } = useLanguage();
   const [legacyCountry, setCountry] = useState('');

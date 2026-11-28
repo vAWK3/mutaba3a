@@ -1,0 +1,75 @@
+app: portal
+area: change-plan
+title: Changing plan from Billing (up now, down at the period end, to Starter), stubbed API
+tier: secondary
+# MUT-734 (wireframe mut-734, variant A on every screen; server half ADR-291). The FakeApi's `paid` seed answers the
+# preview, the change and Undo as the server does (a fixed proration); Stripe's own charge, schedule and 3-D Secure are
+# portal-live's with the sandbox (TD-347).
+paths:
+  - src/hosted/components/ChangePlan.tsx
+  - src/hosted/data/planChangeQueries.ts
+features:
+  - id: upgrade-now
+    title: On Solo, Change plan › Business previews the amount charged now; Pay charges it and the done pane says You're on Business
+    tier: secondary
+    tickets: [MUT-734]
+    paths:
+      - src/hosted/components/Scene.tsx
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/hosted.css
+    steps:
+      - As a Solo subscriber, open Billing and choose Change plan
+      - Choose Business
+      - Choose Pay ₪31.40
+      - Choose Done
+    expect:
+      - The four plans are listed, Solo marked Current and not selectable
+      - The preview's main figure is "Charged now ₪31.40" and the button reads Pay ₪31.40
+      - The plan-upgraded scene plays and the pane says "You're on Business"
+      - Billing's headline reads "Business, renews …"
+  - id: downgrade-scheduled
+    title: On Business with two businesses, Change plan › Solo asks which business stays active; Confirm schedules it with a toast and Undo takes it back
+    tier: secondary
+    tickets: [MUT-734]
+    paths:
+      - src/hosted/components/Toast.tsx
+      - src/hosted/components/BusinessChecklist.tsx
+    steps:
+      - As a Business subscriber with two businesses, open Change plan and choose Solo
+      - Tick one business
+      - Choose Confirm
+      - Choose Undo on the scheduled line
+    expect:
+      - The preview's main figure is "Solo from <period end>"; the checklist reads 0 of 1 and Confirm is off
+      - The counter reads 1 of 1, the other business says "Read-only from <date>", and Confirm turns on
+      - Billing shows the change-scheduled scene, "Scheduled", "Solo from <date>" and Undo; a toast rises with the same words and Undo
+      - The line collapses and a toast says "Business renews <date>"; Change plan is offered again
+  - id: cancel-to-starter
+    title: Cancel plan's confirm offers Move to Starter, which opens Change plan on Starter and schedules it
+    tier: secondary
+    tickets: [MUT-734]
+    paths:
+      - src/hosted/components/BillingCancelFlow.tsx
+      - src/hosted/components/InPlaceConfirm.tsx
+    steps:
+      - As a Solo subscriber, open Billing, choose Cancel plan, give a reason and Continue
+      - Choose Move to Starter
+      - Choose Confirm
+    expect:
+      - The confirm has Keep my plan, Move to Starter and the cancel
+      - Change plan opens with Starter chosen and "Starter from <period end>"
+      - Billing shows "Starter from <date>" with Undo
+  - id: operator-plan-history
+    title: The operator's account page lists the person's plan changes (Plan history)
+    tier: secondary
+    tickets: [MUT-734]
+    manual: true
+    # Rows come only from a Stripe-backed change on a live API (billing_plan_changes); the list's rendering is
+    # unit-tested in src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx.
+    paths:
+      - src/hosted/pages/operator/OperatorPlanHistory.tsx
+      - src/hosted/pages/operator/OperatorAccountPage.tsx
+    steps:
+      - As an operator, open the account of someone who moved Solo → Business and scheduled Business → Solo
+    expect:
+      - Plan history lists both, newest first, with the day, the kind, Scheduled / Applied and the upgrade's charge
