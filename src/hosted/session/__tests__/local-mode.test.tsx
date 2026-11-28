@@ -299,8 +299,10 @@ describe('the shell signed out', () => {
     await user.click(within(page).getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByLabelText('Email')).toBeInTheDocument();
     expect(locationOf(router)).toBe('/sign-in');
-    // No bounce (no /v1/me). The one request is the server's public doors (MUT-368 D1): the person chose the server.
-    expect(server.calls.map((call) => `${call.method} ${call.url.pathname}`)).toEqual(['GET /v1/self-service']);
+    // No bounce (no /v1/me). Only the server's public doors are asked (MUT-368 D1): the person chose the server. You › Account
+    // asks them too (MUT-737 open sign-up), and the sign-in page asks again when that request was cut off by the navigation.
+    const asked = new Set(server.calls.map((call) => `${call.method} ${call.url.pathname}`));
+    expect([...asked]).toEqual(['GET /v1/self-service']);
   });
 
   it('shows the same home and four destinations as signed in, with Conversions one level in under Paid (MUT-287, MUT-424, MUT-657)', async () => {

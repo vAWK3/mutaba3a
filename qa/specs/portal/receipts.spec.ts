@@ -477,7 +477,8 @@ test('A receipt from a known vendor opens with its last category filled in, unde
   await step('Approve and file it', async () => {
     await page.getByLabel('Amount').fill('12.50');
     await page.getByRole('button', { name: 'Approve and file' }).click();
-    await expect(page).toHaveURL(new RegExp(`${BASE}/receipts$`));
+    // Filing moves on to the next receipt To review (MUT-261 D8); the second Egged receipt is open.
+    await expect(page).toHaveURL(new RegExp(`${BASE}/receipts/${libraryReceipt(2).id}$`));
     expect(api.last('POST', new RegExp(`^/v1/receipts/${first}/approve$`))?.body).toMatchObject({ categoryId: travel.id });
   });
 
