@@ -168,6 +168,12 @@ const ACCOUNTANT_OPERATIONS = [
   'PUT /v1/accountant/customers/{userId}/email',
   // MUT-766: the activation Checkout for an unclaimed customer.
   'POST /v1/accountant/customers/{userId}/checkout-session',
+  // MUT-782 (ADR-341): VAT periods. The client's Done and read, and the accountant's two writes under /v1/clients.
+  'GET /v1/profiles/{profileId}/vat-periods/current',
+  'POST /v1/profiles/{profileId}/vat-periods/{periodKey}/done',
+  'GET /v1/clients/vat-periods',
+  'PUT /v1/clients/{profileId}/vat-period',
+  'POST /v1/clients/{profileId}/vat-periods/{periodKey}/review',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
@@ -447,6 +453,7 @@ beforeAll(async () => {
     // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
     accountantAccess: true,
     accountantProvisioning: true,
+    vatPeriodReminders: true,
     malafatDelegation: true,
     // MUT-560: and share links (SHARE_LINKS).
     shareLinks: true,
