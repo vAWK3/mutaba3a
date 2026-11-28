@@ -28,6 +28,13 @@
 
 ---
 
+## [Unreleased] - 2026-11-28 — TD-371: the self-service QA API runs Starter and open sign-up
+
+### Changed
+- `qa/support/selfservice-live.mjs`: `STARTER_PLAN` and `OPEN_SIGNUP` on (every switch of the production target but INVOICING_FOR_ALL and ACCOUNTANT_PLAN).
+- Re-specced flows: `signup.create`, `signup.375` (Home, no trial), `signup.webmail-starter` (was review-webmail: opens at once on Starter), `operator.signups-history` and `-arabic` (were signups-approve / -decline: the MUT-737 history, no Approve or Decline, the Webmail chip), `operator.step-up-passkey` (on Sign out everywhere), `mail.mail-directional-art` (the account-closing mail's mirrored bin), `malafat-delegation.first-sign-in` / `link-existing` and `passkeys.suggest-first-sign-in` (no trial step). `signup.review-declined` retired.
+- Portal (MUT-737 follow-ups found by it): the operator console and You › Account's Operator link open on Accounts with open sign-up; a Starter profile's billing source reads "Starter" on the operator's account page (`hosted.operator.accounts.billingSource.STARTER`).
+
 ## [Unreleased] - 2026-11-28 — MUT-775 (portal): a known vendor's last category fills the receipt review
 
 ### Added

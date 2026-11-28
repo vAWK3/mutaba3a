@@ -2394,7 +2394,8 @@
           "OPERATOR": "منحة",
           "STRIPE": "مدفوع",
           "TRIAL": "تجربة",
-          "NONE": "بلا خطة"
+          "NONE": "بلا خطة",
+          "STARTER": "البداية"
         },
         "billingUntil": "حتى {date}",
         "noProfiles": "لا ملفات.",

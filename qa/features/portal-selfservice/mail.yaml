@@ -27,14 +27,16 @@ features:
       - With images off the headline, the button and the copyable link are all still there
       - The button opens /setup, "Finish creating your account"
   - id: mail-directional-art
-    title: An approved Arabic account's ready mail faces its directional art right to left
+    title: An Arabic account's closing mail faces its directional art right to left
     tier: secondary
+    tickets: [MUT-468, TD-371]
     paths:
       - server/src/email/templates/look.ts
     steps:
-      - Sign up in Arabic with a webmail address and finish /setup (it waits for review)
-      - The operator approves the account
-      - Open the account-ready mail
+      - Sign up in Arabic with a webmail address and finish /setup (it opens at once)
+      - Close the account from You › Account with the password
+      - Open the account-closing mail
     expect:
-      - The ready mail is Arabic, right to left, headed "حسابك جاهز"
-      - Its header is the mirrored milestone picture (mail-header-hello-milestone-firm-rtl-2x.png) and it loads from the portal
+      - The account opens on Home, with no review
+      - The closing page takes over
+      - The mail is Arabic, right to left, headed "سيُحذف حسابك بتاريخ …", and its header is the mirrored bin picture (mail-header-goodbye-destructive-confirmation-rtl-2x.png), loaded from the portal

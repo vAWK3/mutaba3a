@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
-import { address, chooseLanguage, decideReview, expireSignupLinks, mailTo, operatorAccount, outbox, setupLinkIn, signInThroughForm, skipSetupPasskey } from '../../support/selfService';
+import { address, chooseLanguage, expireSignupLinks, mailTo, operatorAccount, outbox, setupLinkIn, signInThroughForm, skipSetupPasskey } from '../../support/selfService';
+import { openYou, youRow } from '../../support/you';
 import { stubTurnstile } from '../../support/turnstile';
 
 /**
@@ -23,12 +24,8 @@ const COPY = {
     terms: /terms of service/,
     create: 'Create account',
     home: 'Home',
-    trial: 'Your free trial',
-    trialStarted: 'Your 14-day free trial has started',
-    openSoon: /Subscriptions open soon/,
-    trialContinue: 'Continue',
-    review: "We're reviewing your account",
-    reviewBody: "We'll email you within 2 working days.",
+    billing: 'Billing',
+    starter: "You're on Starter, free",
   },
   ar: {
     title: 'أنشئ حسابك',
@@ -40,12 +37,8 @@ const COPY = {
     terms: /شروط الخدمة/,
     create: 'أنشئ الحساب',
     home: 'الرئيسية',
-    trial: 'تجربتك المجانية',
-    trialStarted: 'بدأت تجربتك المجانية لمدة 14 يومًا',
-    openSoon: /يُفتح الاشتراك قريبًا/,
-    trialContinue: 'متابعة',
-    review: 'نراجع حسابك',
-    reviewBody: 'سنراسلك خلال يومَي عمل.',
+    billing: 'الاشتراك',
+    starter: 'أنت على خطة البداية المجانية',
   },
 } as const;
 
@@ -76,24 +69,11 @@ async function expectHomeAfterSetup(page: Page, language: Language) {
   await expectHome(page, language);
 }
 
-/**
- * MUT-418: a new trial's first sign-in opens on "Your 14-day free trial has started". This API has no Stripe, so it
- * is the honest variant (subscriptions open soon, Continue only, no card). Continue lands on Home, once.
- */
+/** TD-371 (STARTER_PLAN on): a new account starts on Starter, so Home comes with no trial step (ADR-284). */
 async function expectHome(page: Page, language: Language) {
-  const trial = page.getByRole('dialog', { name: COPY[language].trial });
-  await expect(trial.getByRole('heading', { name: COPY[language].trialStarted })).toBeVisible();
-  await expect(trial.getByText(COPY[language].openSoon)).toBeVisible();
-  await expect(trial.getByRole('button', { name: /Add a card|أضف بطاقة/ })).toHaveCount(0);
-  await trial.getByRole('button', { name: COPY[language].trialContinue, exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { level: 1, name: COPY[language].home })).toBeVisible();
-}
-
-async function expectUnderReview(page: Page, language: Language) {
-  await expect(page.getByRole('heading', { level: 1, name: COPY[language].review })).toBeVisible();
-  await expect(page.getByText(COPY[language].reviewBody)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -272,49 +252,26 @@ test('An address on a domain that passes the business checks signs up at once', 
 });
 
 for (const language of ['en', 'ar'] as const) {
-  test(`A webmail signup waits for the operator, then signs in to Home once approved (${language})`, { tag: '@portal-selfservice.signup.review-webmail' }, async ({ page, step }) => {
+  test(`A webmail signup opens at once on Starter, with no review and no trial (${language})`, { tag: '@portal-selfservice.signup.webmail-starter' }, async ({ page, step }) => {
     await chooseLanguage(page, language);
-    const email = address(`review-${language}`, 'gmail.com');
-    await step('Sign up with an @gmail.com address and finish /setup: the under-review screen', async () => {
+    const email = address(`open-${language}`, 'gmail.com');
+    await step('Sign up with an @gmail.com address and finish /setup: Home, signed in', async () => {
       await askForLink(page, email, language);
       await finishSetup(page, email, language);
-      await expectUnderReview(page, language);
-      await expect(page.getByRole('link', { name: /@/ })).toHaveAttribute('href', /^mailto:/);
+      await expectHomeAfterSetup(page, language);
     });
-    await step('Sign in with the new password: the same screen', async () => {
-      await signInThroughForm(page, email, PASSWORD, language);
-      await expectUnderReview(page, language);
+    await step('Open Billing: the person is on Starter, free', async () => {
+      await openYou(page, 'account');
+      await youRow(page, COPY[language].billing).click();
+      await expect(page.getByRole('heading', { name: COPY[language].starter })).toBeVisible();
     });
-    await step('The operator approves; the approval mail arrives', async () => {
-      await decideReview(email, 'approve');
-      await mailTo(email, 'account-ready');
-    });
-    await step('Sign in again: Home', async () => {
+    await step('On a new browser, sign in with the new password: Home', async () => {
+      await page.context().clearCookies();
       await signInThroughForm(page, email, PASSWORD, language);
       await expectHome(page, language);
     });
   });
 }
-
-test('A declined signup gets the decline mail, and sign-in is refused like any unknown account', { tag: '@portal-selfservice.signup.review-declined' }, async ({ page, step }) => {
-  await chooseLanguage(page, 'en');
-  const email = address('declined', 'gmail.com');
-  await step('Sign up with an @gmail.com address and finish /setup: under review', async () => {
-    await askForLink(page, email, 'en');
-    await finishSetup(page, email, 'en');
-    await expectUnderReview(page, 'en');
-  });
-  await step('The operator declines; the mail names the support address', async () => {
-    await decideReview(email, 'decline');
-    const mail = await mailTo(email, 'account-declined');
-    expect(mail.text).toMatch(/[\w.+-]+@[\w.-]+\.\w+/);
-  });
-  await step('Sign in with that address and password: refused like any unknown account', async () => {
-    await page.getByRole('button', { name: 'Sign out' }).click();
-    await signInThroughForm(page, email, PASSWORD, 'en');
-    await expect(page.getByRole('alert')).toContainText("That email and password don't match.");
-  });
-});
 
 test('At 375 px in Arabic, every signup screen fits with nothing scrolling sideways', { tag: '@portal-selfservice.signup.375' }, async ({ page, step }) => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -339,11 +296,11 @@ test('At 375 px in Arabic, every signup screen fits with nothing scrolling sidew
     await expect(page.getByRole('heading', { level: 1, name: COPY.ar.finish })).toBeVisible();
     await expectNoHorizontalOverflow(page, '/setup at 375 px');
   });
-  await step('The under-review screen fits', async () => {
+  await step('Home of the new account fits', async () => {
     await page.getByLabel(COPY.ar.password).fill(PASSWORD);
     await page.getByRole('checkbox', { name: COPY.ar.terms }).check();
     await page.getByRole('button', { name: COPY.ar.create }).click();
-    await expectUnderReview(page, 'ar');
-    await expectNoHorizontalOverflow(page, 'under review at 375 px');
+    await expectHomeAfterSetup(page, 'ar');
+    await expectNoHorizontalOverflow(page, 'Home at 375 px');
   });
 });

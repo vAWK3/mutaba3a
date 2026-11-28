@@ -2250,7 +2250,8 @@
           "OPERATOR": "Granted",
           "STRIPE": "Paid",
           "TRIAL": "Trial",
-          "NONE": "No plan"
+          "NONE": "No plan",
+          "STARTER": "Starter"
         },
         "billingUntil": "until {date}",
         "noProfiles": "No profiles.",
