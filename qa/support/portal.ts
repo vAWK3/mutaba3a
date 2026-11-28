@@ -196,6 +196,8 @@ export async function openSignedInPortal(
       return route.fulfill(json(hostedProfile(created), 201));
     }
     if (method === 'GET' && pathname === '/v1/summaries/organization') return route.fulfill(json({ asOf: '2026-10-15', currencies: [] }));
+    // MUT-774: the clients list's Balance column; an empty list of balances, not a page of items.
+    if (method === 'GET' && pathname === '/v1/customer-balances') return route.fulfill(json({ asOf: '2026-10-15', balances: [] }));
     if (method === 'GET' && pathname === '/v1/customers') {
       return route.fulfill(json({ items: Array.from({ length: clients }, (_, i) => customer(i)), nextCursor: null }));
     }
