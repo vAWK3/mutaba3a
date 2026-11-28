@@ -50,3 +50,15 @@ features:
       - Ask for more has its own pane with a 200-character note; the footer sends or cancels
       - The review posts MORE_NEEDED with the note, and the row reads More needed
       - The period select posts the chosen kind
+  - id: client-result
+    title: "A client sees what the accountant did with the period, more needed with the note and then confirmed"
+    tier: secondary
+    tickets: [MUT-783]
+    steps:
+      - Open home with a period the accountant asked more for
+      - Tap Done again
+      - Open home with a period the accountant confirmed
+    expect:
+      - The group says "Your accountant needs more", shows the accountant's note and offers Done
+      - After Done the line says "Waiting for your accountant"; the note and the button are gone
+      - A confirmed period shows "Confirmed by your accountant" with no Done button

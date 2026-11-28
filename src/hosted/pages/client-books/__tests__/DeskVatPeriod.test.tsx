@@ -109,6 +109,39 @@ describe('the desk: VAT period column and chips', () => {
   });
 });
 
+describe('the VAT drawer, edge cases', () => {
+  it('does not open from the URL while the switch is off, or for a client the server does not list', async () => {
+    desk(null, {}, `/client-books?vat=${CAFE}`);
+    await screen.findByRole('table', { name: 'Client books' });
+    expect(screen.queryByRole('dialog', { name: 'Café Nour' })).toBeNull();
+  });
+
+  it('after Confirm the footer no longer offers Confirm, so it cannot be sent twice', async () => {
+    const { user, api, set } = desk(THREE, {
+      [`POST /v1/clients/${BAKERY}/vat-periods/${KEY}/review`]: () => {
+        set([item(CAFE, view('OPEN')), item(BAKERY, view('CONFIRMED')), item(STUDIO, view('CONFIRMED'))]);
+        return ok(view('CONFIRMED'));
+      },
+    }, `/client-books?vat=${BAKERY}`);
+    const drawer = await screen.findByRole('dialog', { name: 'Bakery' });
+    await user.click(await within(drawer).findByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(within(drawer).queryByRole('button', { name: 'Confirm' })).toBeNull());
+    expect(api.count(`POST /v1/clients/${BAKERY}/vat-periods/${KEY}/review`)).toBe(1);
+    expect(within(drawer).queryByRole('alert')).toBeNull();
+  });
+
+  it('a filter does not outlive the chips: when no client has a period any more, every row shows again', async () => {
+    const { user, set, queryClient } = desk(THREE);
+    const chips = await screen.findByRole('group', { name: 'VAT state' });
+    await user.click(within(chips).getByRole('button', { name: /Confirmed/ }));
+    set([item(CAFE, null), item(BAKERY, null), item(STUDIO, null)]);
+    await queryClient.invalidateQueries({ queryKey: ['clientBooks', 'vatPeriods'] });
+    const table = screen.getByRole('table', { name: 'Client books' });
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'VAT state' })).toBeNull());
+    expect(within(table).getByText('Café Nour')).toBeInTheDocument();
+  });
+});
+
 describe('the VAT drawer', () => {
   it('opens from the row on ?vat= and shows the period and its state', async () => {
     const { user, router } = desk(THREE);

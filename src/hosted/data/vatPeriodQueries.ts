@@ -51,6 +51,10 @@ export function useMarkVatPeriodDone(profileId: string) {
   return useMutation({
     mutationFn: (periodKey: string) => api.markVatPeriodDone(profileId, periodKey),
     onSuccess: (period) => queryClient.setQueryData(profileKey(profileId, 'vatPeriod'), period),
+    // 409: the accountant confirmed since this page read the period. Read it again, so the group shows what is true.
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'vatPeriod') });
+    },
   });
 }
 
@@ -58,7 +62,10 @@ export function useSetClientVatPeriod() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ profileId, kind }: { profileId: string; kind: Schemas['VatPeriodKind'] }) => api.setClientVatPeriod(profileId, kind),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: CLIENT_VAT_KEY }),
+    onSuccess: async ({ kind }, { profileId }) => {
+      queryClient.setQueryData<Schemas['ClientVatPeriodsResponse'] | null>(CLIENT_VAT_KEY, (old) => old && { items: old.items.map((item) => (item.profileId === profileId ? { ...item, chosenKind: kind, kind } : item)) });
+      await queryClient.invalidateQueries({ queryKey: CLIENT_VAT_KEY });
+    },
   });
 }
 
@@ -67,6 +74,14 @@ export function useReviewVatPeriod() {
   return useMutation({
     mutationFn: ({ profileId, periodKey, decision, note }: { profileId: string; periodKey: string; decision: 'CONFIRMED' | 'MORE_NEEDED'; note?: string }) =>
       api.reviewVatPeriod(profileId, periodKey, { decision, ...(note ? { note } : {}) }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: CLIENT_VAT_KEY }),
+    // The answer is the period as it now stands: put it in the list at once (the footer must not offer Confirm again for
+    // the old state), then re-read. 409 means it was already confirmed: re-read too.
+    onSuccess: async (period, { profileId }) => {
+      queryClient.setQueryData<Schemas['ClientVatPeriodsResponse'] | null>(CLIENT_VAT_KEY, (old) => old && { items: old.items.map((item) => (item.profileId === profileId ? { ...item, period } : item)) });
+      await queryClient.invalidateQueries({ queryKey: CLIENT_VAT_KEY });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) void queryClient.invalidateQueries({ queryKey: CLIENT_VAT_KEY });
+    },
   });
 }

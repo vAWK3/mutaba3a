@@ -74,6 +74,8 @@ export function ClientBooksPage() {
   const approved = customers?.approved === true;
   // MUT-783: each client's VAT period; null while the switch is off, and then the desk has no VAT column.
   const vatItems = useClientVatPeriods().data?.items;
+  // The chips show only while some client has a period; a filter must never outlive them (an empty table with no way back).
+  const vatChips = vatItems?.some((item) => item.period) === true;
   const vatBy = useMemo(() => (vatItems ? new Map(vatItems.map((item) => [item.profileId, item])) : null), [vatItems]);
 
   const activatingKey = [...activating].sort().join(',');
@@ -120,7 +122,7 @@ export function ClientBooksPage() {
         }}
       />
       {approved && rows.length > 0 && <DeskChips rows={rows} filter={filter} onFilter={setFilter} />}
-      {vatItems && vatItems.some((item) => item.period) && <VatChips items={vatItems} filter={vatFilter} onFilter={setVatFilter} />}
+      {vatChips && vatItems && <VatChips items={vatItems} filter={vatFilter} onFilter={setVatFilter} />}
       <QueryView
         queries={[books]}
         data={books.data ? rows : undefined}
@@ -147,7 +149,7 @@ export function ClientBooksPage() {
             query={query}
             filter={approved ? filter : 'all'}
             vatBy={vatBy}
-            vatFilter={vatFilter}
+            vatFilter={vatChips ? vatFilter : 'all'}
             onVat={(row) => goTo({ vat: row.client!.profileId })}
             onSubscribe={() => setSubscribing(true)}
             onOpen={(row, pane) => goTo({ customer: row.customer!.userId, ...(pane ? { pane } : {}) })}
@@ -155,7 +157,7 @@ export function ClientBooksPage() {
         )}
       </QueryView>
       {search.newCustomer && approved && <AddCustomerDrawer onClose={closeDrawers} />}
-      {vatRow?.client && <VatPeriodDrawer profileId={vatRow.client.profileId} name={vatRow.name} item={vatBy?.get(vatRow.client.profileId)} onClose={closeDrawers} />}
+      {vatRow?.client && vatBy?.has(vatRow.client.profileId) && <VatPeriodDrawer profileId={vatRow.client.profileId} name={vatRow.name} item={vatBy?.get(vatRow.client.profileId)} onClose={closeDrawers} />}
       {customerRow?.customer && <CustomerDrawer key={customerRow.key} row={customerRow} pane={search.pane} onClose={closeDrawers} onPane={(pane) => goTo({ customer: search.customer!, ...(pane ? { pane } : {}) }, true)} />}
     </div>
   );

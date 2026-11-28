@@ -18,6 +18,10 @@
 
 ## Open Debt
 
+### TD-378: A confirmed VAT period leaves the client's home 30 days after the announcement, not the confirmation (MUT-783, 2026-11-28)
+
+`clientVatVisible` counts `VAT_CONFIRMED_SHOWN_DAYS` from `announcedAt` because `VatPeriodView` carries no confirmation time. An accountant who confirms more than 30 days after the announcement makes the group vanish at once, so the client never reads "Confirmed by your accountant". Add `reviewedAt` to the server's `VatPeriodView` and count from it.
+
 ### TD-377: The VAT period motions are not built (MUT-783, 2026-11-28)
 
 Claude Design delivered three motions (Done 680 ms, Confirm 420 ms, More needed 600 ms; `docs/design/vat-period/SPEC.md`). The portal swaps the state chip and the scene without the choreography (the end poses, the chip fades), which is also what reduced motion shows. Build them in CSS from the spec, with its numbers pinned in a test, as MUT-770's motion was.

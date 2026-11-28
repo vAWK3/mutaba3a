@@ -122,3 +122,29 @@ test('An accountant asks a client for more receipts with a note, and chooses how
     await expect.poll(() => api.calls('PUT', `/v1/clients/${CARD_PROFILE}/vat-period`)[0]?.body).toEqual({ kind: 'MONTHLY' });
   });
 });
+
+test('A client sees what the accountant did with the period: more needed with the note, then confirmed', { tag: '@portal.vat-period.client-result' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], vatPeriod: period('MORE_NEEDED', { note: 'October fuel', doneAt: new Date().toISOString() }) });
+  const group = () => page.getByRole('region', { name: 'VAT · Sep – Oct 2026' });
+
+  await step('Open home with a period the accountant asked more for', async () => {
+    await api.open(page, HOME);
+    await expect(group().getByText('Your accountant needs more')).toBeVisible();
+    await expect(group().getByText('October fuel')).toBeVisible();
+    await expect(group().getByRole('button', { name: 'Done' })).toBeVisible();
+  });
+
+  await step('Tap Done again', async () => {
+    await group().getByRole('button', { name: 'Done' }).click();
+    await expect(group().getByText('Waiting for your accountant')).toBeVisible();
+    await expect(group().getByRole('button', { name: 'Done' })).toHaveCount(0);
+    await expect(group().getByText('October fuel')).toHaveCount(0);
+  });
+
+  await step('Open home with a period the accountant confirmed', async () => {
+    const confirmed = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], vatPeriod: period('CONFIRMED') });
+    await confirmed.open(page, HOME);
+    await expect(group().getByText('Confirmed by your accountant')).toBeVisible();
+    await expect(group().getByRole('button', { name: 'Done' })).toHaveCount(0);
+  });
+});

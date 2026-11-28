@@ -86,6 +86,15 @@ describe('home: the client\'s VAT period (MUT-783)', () => {
     expect(await within(vat).findByText('Waiting for your accountant')).toBeInTheDocument();
   });
 
+  it('Done on a period the accountant already confirmed re-reads it and shows the truth', async () => {
+    let reads = 0;
+    const { user } = portal({ [CURRENT]: () => ok({ period: reads++ === 0 ? period() : period({ state: 'CONFIRMED' }) }), [DONE]: () => fail(409, 'VAT_PERIOD_STATE') });
+    const vat = await group();
+    await user.click(within(vat).getByRole('button', { name: 'Done' }));
+    expect(await within(vat).findByText('Confirmed by your accountant')).toBeInTheDocument();
+    expect(within(vat).queryByRole('button', { name: 'Done' })).toBeNull();
+  });
+
   it('says so when Done could not be saved, and keeps the button', async () => {
     const { user } = portal({ [CURRENT]: () => ok({ period: period() }), [DONE]: () => fail(500, 'INTERNAL') });
     const vat = await group();

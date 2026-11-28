@@ -39,6 +39,7 @@
 ### Technical
 - `VatPeriodView` is registered as its own OpenAPI component (a nullable use had made the generated type nullable); portal types regenerated.
 - Files: `src/hosted/{pages/client-books,pages/home,components/VatIcons.tsx,data/vatPeriodQueries.ts,api/client.ts,i18n,hosted.css}`, `server/src/app.ts`, `qa/`, `DESIGN.md`, `docs/design/vat-period/`.
+- After review (adversarial pass): the VAT drawer opens from the URL only for a client the server lists; Confirm and the period choice put the server's answer into the list at once, so Confirm cannot be sent twice; a Done that meets 409 re-reads the period; a VAT filter no longer outlives its chips. New flow `portal.vat-period.client-result` (more needed with the note, Done again, confirmed). The 30-day window counts from the announcement (TD-378).
 - Not built: the Done, Confirm and More needed motions (TD-377). The phone is MUT-784.
 
 ## 2026-11-28 · MUT-782: VAT period per client, period-end reminders, "all receipts sent" (server, dark)
