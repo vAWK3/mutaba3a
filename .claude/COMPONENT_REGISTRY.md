@@ -2694,6 +2694,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |
 | `src/hosted/data/billingPlans.ts` | `useOfferLine` (MUT-703) | Subscribe step's `PlanRow` `offerNote` |
 | `src/hosted/data/billingView.ts` | `planLaunchOf`, `planOfferFor`, `planComebackOf` (MUT-703) | Subscribe step, opening interval |
+| `src/hosted/pages/client-books/VatBadge.tsx` | `VatBadge({ state })` (MUT-783): the word, its glyph and colour | the desk's VAT column, the VAT drawer |
+| `src/hosted/pages/client-books/VatPeriodDrawer.tsx` | `VatPeriodDrawer` (MUT-783) | the desk, on `?vat=<profileId>` |
+| `src/hosted/pages/home/VatPeriodGroup.tsx` | `VatPeriodGroup` (MUT-783) | home's Waiting lane |
+| `src/hosted/pages/client-books/vatPeriodRules.ts` | `vatPeriodWords`, `vatDueWords`, `clientVatVisible`, `canSayDone`, `canReview`, `vatFilterCounts` (MUT-783) | the desk and home |
+| `src/hosted/components/VatIcons.tsx` | `VatPeriodIcon`, `State*Icon`, `AskMoreIcon` (MUT-783; the pointing ones mirror for Arabic) | the badge, the drawer |
+| `src/hosted/data/vatPeriodQueries.ts` | `useCurrentVatPeriod`, `useClientVatPeriods`, `useMarkVatPeriodDone`, `useReviewVatPeriod`, `useSetClientVatPeriod` (MUT-783) | home and the desk |
 | `server/src/vat-periods/run.ts` | `runVatPeriodSweep`, `VAT_PERIOD_POLICY` (MUT-782) | the daily VAT period job (`routes/vat-period-sweep.ts`) |
 | `server/src/vat-periods/pack.ts` | `vatPackFor(country)` (MUT-782) | the sweep and the VAT period routes: the pack by the profile's country |
 | `server/src/routes/vat-periods.ts` | `periodView`, `effectiveKind` (MUT-782) | the client's Done and read, the accountant's period, review and desk read |
