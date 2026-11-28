@@ -64,8 +64,6 @@
 
 ---
 
-## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.201.0-mut777, ADR-333, migration)
-
 ## [Unreleased] - 2026-11-27 — MUT-777: each pilot tester's one yes to watched sessions (API 1.214.0-mut777, ADR-333, migration)
 
 ### Added
@@ -112,8 +110,6 @@
 - Tests: `src/hosted/components/__tests__/PilotWelcome.test.tsx`.
 
 ---
-
-## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.200.0-mut753, ADR-330)
 
 ## [Unreleased] - 2026-11-27 — MUT-753: the Pilot panel in Billing, and its end state (API 1.213.0-mut753, ADR-330)
 
