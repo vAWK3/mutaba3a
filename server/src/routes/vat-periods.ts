@@ -18,7 +18,7 @@ import {
 import { VAT_PERIOD_POLICY } from '../vat-periods/run.js';
 import { vatPackFor } from '../vat-periods/pack.js';
 import type { VatPeriodKind } from '../vat-periods/types.js';
-import { z } from '@hono/zod-openapi';
+import type { z } from '@hono/zod-openapi';
 
 /**
  * MUT-782 (ADR-341): a client's VAT period and its "all receipts sent" state.
