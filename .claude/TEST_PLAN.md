@@ -5089,6 +5089,14 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Migration | `migration-mut777.test.ts` (Postgres) | after the pilot migration; old people null; schema matches |
 | Portal | `PilotWelcome.test.tsx`, `OperatorAccountPage.test.tsx` | the tick is off by default and sends nothing unticked; ticked sends once; not asked again once recorded; the Accounts line; the grant drawer sends `watchConsent` |
 
+## MUT-758 (web half) — the pilot events (2026-11-27, ADR-298)
+
+| Level | File | What |
+|---|---|---|
+| Portal | `src/hosted/components/__tests__/BillingDrawer.pilot.test.tsx` | Billing opened once with `days_left` rounded down, plans viewed, a 90% line's `limit`, Write to us; never the cohort; nothing for a non-pilot |
+| Portal | `src/hosted/shell/__tests__/PilotMilestones.test.tsx` | the first scan counted once with `hours_since_start` |
+| Gate | existing `portalAnalytics` tests | release-only and opt-in (`trackPortal`), unchanged |
+
 ## MUT-703 (server half) — offers on Solo, Business and Firm (2026-11-27, ADR-340)
 
 | Layer | File | Covers |

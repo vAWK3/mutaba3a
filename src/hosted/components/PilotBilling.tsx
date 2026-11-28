@@ -1,8 +1,10 @@
+import { useEffect, useRef } from 'react';
 import { useLanguage, useT } from '../../lib/i18n/core';
+import { trackPilotEvent } from '../analytics/portalAnalytics';
 import { useTp } from '../../lib/i18n/plural';
 import type { BillingOverview } from '../api/client';
 import { useLimitsLine } from '../data/billingPlans';
-import { pilotCurrencyOf, type BillingPilot } from '../data/pilot';
+import { pilotCurrencyOf, pilotDaysLeftFloor, type BillingPilot } from '../data/pilot';
 import type { UsageLine, UsageLines } from '../data/usageLines';
 import { formatDay } from '../format/dates';
 import { SUPPORT_EMAIL } from '../terms';
@@ -14,14 +16,15 @@ import { sentence } from './billingText';
  * the three plans with their Expected price and limits (from `pilot.plans`, never written here), and one "Write to
  * us" link last. Minimal copy: numbers, labels, one action. Nothing here refuses or upsells (NOT in scope).
  */
-export function PilotBilling({ billing, pilot, usage, onWriteToUs }: { billing: BillingOverview; pilot: BillingPilot; usage: UsageLines | null; onWriteToUs?: () => void }) {
+export function PilotBilling({ billing, pilot, usage }: { billing: BillingOverview; pilot: BillingPilot; usage: UsageLines | null }) {
   const t = useT();
+  usePilotOpenedEvents(pilot, usage);
   return (
     <>
       {usage && usage.lines.length > 0 && <PlanUsageLines usage={usage} titleId="hp-pilot-usage" />}
       {pilot.plans.length > 0 && <PilotPlans billing={billing} pilot={pilot} />}
       <div>
-        <a className="hp-pilot-write" href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t('hosted.billing.pilot.mailSubject'))}`} onClick={onWriteToUs} data-testid="pilot-write-to-us">
+        <a className="hp-pilot-write" href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t('hosted.billing.pilot.mailSubject'))}`} onClick={() => trackPilotEvent('pilot_contact_tapped')} data-testid="pilot-write-to-us">
           {t('hosted.billing.pilot.writeToUs')}
         </a>
       </div>
@@ -71,8 +74,9 @@ function PilotPlans({ billing, pilot }: { billing: BillingOverview; pilot: Billi
   const { language } = useLanguage();
   const limits = useLimitsLine();
   const currency = pilotCurrencyOf(billing, pilot.plans);
+  const ref = useSeenOnce(() => trackPilotEvent('pilot_plans_viewed'));
   return (
-    <section className="hp-billing-plan" aria-labelledby="hp-pilot-plans" data-testid="pilot-plans">
+    <section ref={ref} className="hp-billing-plan" aria-labelledby="hp-pilot-plans" data-testid="pilot-plans">
       <h4 id="hp-pilot-plans" className="hp-starter-heading">
         {t('hosted.billing.pilot.plansTitle')}
       </h4>
@@ -99,3 +103,49 @@ function PilotPlans({ billing, pilot }: { billing: BillingOverview; pilot: Billi
     </section>
   );
 }
+
+/**
+ * MUT-758 (ADR-298): once per opening of the panel, Billing opened with the days left (rounded down), and each usage
+ * line at 90% or more (`limit`). A ref keeps it to once per mount (StrictMode runs effects twice).
+ */
+function usePilotOpenedEvents(pilot: BillingPilot, usage: UsageLines | null) {
+  const sent = useRef(false);
+  useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
+    trackPilotEvent('pilot_billing_opened', { days_left: pilotDaysLeftFloor(pilot.endsAt, new Date()) });
+    for (const line of usage?.lines ?? []) if (line.attention) trackPilotEvent('pilot_usage_near_cap', { limit: line.key });
+  }, [pilot.endsAt, usage]);
+}
+
+/** Calls `onSeen` once, the first time the element comes into view (on mount where IntersectionObserver is missing). */
+function useSeenOnce(onSeen: () => void) {
+  const ref = useRef<HTMLElement>(null);
+  const seen = useRef(false);
+  const callback = useRef(onSeen);
+  useEffect(() => {
+    callback.current = onSeen;
+  });
+  useEffect(() => {
+    const el = ref.current;
+    const fire = () => {
+      if (seen.current) return;
+      seen.current = true;
+      callback.current();
+    };
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      fire();
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        fire();
+        observer.disconnect();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return ref;
+}
+

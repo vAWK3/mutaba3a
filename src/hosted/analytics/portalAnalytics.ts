@@ -22,13 +22,19 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown' | PlanEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown' | PlanEvent | PilotEvent;
 /**
  * MUT-731 (ADR-284): Starter's limits (MUT-735 §2.9: the funnel is the clients', never the server's). A limit reached
  * (`plan_cap_reached`, `limit`), Upgrade shown (`plan_upgrade_offered`, `limit`) and pressed (`plan_upgrade_chosen`,
  * `from`, `to`), and Continue free on Starter after a cancel (`starter_continue_chosen`).
  */
 export type PlanEvent = 'plan_cap_reached' | 'plan_upgrade_offered' | 'plan_upgrade_chosen' | 'starter_continue_chosen';
+/**
+ * MUT-758 (ADR-298, contract 2.13.0): the free pilot's events, tagged by the `pilot_` prefix and never carrying the
+ * cohort. Billing opened (`days_left`), plans viewed, Write to us pressed, the first scan and first invoice
+ * (`hours_since_start`), and a usage line at 90% (`limit`). Release-only and opt-in like every portal event.
+ */
+export type PilotEvent = 'pilot_billing_opened' | 'pilot_plans_viewed' | 'pilot_contact_tapped' | 'pilot_first_scan_saved' | 'pilot_first_invoice_issued' | 'pilot_usage_near_cap';
 /**
  * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
  * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`); and the owner's Download a period (`period_downloaded`, MUT-314). Definitions:
@@ -344,6 +350,11 @@ export function trackPlanEvent(event: PlanEvent, properties: Record<string, stri
   const key = `${event}|${JSON.stringify(properties)}`;
   if (once && planEventsCounted.has(key)) return;
   if (once) planEventsCounted.add(key);
+  void trackPortal(event, properties);
+}
+
+/** MUT-758: counts a pilot event. Once-per-opening and once-per-account are the callers' (the panel, the milestones). */
+export function trackPilotEvent(event: PilotEvent, properties: Record<string, string | number> = {}): void {
   void trackPortal(event, properties);
 }
 
