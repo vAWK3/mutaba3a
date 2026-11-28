@@ -33,7 +33,13 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
+import type { DealerType } from '../issuing/types.js';
+import type { VatPeriodKind } from '../jurisdictions/il/vat-periods.js';
 import type {
+  VatPeriodRecord,
+  VatPeriodRepository,
+  VatSweepPerson,
+  VatSweepTarget,
   AccountPurgeRepository,
   IssueDocumentInput,
   NotForInvoiceItem,
@@ -866,6 +872,105 @@ export class PrismaLedgerStore implements LedgerStore {
    * profile, the provisioning stamp, the setup link with the claim code's digest, the owned BUSINESS profile and its
    * membership, the ACTIVE read grant and the audit rows. Any failure rolls everything back.
    */
+  /** MUT-782 (ADR-341): VAT periods. Transitions are guarded updates (`updateMany` on the allowed states), so a race can't skip one. */
+  readonly vatPeriods: VatPeriodRepository = {
+    settingOf: async (organizationId) => (await this.prisma.vatPeriodSetting.findUnique({ where: { organizationId }, select: { kind: true } }))?.kind ?? null,
+    setKind: ({ organizationId, kind, userId, at, audit }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          await tx.vatPeriodSetting.upsert({ where: { organizationId }, create: { organizationId, kind, setByUserId: userId, updatedAt: at }, update: { kind, setByUserId: userId, updatedAt: at } });
+          if (audit && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        }),
+      ),
+    sweepTargets: async ({ limit, after }) => {
+      const out: VatSweepTarget[] = [];
+      const batch = Math.max(limit, 50);
+      let cursor = after;
+      const person = (u: { id: string; email: string; displayName: string; locale: string }): VatSweepPerson => ({ userId: u.id, email: u.email, displayName: u.displayName, locale: u.locale as UserLocale });
+      const live = { status: 'ACTIVE', passwordHash: { not: null }, closeRequestedAt: null } as const;
+      while (out.length < limit) {
+        const orgs = await this.prisma.organization.findMany({
+          where: { accountantGrants: { some: { status: 'ACTIVE', accountantUserId: { not: null }, accountant: live } }, ...(cursor ? { id: { gt: cursor } } : {}) },
+          orderBy: { id: 'asc' },
+          take: batch,
+          select: {
+            id: true,
+            name: true,
+            timezone: true,
+            vatPeriodSetting: { select: { kind: true } },
+            memberships: { where: { role: 'OWNER', user: live }, select: { user: { select: { id: true, email: true, displayName: true, locale: true } } } },
+            accountantGrants: { where: { status: 'ACTIVE', accountantUserId: { not: null }, accountant: live }, select: { accountant: { select: { id: true, email: true, displayName: true, locale: true } } } },
+          },
+        });
+        if (orgs.length === 0) break;
+        const issuers = await this.prisma.issuerDetails.findMany({ where: { organizationId: { in: orgs.map((o) => o.id) } }, select: { organizationId: true, dealerType: true } });
+        const dealerOf = new Map(issuers.map((i) => [i.organizationId, i.dealerType as DealerType]));
+        for (const o of orgs) {
+          cursor = o.id;
+          const accountants = o.accountantGrants.flatMap((g) => (g.accountant ? [person(g.accountant)] : []));
+          if (o.memberships.length === 0 || accountants.length === 0) continue;
+          out.push({ organizationId: o.id, name: o.name, timezone: o.timezone, dealerType: dealerOf.get(o.id) ?? null, chosenKind: (o.vatPeriodSetting?.kind as VatPeriodKind | undefined) ?? null, owners: o.memberships.map((m) => person(m.user)), accountants });
+          if (out.length >= limit) break;
+        }
+        if (orgs.length < batch) break;
+      }
+      return out;
+    },
+    announce: ({ organizationId, periodKey, at, followUpDueAt, audit }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // ON CONFLICT DO NOTHING: of racing sweeps exactly one inserts, and only that one mails.
+          const made = await tx.vatPeriodRecord.createMany({ data: [{ organizationId, periodKey, state: 'OPEN', announcedAt: at, followUpDueAt }], skipDuplicates: true });
+          if (made.count === 0) return false;
+          if (audit && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return true;
+        }),
+      ),
+    recordOf: async (organizationId, periodKey) => mapNullable(await this.prisma.vatPeriodRecord.findUnique({ where: { organizationId_periodKey: { organizationId, periodKey } } }), toVatPeriodRecord),
+    latestOf: async (organizationIds) => {
+      const out = new Map<string, VatPeriodRecord>();
+      if (organizationIds.length === 0) return out;
+      const rows = await this.prisma.vatPeriodRecord.findMany({ where: { organizationId: { in: [...organizationIds] } }, orderBy: [{ organizationId: 'asc' }, { announcedAt: 'desc' }], distinct: ['organizationId'] });
+      for (const row of rows) out.set(row.organizationId, toVatPeriodRecord(row));
+      return out;
+    },
+    markDone: ({ organizationId, periodKey, userId, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const moved = await tx.vatPeriodRecord.updateMany({ where: { organizationId, periodKey, state: { in: ['OPEN', 'MORE_NEEDED'] } }, data: { state: 'CLIENT_DONE', doneAt: at, doneByUserId: userId } });
+        if (moved.count === 1) {
+          if (audit && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return 'done';
+        }
+        const row = await tx.vatPeriodRecord.findUnique({ where: { organizationId_periodKey: { organizationId, periodKey } }, select: { state: true } });
+        if (!row) return 'not_found';
+        return row.state === 'CLIENT_DONE' ? 'unchanged' : 'state';
+      }),
+    review: ({ organizationId, periodKey, userId, decision, note, at, followUpDueAt, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const moved = await tx.vatPeriodRecord.updateMany({
+          where: { organizationId, periodKey, state: { in: ['OPEN', 'CLIENT_DONE', 'MORE_NEEDED'] } },
+          data: { state: decision, reviewedAt: at, reviewedByUserId: userId, note: decision === 'MORE_NEEDED' ? note : null, followUpDueAt: decision === 'CONFIRMED' ? null : followUpDueAt, followUpSentAt: null },
+        });
+        if (moved.count === 1) {
+          if (audit && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return 'ok';
+        }
+        const row = await tx.vatPeriodRecord.findUnique({ where: { organizationId_periodKey: { organizationId, periodKey } }, select: { state: true } });
+        return row ? 'state' : 'not_found';
+      }),
+    followUpsDue: async ({ at, limit }) =>
+      (
+        await this.prisma.vatPeriodRecord.findMany({
+          where: { state: { in: ['OPEN', 'MORE_NEEDED'] }, followUpDueAt: { lte: at }, followUpSentAt: null },
+          orderBy: [{ followUpDueAt: 'asc' }, { organizationId: 'asc' }],
+          take: limit,
+        })
+      ).map(toVatPeriodRecord),
+    markFollowUpSent: async (organizationId, periodKey, at) => {
+      await this.prisma.vatPeriodRecord.updateMany({ where: { organizationId, periodKey }, data: { followUpSentAt: at } });
+    },
+  };
+
   readonly provision: ProvisionRepository = {
     create: async (input) => {
       try {
@@ -4922,6 +5027,22 @@ function toShareLink(row: Prisma.ShareLinkGetPayload<object>): ShareLinkRecord {
 
 function toShareLinkViewer(row: Prisma.ShareLinkViewerGetPayload<object>): ShareLinkViewerRecord {
   return { id: row.id, shareLinkId: row.shareLinkId, tokenDigest: row.tokenDigest, accessExpiresAt: row.accessExpiresAt, lastViewedAt: row.lastViewedAt, createdAt: row.createdAt };
+}
+
+function toVatPeriodRecord(row: Prisma.VatPeriodRecordGetPayload<object>): VatPeriodRecord {
+  return {
+    organizationId: row.organizationId,
+    periodKey: row.periodKey,
+    state: row.state,
+    announcedAt: row.announcedAt,
+    followUpDueAt: row.followUpDueAt,
+    followUpSentAt: row.followUpSentAt,
+    doneAt: row.doneAt,
+    doneByUserId: row.doneByUserId,
+    reviewedAt: row.reviewedAt,
+    reviewedByUserId: row.reviewedByUserId,
+    note: row.note,
+  };
 }
 
 function toAccountantGrant(row: Prisma.AccountantGrantGetPayload<object>): AccountantGrantRecord {

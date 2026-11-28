@@ -55,6 +55,9 @@ export const PURGE_PROFILE_TABLES = [
   'tax_authority_connections',
   // MUT-735 (ADR-281): the deleted profile's usage events (the person's own, on any profile, go by subjectKey too).
   'usage_events',
+  // MUT-782 (ADR-341): the profile's chosen VAT period and each announced period's state.
+  'vat_period_records',
+  'vat_period_settings',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */

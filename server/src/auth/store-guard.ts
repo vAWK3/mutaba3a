@@ -552,6 +552,23 @@ export const STORE_ACCESS: StoreAccess = {
     touchViewed: 'operator',
   },
   /**
+   * MUT-782 (ADR-341): VAT periods. The client's Done and reads go through their own session (the route checks they own the
+   * profile); the accountant's two writes are session-only routes under /v1/clients on the store beneath the guard, so an
+   * accountant principal on a profile (read-only, ADR-245) reaches none of them. The daily sweep is the operator's door.
+   */
+  vatPeriods: {
+    settingOf: 'sessionOnly',
+    setKind: 'sessionOnly',
+    sweepTargets: 'operator',
+    announce: 'operator',
+    recordOf: 'sessionOnly',
+    latestOf: 'sessionOnly',
+    markDone: 'sessionOnly',
+    review: 'sessionOnly',
+    followUpsDue: 'operator',
+    markFollowUpSent: 'operator',
+  },
+  /**
    * MUT-560 (ADR-247): an owner creates, lists and revokes share links from their session (the route checks they own
    * the profile). The public link routes and shareLinkAccess read and stamp on the store beneath any guard, so those
    * methods are refused to every principal, like the accountant invite's public pair.

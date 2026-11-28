@@ -4,6 +4,7 @@ import { hardCapOf } from '../usage/caps.js';
 import { UsageCapReached } from '../usage/cap-reached.js';
 import { usageEvent } from '../usage/event.js';
 import { MemoryUsage } from './memory-usage.js';
+import type { VatPeriodKind } from '../jurisdictions/il/vat-periods.js';
 import { randomUUID } from 'node:crypto';
 import { CLAIM_CODE_MAX_ATTEMPTS } from '../auth/claim-code.js';
 import { KeyedQueue } from './keyed-queue.js';
@@ -31,6 +32,10 @@ import type {
   IssuedDocumentCancellationRecord,
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
+  VatPeriodRecord,
+  VatPeriodRepository,
+  VatSweepPerson,
+  VatSweepTarget,
   IssuingRepository,
   JsonObject,
   IssuingRetentionAction,
@@ -1007,6 +1012,90 @@ export class MemoryLedgerStore implements LedgerStore {
    * MUT-763: an approved accountant creates a customer's account. Every check runs before the first write (the in-memory
    * stand-in for the Postgres transaction), so a refusal or a duplicate leaves nothing behind.
    */
+  /** MUT-782 (ADR-341): the chosen VAT period kind per profile, and each profile's announced periods (key: `${organizationId}|${periodKey}`). */
+  private readonly vatKinds = new Map<string, VatPeriodKind>();
+  private readonly vatRecords = new Map<string, VatPeriodRecord>();
+
+  private vatPerson(userId: string): VatSweepPerson | null {
+    const u = this.people.get(userId);
+    // Claimed (has a password), active and not closing: the people a reminder may reach.
+    if (!u || u.status !== 'ACTIVE' || u.passwordHash === null || u.closure !== null) return null;
+    return { userId: u.id, email: u.email, displayName: u.displayName, locale: u.locale };
+  }
+
+  readonly vatPeriods: VatPeriodRepository = {
+    settingOf: async (organizationId) => this.vatKinds.get(organizationId) ?? null,
+    setKind: async ({ organizationId, kind, at, audit }) => {
+      if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('vat_period_settings.organizationId');
+      this.vatKinds.set(organizationId, kind);
+      this.pushEvents(audit ?? [], at);
+    },
+    sweepTargets: async ({ limit, after }) => {
+      const withAccountant = new Set([...this.accountantGrantMap.values()].filter((g) => g.status === 'ACTIVE' && g.accountantUserId !== null).map((g) => g.organizationId));
+      const out: VatSweepTarget[] = [];
+      for (const organizationId of [...withAccountant].filter((id) => this.orgs.has(id) && (after === undefined || id > after)).sort()) {
+        if (out.length >= limit) break;
+        const owners = [...this.members.values()].filter((m) => m.organizationId === organizationId && m.role === 'OWNER').flatMap((m) => this.vatPerson(m.userId) ?? []);
+        const accountants = [...this.accountantGrantMap.values()]
+          .filter((g) => g.organizationId === organizationId && g.status === 'ACTIVE' && g.accountantUserId !== null)
+          .flatMap((g) => this.vatPerson(g.accountantUserId!) ?? []);
+        if (owners.length === 0 || accountants.length === 0) continue;
+        const org = this.orgs.get(organizationId)!;
+        out.push({ organizationId, name: org.name, timezone: org.timezone, dealerType: this.issuerMap.get(organizationId)?.dealerType ?? null, chosenKind: this.vatKinds.get(organizationId) ?? null, owners, accountants });
+      }
+      return out;
+    },
+    announce: async ({ organizationId, periodKey, at, followUpDueAt, audit }) => {
+      if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('vat_period_records.organizationId');
+      const id = `${organizationId}|${periodKey}`;
+      if (this.vatRecords.has(id)) return false;
+      this.vatRecords.set(id, { organizationId, periodKey, state: 'OPEN', announcedAt: at, followUpDueAt, followUpSentAt: null, doneAt: null, doneByUserId: null, reviewedAt: null, reviewedByUserId: null, note: null });
+      this.pushEvents(audit ?? [], at);
+      return true;
+    },
+    recordOf: async (organizationId, periodKey) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      return r ? { ...r } : null;
+    },
+    latestOf: async (organizationIds) => {
+      const wanted = new Set(organizationIds);
+      const out = new Map<string, VatPeriodRecord>();
+      for (const r of this.vatRecords.values()) {
+        if (!wanted.has(r.organizationId)) continue;
+        const seen = out.get(r.organizationId);
+        if (!seen || r.announcedAt.getTime() > seen.announcedAt.getTime()) out.set(r.organizationId, { ...r });
+      }
+      return out;
+    },
+    markDone: async ({ organizationId, periodKey, userId, at, audit }) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      if (!r) return 'not_found';
+      if (r.state === 'CLIENT_DONE') return 'unchanged';
+      if (r.state === 'CONFIRMED') return 'state';
+      Object.assign(r, { state: 'CLIENT_DONE', doneAt: at, doneByUserId: userId });
+      this.pushEvents(audit ?? [], at);
+      return 'done';
+    },
+    review: async ({ organizationId, periodKey, userId, decision, note, at, followUpDueAt, audit }) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      if (!r) return 'not_found';
+      if (r.state === 'CONFIRMED') return 'state';
+      Object.assign(r, { state: decision, reviewedAt: at, reviewedByUserId: userId, note: decision === 'MORE_NEEDED' ? note : null, followUpDueAt: decision === 'CONFIRMED' ? null : followUpDueAt, followUpSentAt: null });
+      this.pushEvents(audit ?? [], at);
+      return 'ok';
+    },
+    followUpsDue: async ({ at, limit }) =>
+      [...this.vatRecords.values()]
+        .filter((r) => (r.state === 'OPEN' || r.state === 'MORE_NEEDED') && r.followUpDueAt !== null && r.followUpDueAt.getTime() <= at.getTime() && r.followUpSentAt === null)
+        .sort((a, b) => a.followUpDueAt!.getTime() - b.followUpDueAt!.getTime() || a.organizationId.localeCompare(b.organizationId))
+        .slice(0, limit)
+        .map((r) => ({ ...r })),
+    markFollowUpSent: async (organizationId, periodKey, at) => {
+      const r = this.vatRecords.get(`${organizationId}|${periodKey}`);
+      if (r) r.followUpSentAt = at;
+    },
+  };
+
   readonly provision: ProvisionRepository = {
     create: async (input) => {
       const approval = this.provisionApprovals.get(input.accountantUserId);

@@ -10,6 +10,7 @@ import type { CreditReasonCode } from '../payments/credit.js';
 import type { ShareLinkPeriod } from '../share-links/period.js';
 import type { ComposedDocument } from '../issuing/compose.js';
 import type { DealerType, IssuedDocType } from '../issuing/types.js';
+import type { VatPeriodKind } from '../jurisdictions/il/vat-periods.js';
 import type { DocumentsDueInput, DocumentsPreference } from '../issuing/documents-due.js';
 import type { PaymentRequestFacts } from '../issuing/payment-request.js';
 import type { UsageDoor, UsageKind, UsageMeter, UsagePlan } from '../usage/kinds.js';
@@ -3178,6 +3179,8 @@ export interface LedgerStore {
   accountantGrants: AccountantGrantRepository;
   /** MUT-763: an approved accountant creates a customer's account (own guard class `provision`). */
   provision: ProvisionRepository;
+  /** MUT-782 (ADR-341): a client's VAT period, each period's reminder and its "all receipts sent" state. */
+  vatPeriods: VatPeriodRepository;
   /** MUT-560 (ADR-247): one-time links to a period of one profile, opened with a PIN and no account. */
   shareLinks: ShareLinkRepository;
   /** MUT-314 (ADR-248): a period download's size estimate and its batched name lookups. Reads only. */
@@ -5602,4 +5605,71 @@ export interface UsageRepository {
   prune(before: UsagePruneBefore): Promise<{ events: number; counters: number; routes: number }>;
   /** Account closure (MUT-333): the payer's events and counters. */
   purgeSubject(subjectKey: string): Promise<{ events: number; counters: number }>;
+}
+
+// ---- MUT-782 (ADR-341): VAT periods, period-end reminders and "all receipts sent" ------------------------------------
+
+export type VatPeriodState = 'OPEN' | 'CLIENT_DONE' | 'CONFIRMED' | 'MORE_NEEDED';
+
+/** One client profile's one VAT period: announced once, then moved along by the client (Done) and the accountant (Confirm, Ask for more). */
+export interface VatPeriodRecord {
+  organizationId: string;
+  /** `2026-M10`, `2026-B5`, `2026-Y` (jurisdictions/il/vat-periods.ts). */
+  periodKey: string;
+  state: VatPeriodState;
+  announcedAt: Date;
+  /** When the client's follow-up is due: set at announce and again on Ask for more; null once the period needs none. */
+  followUpDueAt: Date | null;
+  followUpSentAt: Date | null;
+  doneAt: Date | null;
+  doneByUserId: string | null;
+  reviewedAt: Date | null;
+  reviewedByUserId: string | null;
+  /** The accountant's note on Ask for more, at most 200 characters. */
+  note: string | null;
+}
+
+/** A person the sweep writes to: an owner of the client profile, or an accountant who reads it. */
+export interface VatSweepPerson {
+  userId: string;
+  email: string;
+  displayName: string;
+  locale: UserLocale;
+}
+
+/** A profile with at least one ACTIVE accountant and a claimed, live owner: what the daily sweep walks. */
+export interface VatSweepTarget {
+  organizationId: string;
+  name: string;
+  timezone: string;
+  /** From the profile's issuer details; null when it has none. */
+  dealerType: DealerType | null;
+  /** The accountant's choice; null follows the dealer type. */
+  chosenKind: VatPeriodKind | null;
+  owners: VatSweepPerson[];
+  accountants: VatSweepPerson[];
+}
+
+export type VatDoneResult = 'done' | 'unchanged' | 'not_found' | 'state';
+export type VatReviewResult = 'ok' | 'not_found' | 'state';
+
+export interface VatPeriodRepository {
+  /** The accountant's chosen period kind for this profile; null when none was chosen. */
+  settingOf(organizationId: string): Promise<VatPeriodKind | null>;
+  /** Sets the chosen kind (an upsert) and writes `audit` in the same transaction. */
+  setKind(input: { organizationId: string; kind: VatPeriodKind; userId: string; at: Date; audit?: AuditEventInput[] }): Promise<void>;
+  /** Profiles the daily sweep walks, in profile-id order after `after`. */
+  sweepTargets(input: { limit: number; after?: string | undefined }): Promise<VatSweepTarget[]>;
+  /** Inserts the period as OPEN unless it exists. True only when this call inserted it (the idempotency of the daily mail); `audit` is written with the insert. */
+  announce(input: { organizationId: string; periodKey: string; at: Date; followUpDueAt: Date; audit?: AuditEventInput[] }): Promise<boolean>;
+  recordOf(organizationId: string, periodKey: string): Promise<VatPeriodRecord | null>;
+  /** The most recently announced period of each profile (one query), for the client's home and the desk rows. */
+  latestOf(organizationIds: readonly string[]): Promise<Map<string, VatPeriodRecord>>;
+  /** The client says all receipts are sent: OPEN or MORE_NEEDED becomes CLIENT_DONE; CLIENT_DONE again is `unchanged`; CONFIRMED is `state`. */
+  markDone(input: { organizationId: string; periodKey: string; userId: string; at: Date; audit?: AuditEventInput[] }): Promise<VatDoneResult>;
+  /** The accountant confirms or asks for more from any state but CONFIRMED. MORE_NEEDED sets the follow-up due and clears its sent mark; CONFIRMED clears the due. */
+  review(input: { organizationId: string; periodKey: string; userId: string; decision: 'CONFIRMED' | 'MORE_NEEDED'; note: string | null; at: Date; followUpDueAt: Date | null; audit?: AuditEventInput[] }): Promise<VatReviewResult>;
+  /** OPEN or MORE_NEEDED periods whose follow-up is due at `at` and not yet sent, oldest first. */
+  followUpsDue(input: { at: Date; limit: number }): Promise<VatPeriodRecord[]>;
+  markFollowUpSent(organizationId: string, periodKey: string, at: Date): Promise<void>;
 }

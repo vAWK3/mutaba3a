@@ -241,6 +241,9 @@ model Organization {
   accountantGrants AccountantGrant[]
   /// MUT-560 (ADR-247): one-time share links to a period of this profile.
   shareLinks       ShareLink[]
+  /// MUT-782 (ADR-341): the accountant's chosen VAT period kind, and each announced period's reminder state.
+  vatPeriodSetting VatPeriodSetting?
+  vatPeriodRecords VatPeriodRecord[]
 
   @@index([ownerUserId])
   @@map("organizations")
@@ -2693,4 +2696,60 @@ model RouteUsageDaily {
 
   @@id([day, routeKey, plan, statusClass])
   @@map("route_usage_daily")
+}
+
+/// MUT-782 (ADR-341): how often a client profile files VAT. The accountant's choice is stored in `vat_period_settings`;
+/// without one the profile follows its dealer type (jurisdictions/il/vat-periods.ts). NONE never pings.
+enum VatPeriodKind {
+  MONTHLY
+  BIMONTHLY
+  YEARLY
+  NONE
+}
+
+/// MUT-782: where one period's "all receipts sent" stands. OPEN, then the client says CLIENT_DONE, then the accountant
+/// CONFIRMED (final) or asks for MORE_NEEDED, and the client says Done again.
+enum VatPeriodState {
+  OPEN
+  CLIENT_DONE
+  CONFIRMED
+  MORE_NEEDED
+}
+
+/// MUT-782 (ADR-341): the accountant's chosen period kind for one profile. Written only by an ACTIVE accountant's
+/// session-only route under /v1/clients (ADR-245's read-only guard stays whole). `setByUserId` is a plain id, no foreign
+/// key: who chose it is a record, not a reference the purge must keep alive.
+model VatPeriodSetting {
+  organizationId String        @id @db.Uuid
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind           VatPeriodKind
+  setByUserId    String?       @db.Uuid
+  updatedAt      DateTime
+
+  @@map("vat_period_settings")
+}
+
+/// MUT-782 (ADR-341): one VAT period of one profile, announced once by the daily sweep. `periodKey` names the period for
+/// good (`2026-M10`, `2026-B5`, `2026-Y`), so a later change of the profile's kind never moves it. The unique key is the
+/// sweep's idempotency: only the insert that wins sends the mail.
+model VatPeriodRecord {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  periodKey        String         @db.VarChar(16)
+  state            VatPeriodState @default(OPEN)
+  announcedAt      DateTime
+  /// When the client's follow-up mail is due; set at announce and again on Ask for more, null once none is wanted.
+  followUpDueAt    DateTime?
+  followUpSentAt   DateTime?
+  doneAt           DateTime?
+  doneByUserId     String?        @db.Uuid
+  reviewedAt       DateTime?
+  reviewedByUserId String?        @db.Uuid
+  /// The accountant's note on Ask for more.
+  note             String?        @db.VarChar(200)
+
+  @@unique([organizationId, periodKey])
+  @@index([state, followUpDueAt])
+  @@map("vat_period_records")
 }
