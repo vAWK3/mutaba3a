@@ -53,6 +53,8 @@ locals {
   usage_prune_job = "mutaba3a-usage-prune${local.suffix}"
   # MUT-767 (ADR-300): the daily sweep of accounts an accountant created that nobody claimed.
   accountant_unclaimed_sweep_job = "mutaba3a-accountant-unclaimed-sweep${local.suffix}"
+  # MUT-782 (ADR-341): the daily VAT period reminders (clients and accountants).
+  vat_period_sweep_job = "mutaba3a-vat-period-sweep${local.suffix}"
   # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
   # MUT-525: the launch-offer renewal notices need mail and Stripe; they announce a price, not the lapse gate.
@@ -822,6 +824,14 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
+        # MUT-782 (ADR-341): VAT period reminders and "all receipts sent"; off = those routes and the daily job answer 404.
+        dynamic "env" {
+          for_each = var.vat_period_reminders ? { VAT_PERIOD_REMINDERS = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-764..767 (ADR-292): an approved accountant creates customers' accounts; off = those routes answer 404.
         dynamic "env" {
           for_each = var.accountant_provisioning ? { ACCOUNTANT_PROVISIONING = "true" } : {}
@@ -1443,6 +1453,38 @@ resource "google_cloud_scheduler_job" "accountant_unclaimed_sweep" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/accountants/unclaimed-sweep"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-782 (ADR-341): the daily VAT period sweep at 08:00 Jerusalem: on the first day after a client's period ends, its
+# owners are asked whether all receipts are sent and each accountant gets one digest; a follow-up goes 5 days later
+# while the period is open. Each period is announced once (a unique row), so a retry or a second run sends nothing new.
+# Only with vat_period_reminders: while it is off the route answers 404.
+resource "google_cloud_scheduler_job" "vat_period_sweep" {
+  count = var.vat_period_reminders ? 1 : 0
+
+  project          = var.project_id
+  name             = local.vat_period_sweep_job
+  region           = var.region
+  description      = "Daily VAT period reminders (MUT-782)."
+  schedule         = "0 8 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 2
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/vat-periods/sweep"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

@@ -18,6 +18,10 @@
 
 ## Open Debt
 
+### TD-373: A VAT period's announcement mail is not retried (MUT-782, 2026-11-28)
+
+`announce` inserts the period before the mail goes, so a failed send is not retried that day; the client's follow-up 5 days later covers it, and the accountant's digest is its own mail. If real send failures show up, record the mail status on `vat_period_records` and retry the unsent ones in the next run.
+
 ### TD-372: Pilot watched-session consent has no withdrawal in the product (MUT-777, 2026-11-27)
 
 The yes is stored once (`users.pilotWatchConsentAt`); there is no "take it back" control. A tester who withdraws tells us and the operator stops watching; clearing the column needs a script. Add a You › Account switch if a tester asks. Recording retention is a [TODO] in the privacy draft.

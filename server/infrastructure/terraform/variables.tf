@@ -596,6 +596,12 @@ variable "accountant_provisioning" {
   default     = false
 }
 
+variable "vat_period_reminders" {
+  description = "MUT-782 (ADR-341): sets VAT_PERIOD_REMINDERS=true: when a client's VAT period ends, its owners are asked whether all receipts are sent and the accountant gets a digest; the client says Done, the accountant confirms or asks for more. Adds the daily sweep job (POST /jobs/v1/vat-periods/sweep). false (default) = every route and the job answer 404. Needs the MUT-782 migration applied first and a working mailer."
+  type        = bool
+  default     = false
+}
+
 variable "malafat_sign_in" {
   description = "MUT-595 (ADR-254 D1): sets MALAFAT_SIGN_IN=true: Sign in with Malafat (GET /v1/self-service says malafatSignIn: true; the portal and phone doors show). false (default) = its routes answer 404. Turn on only after Malafat lists this server's callback in MTB3A_SIGN_IN_REDIRECT_URIS and releases it (MAL-1539)."
   type        = bool

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTB3A VAT period wireframes</title>
+<style>
+:root{--bg:#FBF8F1;--surface:#fff;--ink:#1F1B2E;--ink2:#5B5670;--line:#E4DFEE;--accent:#795DBA;--accent-solid:#5B4496;--lav:#F4F2FB;--lavInk:#4A3A80;--mint:#E3F4EA;--mintInk:#1F6B43;--butter:#FFF3D6;--butterInk:#7A5410;--rose:#FBE6E8;--roseInk:#8E2A38;--peach:#E89960}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,"Segoe UI",Tahoma,sans-serif;background:var(--bg);color:var(--ink)}
+header.bar{position:sticky;top:0;z-index:5;display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+header.bar b{font-size:15px}button,select{font:inherit}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}.seg button{border:0;background:none;padding:6px 14px;cursor:pointer;color:var(--ink2)}.seg button[aria-pressed=true]{background:var(--lav);color:var(--lavInk)}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 60px;display:grid;gap:36px}
+h2{font-size:20px;margin:0 0 4px}p.note{margin:0 0 12px;color:var(--ink2);font-size:13px}
+.frames{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}@media(min-width:960px){.frames.two{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}}
+.desktop{border:1px solid var(--line);border-radius:18px;background:var(--bg);overflow:hidden;position:relative;min-height:380px}
+.phones{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.phone{width:300px;border:8px solid #1F1B2E;border-radius:34px;background:var(--bg);min-height:560px;overflow:hidden;position:relative}
+.phone .sb{height:24px;background:var(--bg)}.pad{padding:12px 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 16px}
+table{width:100%;border-collapse:collapse}th{font-size:13px;font-weight:400;color:var(--ink2);text-align:start;padding:10px 14px;border-bottom:1px solid var(--line)}td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}tr.row{cursor:pointer}tr.row:hover{background:#faf9fd}
+.chip{display:inline-block;font-size:13px;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.c-wait{background:#EFEDF3;color:#4B4660}.c-done{background:var(--lav);color:var(--lavInk)}.c-ok{background:var(--mint);color:var(--mintInk)}.c-more{background:var(--butter);color:var(--butterInk)}.c-none{background:none;color:var(--ink2);border:1px dashed var(--line)}
+.btn{border:0;border-radius:12px;padding:10px 16px;min-height:44px;cursor:pointer;background:var(--accent-solid);color:#fff}.btn.sec{background:var(--surface);color:var(--ink);border:1px solid var(--line)}.btn.link{background:none;color:var(--accent-solid);padding:0 6px}
+.drawer{position:absolute;inset-block:0;inset-inline-start:0;width:min(420px,92%);background:var(--surface);border-inline-end:1px solid var(--line);box-shadow:0 0 40px #1f1b2e22;display:none;flex-direction:column}.drawer.open{display:flex}
+.drawer .body{padding:16px;flex:1;overflow:auto;display:grid;gap:14px;align-content:start}.drawer .foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:var(--bg)}
+.drawer h3{margin:0;font-size:16px}.close{position:absolute;inset-block-start:10px;inset-inline-end:12px;border:0;background:none;font-size:20px;cursor:pointer}
+label{display:grid;gap:4px;font-size:13px;color:var(--ink2)}select,textarea{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--lav);color:var(--ink)}
+.rowline{display:flex;gap:10px;align-items:center;justify-content:space-between}.muted{color:var(--ink2);font-size:13px}
+.group h4{margin:0 0 8px;font-size:13px;color:var(--ink2);font-weight:500}
+.sheet{position:absolute;inset-inline:0;bottom:0;background:var(--surface);border-radius:24px 24px 0 0;border-top:1px solid var(--line);padding:16px;box-shadow:0 -10px 40px #1f1b2e22;display:none;gap:12px}.sheet.open{display:grid}
+.art{width:96px;height:96px;margin-inline:auto;border:2px dashed var(--line);border-radius:18px;display:grid;place-items:center;color:var(--ink2);font-size:11px;text-align:center}
+.tag{font-size:11px;background:var(--peach);color:#fff;border-radius:6px;padding:1px 6px}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<header class="bar">
+  <b data-t="title"></b>
+  <span class="seg" role="group" aria-label="language"><button data-lang="ar" aria-pressed="true">العربية</button><button data-lang="en" aria-pressed="false">English</button></span>
+  <span class="seg" role="group" aria-label="client state">
+    <button data-state="open" aria-pressed="true" data-t="s_open"></button><button data-state="done" aria-pressed="false" data-t="s_done"></button><button data-state="ok" aria-pressed="false" data-t="s_ok"></button><button data-state="more" aria-pressed="false" data-t="s_more"></button>
+  </span>
+  <span class="muted" data-t="hint"></span>
+</header>
+<main>
+  <section>
+    <h2 data-t="h_desk"></h2>
+    <p class="note" data-t="n_desk"></p>
+    <div class="frames">
+      <div class="desktop" id="desk">
+        <div class="pad"><div class="rowline"><b data-t="clients"></b><span class="legend"><span class="chip c-wait" data-t="s_open"></span><span class="chip c-done" data-t="s_done"></span><span class="chip c-ok" data-t="s_ok"></span><span class="chip c-more" data-t="s_more"></span></span></div></div>
+        <table>
+          <thead><tr><th data-t="client"></th><th data-t="period"></th><th data-t="due"></th><th data-t="state"></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dt">
+          <button class="close" id="dclose" aria-label="close">×</button>
+          <div class="body">
+            <h3 id="dt"></h3>
+            <div class="rowline"><span id="dperiod"></span><span class="chip" id="dchip"></span></div>
+            <div id="dnote" class="muted"></div>
+            <div id="dactions" class="rowline" style="justify-content:flex-start;gap:8px;flex-wrap:wrap"></div>
+            <div id="askpane" style="display:none"><label><span data-t="note"></span><textarea id="asknote" rows="3" maxlength="200"></textarea></label></div>
+            <hr style="border:0;border-top:1px solid var(--line);width:100%">
+            <label><span data-t="vatperiod"></span>
+              <select id="kind"><option value="BIMONTHLY" data-t="k_bi"></option><option value="MONTHLY" data-t="k_m"></option><option value="YEARLY" data-t="k_y"></option><option value="NONE" data-t="k_n"></option></select>
+            </label>
+          </div>
+          <div class="foot"><button class="btn sec" id="dcancel" data-t="close"></button></div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-t="h_home"></h2>
+    <p class="note" data-t="n_home"></p>
+    <div class="frames two">
+      <div class="desktop"><div class="pad" style="display:grid;gap:14px">
+        <div class="card"><div class="art" data-t="art_drop"></div></div>
+        <div class="card group" id="homegroup"></div>
+      </div></div>
+      <div class="muted" data-t="n_home2"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-t="h_phone"></h2>
+    <p class="note" data-t="n_phone"></p>
+    <div class="phones">
+      <div class="phone" id="p1"><div class="sb"></div><div class="pad" style="display:grid;gap:12px"><b data-t="home"></b><div class="card group" id="phonegroup"></div></div>
+        <div class="sheet" id="donesheet"><div class="art"><span data-t="art_sent"></span><span class="tag">RTL</span></div><b data-t="sent_title"></b><button class="btn" id="donego" data-t="done_btn"></button></div></div>
+      <div class="phone" id="p2"><div class="sb"></div><div class="pad" style="display:grid;gap:10px"><b data-t="clients"></b><div id="plist" style="display:grid;gap:8px"></div></div>
+        <div class="sheet" id="revsheet"><b id="rt"></b><div id="rchip"></div><label id="rasklabel" style="display:none"><span data-t="note"></span><textarea rows="2"></textarea></label><div class="rowline"><button class="btn sec" id="ask" data-t="ask"></button><button class="btn" id="confirm" data-t="confirm"></button></div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-t="h_art"></h2>
+    <p class="note" data-t="n_art"></p>
+    <div class="phones" style="justify-content:flex-start"><div class="art" data-t="art_sent"></div><div class="art" data-t="art_ok"></div><div class="art" data-t="art_more"></div><div class="art" data-t="art_clear"></div><div class="art" data-t="art_unset"></div></div>
+  </section>
+</main>
+<script>
+const T={
+ar:{title:'فترة ضريبة القيمة المضافة · مخطط',hint:'اضغط على صف لفتح الدرج',s_open:'بانتظار العميل',s_done:'أرسل العميل',s_ok:'مؤكَّد',s_more:'مطلوب المزيد',h_desk:'مكتب المحاسب',n_desk:'عمود الفترة وحالتها. الدرج يفتح من الصف.',clients:'العملاء',client:'العميل',period:'الفترة',due:'الموعد',state:'الحالة',vatperiod:'فترة الضريبة',k_bi:'كل شهرين',k_m:'شهرياً',k_y:'سنوياً',k_n:'بدون',confirm:'تأكيد',ask:'اطلب المزيد',note:'ملاحظة',close:'إغلاق',h_home:'الصفحة الرئيسية للعميل',n_home:'مجموعة داخل «بانتظار»، تحت الفواتير المطلوبة. بلا مبالغ.',n_home2:'المجموعة تختفي حين لا توجد فترة مفتوحة.',art_drop:'منطقة رفع الإيصالات',h_phone:'الهاتف',n_phone:'يمين: العميل. يسار: المحاسب. الورقة السفلية بدل الدرج.',home:'الرئيسية',h_art:'الرسومات المطلوبة',n_art:'أماكن الرسومات. يرسمها التصميم.',art_sent:'تم الإرسال',art_ok:'مؤكَّد',art_more:'ناقص',art_clear:'الكل مؤكَّد',art_unset:'اختر فترة',sent_title:'كل الإيصالات أُرسلت؟',done_btn:'تم',vatlabel:'ضريبة القيمة المضافة',allsent:'كل الإيصالات أُرسلت',after_done:'بانتظار المحاسب',after_ok:'مؤكَّد من المحاسب',after_more:'يطلب المحاسب المزيد',p:'كانون الثاني – شباط',due15:'23 آذار'},
+en:{title:'VAT period · wireframes',hint:'Click a row to open the drawer',s_open:'Waiting for client',s_done:'Client sent',s_ok:'Confirmed',s_more:'More needed',h_desk:'Accountant desk',n_desk:'A period column and its state. The drawer opens from the row.',clients:'Clients',client:'Client',period:'Period',due:'Due',state:'State',vatperiod:'VAT period',k_bi:'Every 2 months',k_m:'Monthly',k_y:'Yearly',k_n:'None',confirm:'Confirm',ask:'Ask for more',note:'Note',close:'Close',h_home:'Client home',n_home:'A group inside Waiting, under To issue. No money.',n_home2:'The group disappears when no period is open.',art_drop:'Receipt drop zone',h_phone:'Phone',n_phone:'Start: client. End: accountant. A bottom sheet instead of the drawer.',home:'Home',h_art:'Art needed',n_art:'Slots for the illustrations. Design draws them.',art_sent:'Sent',art_ok:'Confirmed',art_more:'Missing',art_clear:'All confirmed',art_unset:'Choose period',sent_title:'All receipts sent?',done_btn:'Done',vatlabel:'VAT',allsent:'All receipts sent',after_done:'Waiting for your accountant',after_ok:'Confirmed by your accountant',after_more:'Your accountant needs more',p:'Jan – Feb',due15:'Mar 23'}};
+const clients=[{n:'مطعم الزيتونة / Zaytoona',st:'open',k:'BIMONTHLY'},{n:'مكتب الأمل / Amal Office',st:'done',k:'BIMONTHLY'},{n:'شركة نور / Noor Ltd',st:'ok',k:'MONTHLY'},{n:'سامي الخطيب / Sami',st:'more',k:'BIMONTHLY'},{n:'ريم عيسى / Reem',st:null,k:'NONE'}];
+let lang='ar',cur='open',sel=null;const $=s=>document.querySelector(s);
+const cls={open:'c-wait',done:'c-done',ok:'c-ok',more:'c-more'};
+function t(k){return T[lang][k]}
+function chip(st){return st?`<span class="chip ${cls[st]}">${t('s_'+st)}</span>`:`<span class="chip c-none">${t('vatperiod')}</span>`}
+function render(){
+  document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+  document.querySelectorAll('[data-t]').forEach(e=>e.textContent=t(e.dataset.t));
+  clients[0].st=cur;
+  $('#rows').innerHTML=clients.map((c,i)=>`<tr class="row" data-i="${i}"><td dir="auto">${c.n}</td><td>${c.st?t('p'):'—'}</td><td>${c.st&&c.k!=='YEARLY'?t('due15'):'—'}</td><td>${chip(c.st)}</td></tr>`).join('');
+  $('#rows').querySelectorAll('tr').forEach(r=>r.onclick=()=>openDrawer(+r.dataset.i));
+  const g=cur==='open'?`<div class="rowline"><div><div>${t('vatlabel')} · ${t('p')}</div><div class="muted">${t('due15')}</div></div><button class="btn" data-go>${t('done_btn')}</button></div>`:`<div class="rowline"><div><div>${t('vatlabel')} · ${t('p')}</div><div class="muted">${cur==='done'?t('after_done'):cur==='ok'?t('after_ok'):t('after_more')}</div></div>${cur==='more'?`<button class="btn" data-go>${t('done_btn')}</button>`:chip(cur)}</div>`;
+  const hg=`<h4>${t('h_home')}</h4>`+g;$('#homegroup').innerHTML=hg;$('#phonegroup').innerHTML=g;
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ if(cur==='open'||cur==='more'){cur='done';render();} });
+  $('#plist').innerHTML=clients.map((c,i)=>`<div class="card rowline" data-i="${i}" style="cursor:pointer"><span dir="auto" style="font-size:14px">${c.n.split(' / ')[lang==='ar'?0:1]}</span>${chip(c.st)}</div>`).join('');
+  $('#plist').querySelectorAll('.card').forEach(r=>r.onclick=()=>{sel=+r.dataset.i;$('#rt').textContent=clients[sel].n.split(' / ')[lang==='ar'?0:1];$('#rchip').innerHTML=chip(clients[sel].st);$('#revsheet').classList.add('open')});
+  if(sel!==null)fillDrawer();
+}
+function openDrawer(i){sel=i;fillDrawer();$('#drawer').classList.add('open')}
+function fillDrawer(){const c=clients[sel];$('#dt').textContent=c.n;$('#dperiod').textContent=c.st?`${t('vatlabel')} · ${t('p')}`:'';$('#dchip').className='chip '+(c.st?cls[c.st]:'c-none');$('#dchip').textContent=c.st?t('s_'+c.st):t('vatperiod');$('#kind').value=c.k;
+  $('#dactions').innerHTML=c.st&&c.st!=='ok'?`<button class="btn" id="dconf">${t('confirm')}</button><button class="btn sec" id="dask">${t('ask')}</button>`:'';
+  const dc=$('#dconf');if(dc)dc.onclick=()=>{c.st='ok';if(sel===0)cur='ok';render()};
+  const da=$('#dask');if(da)da.onclick=()=>{$('#askpane').style.display='block';da.textContent=t('ask')+' ✓';da.onclick=()=>{c.st='more';if(sel===0)cur='more';$('#askpane').style.display='none';render()}};
+}
+$('#dclose').onclick=$('#dcancel').onclick=()=>$('#drawer').classList.remove('open');
+$('#confirm').onclick=()=>{clients[sel].st='ok';if(sel===0)cur='ok';$('#revsheet').classList.remove('open');render()};
+$('#ask').onclick=()=>{$('#rasklabel').style.display='grid';$('#ask').onclick=()=>{clients[sel].st='more';if(sel===0)cur='more';$('#revsheet').classList.remove('open');$('#rasklabel').style.display='none';render()}};
+document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{lang=b.dataset.lang;document.querySelectorAll('[data-lang]').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
+document.querySelectorAll('[data-state]').forEach(b=>b.onclick=()=>{cur=b.dataset.state;document.querySelectorAll('[data-state]').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
+render();
+</script>
+</body>
+</html>

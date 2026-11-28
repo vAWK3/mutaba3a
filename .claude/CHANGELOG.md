@@ -28,6 +28,21 @@
 
 ---
 
+## 2026-11-28 · MUT-782: VAT period per client, period-end reminders, "all receipts sent" (server, dark)
+
+### Added
+- **Israel pack:** `jurisdictions/il/vat-periods.ts` (`pack.vat.periods`): default kind by business type, the latest ended period, period keys, the filing day (15th; yearly states none). Neutral types in `vat-periods/types.ts`.
+- **Store:** migration `20261128120000_mut782_vat_periods` (two additive tables, `vat_period_settings`, `vat_period_records`), `store.vatPeriods` (memory and Prisma on one contract), store-guard classes, purge list.
+- **Daily sweep:** `vat-periods/run.ts` and `POST /jobs/v1/vat-periods/sweep`: announces a period on the first day after it ends (10-day window), mails the owners, one digest a day per accountant, one follow-up 5 days later.
+- **Routes:** client `GET .../vat-periods/current` and `POST .../{periodKey}/done`; accountant `GET /v1/clients/vat-periods`, `PUT /v1/clients/{profileId}/vat-period`, `POST /v1/clients/{profileId}/vat-periods/{periodKey}/review` (ADR-341; the accountant never writes through a profile).
+- **Mail:** `vat-period-client`, `vat-period-accountant-digest` (ar and en, existing calendar art).
+- **Flag and infra:** `VAT_PERIOD_REMINDERS` (default off), Terraform `vat_period_reminders` with the daily Scheduler job (prepared, not applied). API 1.215.0-mut782.
+
+### Technical
+- Files: `server/src/{vat-periods,jurisdictions/il/vat-periods.ts,routes/vat-periods.ts,routes/vat-period-sweep.ts,repositories,auth/store-guard.ts,email,schemas.ts,app.ts,config.ts,index.ts,errors.ts}`, `server/prisma`, `server/openapi/openapi.yaml`, `server/infrastructure/terraform`.
+- Tests: pack (`il/__tests__/vat-periods.test.ts`), store contract (`store-contract-vat-periods.ts`, Memory and Postgres), sweep (`vat-periods/__tests__/run.test.ts`), routes (`routes-vat-periods.test.ts`), mail registries, store-guard pins.
+- Why: accountants chased every client by hand each period for the receipts. The portal (MUT-783) and the phone (MUT-784) build on this.
+
 ## 2026-11-28 · MUT-703 (portal half): offers on Solo, Business and Firm
 
 ### Added

@@ -88,6 +88,14 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## VAT period reminders (MUT-782, 2026-11-28)
+
+- **Pack** (`jurisdictions/il/__tests__/vat-periods.test.ts`): defaults by business type; the latest ended period across month, year and leap edges for each kind; keys round-trip and malformed keys are refused; the filing day (none for yearly).
+- **Store contract** (`repositories/__tests__/store-contract-vat-periods.ts`, Memory and Postgres): announce once even raced; transitions and their refusals; Ask for more re-arms the follow-up; `viewsOf` in one call; `sweepTargets` pages by profile id.
+- **Sweep** (`vat-periods/__tests__/run.test.ts`): one ping per period, none mid-period, none for a stale one; monthly, 2-monthly, yearly (no day) and NONE; the accountant's choice beats the dealer type; unclaimed owners skipped; one digest for forty clients; follow-up once, stops at Done or Confirm, re-armed by Ask for more.
+- **Routes** (`__tests__/routes-vat-periods.test.ts`): the dark flag 404s everything (the job after its token); owner-only Done and read; an accountant credential on the profile reaches nothing; accountant routes need an ACTIVE grant (stranger, owner and revoked accountant get 404); confirm is final (409); the note limit; the desk read; the job through the app.
+- Not covered: the portal and phone screens (MUT-783, MUT-784) and release QA (the desk has no screen yet).
+
 ## Unclaimed-account sweep (MUT-767, 2026-11-27)
 
 `routes-accountant-sweep.test.ts` (clock-injected): `reminderDayDue` rules; day-3 reminder once, the fresh link claims with the same code, one digest with counts only, a claimed customer drops out; one digest for several customers and none on a quiet day; day 59 digest says one goes within a week; day 60 removes the unpaid one (closure, audit, then the hourly purge deletes the user and the grant) and keeps and flags the paid one, idempotent on a rerun; a claimed account is never removed; job token and 404 with the flag off. Store contract: keep-code reissue, `sweepRows` paging and filters, `remindedStages`, `expireUnclaimed` refusals and effect. `routes-operator-provisioning.test.ts`: `flagged` for a paid account past 60 days.

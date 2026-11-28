@@ -116,7 +116,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       path: '/v1/profiles/{profileId}/vat-periods/current',
       tags: ['VAT periods'],
       summary: 'The latest VAT period announced for this profile, and where it stands',
-      description: 'MUT-782 (ADR-341). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.172.0-mut782.',
+      description: 'MUT-782 (ADR-341). Null until the first period ends (or while the profile files no VAT). Owners only; an accountant reads the same through GET /v1/clients/vat-periods. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema },
       responses: {
@@ -139,7 +139,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       path: '/v1/profiles/{profileId}/vat-periods/{periodKey}/done',
       tags: ['VAT periods'],
       summary: 'All receipts for this period are sent',
-      description: 'MUT-782 (ADR-341). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.172.0-mut782.',
+      description: 'MUT-782 (ADR-341). OPEN or MORE_NEEDED becomes CLIENT_DONE. A repeat answers 200 and changes nothing. A confirmed period is 409 VAT_PERIOD_STATE. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: VatPeriodKeyParamSchema },
       responses: {
@@ -169,7 +169,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       path: '/v1/clients/vat-periods',
       tags: ['VAT periods'],
       summary: 'Your active clients: how often each files VAT, and where its latest period stands',
-      description: 'MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended clients are not listed. Additive since 1.172.0-mut782.',
+      description: 'MUT-782 (ADR-341). One read for the whole desk (three queries however many clients). Ended clients are not listed. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       responses: {
         200: { description: 'One item per active client', content: { 'application/json': { schema: ClientVatPeriodsResponseSchema } } },
@@ -198,7 +198,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       path: '/v1/clients/{profileId}/vat-period',
       tags: ['VAT periods'],
       summary: 'Choose how often this client files VAT',
-      description: 'MUT-782 (ADR-341). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.172.0-mut782.',
+      description: 'MUT-782 (ADR-341). Applies from the next period that ends; periods already announced keep their state. NONE stops the reminders. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema, body: { required: true, content: { 'application/json': { schema: SetVatPeriodKindRequestSchema } } } },
       responses: {
@@ -221,7 +221,7 @@ export function vatPeriodRoutes(options: { store: LedgerStore }): OpenAPIHono<Ap
       path: '/v1/clients/{profileId}/vat-periods/{periodKey}/review',
       tags: ['VAT periods'],
       summary: 'Confirm that the receipts are all in, or ask the client for more',
-      description: 'MUT-782 (ADR-341). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client\'s reminder five days out, and lets the client say Done again. Additive since 1.172.0-mut782.',
+      description: 'MUT-782 (ADR-341). From any state but CONFIRMED. Ask for more takes an optional note (200 characters), re-opens the client\'s reminder five days out, and lets the client say Done again. Additive since 1.215.0-mut782.',
       security: SESSION_ONLY,
       request: { params: VatPeriodKeyParamSchema, body: { required: true, content: { 'application/json': { schema: ReviewVatPeriodRequestSchema } } } },
       responses: {

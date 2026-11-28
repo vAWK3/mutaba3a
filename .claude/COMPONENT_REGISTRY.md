@@ -2692,3 +2692,7 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |
 | `src/hosted/data/billingPlans.ts` | `useOfferLine` (MUT-703) | Subscribe step's `PlanRow` `offerNote` |
 | `src/hosted/data/billingView.ts` | `planLaunchOf`, `planOfferFor`, `planComebackOf` (MUT-703) | Subscribe step, opening interval |
+| `server/src/vat-periods/run.ts` | `runVatPeriodSweep`, `VAT_PERIOD_POLICY` (MUT-782) | the daily VAT period job (`routes/vat-period-sweep.ts`) |
+| `server/src/vat-periods/pack.ts` | `vatPackFor(country)` (MUT-782) | the sweep and the VAT period routes: the pack by the profile's country |
+| `server/src/routes/vat-periods.ts` | `periodView`, `effectiveKind` (MUT-782) | the client's Done and read, the accountant's period, review and desk read |
+| `server/src/jurisdictions/il/vat-periods.ts` | `latestEndedVatPeriod`, `vatFilingDueDate`, `defaultVatPeriodKind` (MUT-782) | `pack.vat.periods`: what a country's clients file and when |
