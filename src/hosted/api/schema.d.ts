@@ -27060,7 +27060,7 @@ export interface paths {
         put?: never;
         /**
          * Daily: reminders for accounts an accountant created that nobody claimed, and removal of the unpaid ones after 60 days (Cloud Scheduler)
-         * @description Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant, and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
+         * @description Customer reminders on days 3, 10, 30 and 53 (a fresh 14-day link, the same claim code), one digest a day per accountant (with a phone push the same day when the accountant has a device, MUT-780), and on day 60 an unpaid account is closed with its grace over so the hourly purge deletes it with its Stripe customers; a paid one is kept and counted `flagged`. A second run the same day does nothing more. Additive since 1.170.0-mut767.
          */
         post: {
             parameters: {
@@ -27110,6 +27110,131 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/push-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register this phone’s push token (MUT-780)
+         * @description Stores the FCM token for the signed-in session, replacing the session’s earlier token and any other row holding the same token (a phone handed to another person). Idempotent. A session signed out or revoked never receives a push. Additive since 1.216.0-mut780.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RegisterPushDeviceRequest"];
+                };
+            };
+            responses: {
+                /** @description Registered */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: push is not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Remove this phone’s push token (MUT-780)
+         * @description Removes the signed-in session’s token. 204 also when there was none. Signing out (DELETE /v1/device-sessions/current) does the same.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed, or none was held */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: push is not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -36629,8 +36754,16 @@ export interface components {
             removed: number;
             flagged: number;
             digests: number;
+            pushed: number;
             failed: number;
             incomplete: boolean;
+        };
+        RegisterPushDeviceRequest: {
+            /** @enum {string} */
+            platform: "ios" | "android";
+            token: string;
+            /** @enum {string} */
+            environment?: "production" | "sandbox";
         };
         VatPeriodSweepSummary: {
             looked: number;

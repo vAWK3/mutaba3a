@@ -82,6 +82,8 @@ export interface StripeSyncDependencies {
   reconcileGateway: StripeGateway;
   /** MUT-362 review D3: the write door, to print a Checkout business tax number on the customer's invoices. */
   invoiceTaxNumbers?: Pick<CheckoutGateway, 'setInvoiceTaxNumber'>;
+  /** TD-361 (ADR-292 R5): clears the email Checkout saved on an unclaimed account's customer. Absent = never. */
+  customerEmails?: Pick<CheckoutGateway, 'clearCustomerEmail'>;
   /** MUT-750 (ADR-290): re-taxes a plan subscription when its address moves into or out of Israel. Absent = never. */
   taxFollowsAddress?: TaxFollowsAddress;
   logger: Logger;
@@ -345,6 +347,28 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     }
   }
 
+  /**
+   * TD-361 (ADR-292 R5): Checkout asks for an email when the Stripe customer has none, and keeps the answer on the
+   * customer. An account nobody has claimed (an accountant made it: no password yet) holds none until the claim proves
+   * the address, so the one typed in the room is cleared. Only a session this server made names its payer; a failure is
+   * an error, so Stripe redelivers.
+   */
+  async function clearRoomEmail(session: Stripe.Checkout.Session, synced: { result: 'noop' | 'processed' | 'error'; codes: SyncCode[] }) {
+    const customer = session.customer ? customerIdOf(session.customer) : null;
+    const payer = session.payment_link ? null : (session.client_reference_id ?? null);
+    if (!customer || !payer || !UUID_RE.test(payer) || !session.customer_details?.email || !deps.customerEmails) return synced;
+    const person = await deps.store.users.getById(payer);
+    if (!person || person.passwordHash !== null || !(await deps.store.provision.originOf(payer))) return synced;
+    try {
+      await deps.customerEmails.clearCustomerEmail(customer);
+      return synced;
+    } catch (err) {
+      if (!(err instanceof StripeGatewayError)) throw err;
+      deps.logger.warn({ stripeCustomerId: customer, code: err.code, stripeRequestId: err.requestId }, 'Checkout email not cleared from an unclaimed customer; Stripe will redeliver');
+      return { result: 'error' as const, codes: [...synced.codes, 'STRIPE_EMAIL_NOT_CLEARED' as const] };
+    }
+  }
+
   async function dispatch(event: Stripe.Event, requestId: string | null): Promise<{ result: 'noop' | 'processed' | 'error'; codes: SyncCode[] }> {
     const context = (linkHint: string | null): SyncContext => ({ linkHint, source: 'webhook', eventId: event.id, requestId });
     const sync = async (id: string, linkHint: string | null = null) => {
@@ -359,7 +383,9 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
         // A Payment Link takes client_reference_id from its URL: anyone could name anyone. Only a session the server
         // created (MUT-362) may link by it; otherwise the customer's metadata decides.
         const synced = await sync(id, session.payment_link ? null : (session.client_reference_id ?? null));
-        return synced.result === 'error' ? synced : copyTaxNumber(session, synced);
+        if (synced.result === 'error') return synced;
+        const withNumber = await copyTaxNumber(session, synced);
+        return withNumber.result === 'error' ? withNumber : clearRoomEmail(session, withNumber);
       }
       case 'invoice.paid':
       case 'invoice.payment_failed': {

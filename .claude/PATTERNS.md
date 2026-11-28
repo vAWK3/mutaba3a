@@ -3007,3 +3007,7 @@ ADR-245 refuses an accountant every write through a profile. When an accountant 
 ## Pattern: shared content is one typed JSON file per item, copy inline, parsed by one pure function (MUT-674, ADR-341)
 **Where**: `src/content/guides/` (`guideSchema.ts`, `index.ts`, `<id>.json`); the older sibling is `release-notes.json` with `src/lib/whatsNew/releaseNotes.ts`.
 **Rule**: content that more than one surface shows (portal, phone, website) is a plain JSON file with `{ar, en}` inline, not i18n keys. A pure `parse…(unknown, fileId)` is the only door and returns its problems; a test parses every real file and checks what only content can break (scene names and their `-rtl` twins, an id in a contract enum). A registry is a lazy `import.meta.glob`, so adding an item is adding a file.
+
+## Pattern: a push is a nudge sent through one service behind an interface (MUT-780, ADR-350..352)
+**Where**: `server/src/push/` (`ports.ts` `PushSender`, `fcm-sender.ts`, `fake-sender.ts`, `messages.ts`, `service.ts`).
+**Rule**: a feature never talks to FCM. It calls `PushService.notifyUser(userId, { kind, vars, data })`; the copy for each kind (ar and en, counts only, never a name) lives in `messages.ts`; devices come from live sessions only; a failure is logged and never fails the job. Push is dark until its env is set.

@@ -100,6 +100,13 @@ describe('CheckoutGateway customer with no address (MUT-766, eng R5)', () => {
     expect(seen[0]!.form.get('email')).toBe(PERSON.email);
     expect(await gateway.customerIdOf(PERSON.userId)).toBeNull();
   });
+
+  it('clears the address Checkout saved by sending an empty email (TD-361)', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: { id: 'cus_MADE', object: 'customer', email: null } }));
+    await gateway.clearCustomerEmail('cus_MADE');
+    expect(seen.map(route)).toEqual(['POST /v1/customers/cus_MADE']);
+    expect(seen[0]!.form.get('email')).toBe('');
+  });
 });
 
 describe('CheckoutGateway before a Checkout (MUT-362 review: no double charge)', () => {

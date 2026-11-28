@@ -157,6 +157,9 @@ import type {
   PasskeyDeviceType,
   PasskeyRecord,
   PasskeyRepository,
+  PushDeviceRepository,
+  PushEnvironment,
+  PushPlatform,
   FeaturesRepository,
   UserFeatureRecord,
   OAuthAuthorizationRequestRecord,
@@ -4135,6 +4138,30 @@ export class PrismaLedgerStore implements LedgerStore {
   // ---- MUT-735 (ADR-281): usage metering ----
   readonly usage = prismaUsage(() => this.prisma);
 
+  // ---- MUT-780 (ADR-351): phone push tokens ----
+  readonly pushDevices: PushDeviceRepository = {
+    register: async ({ userId, sessionId, platform, token, environment, at }) => {
+      try {
+        await this.prisma.$transaction([
+          this.prisma.pushDevice.deleteMany({ where: { OR: [{ token }, { sessionId }] } }),
+          this.prisma.pushDevice.create({ data: { userId, sessionId, platform, token, environment, createdAt: at, updatedAt: at } }),
+        ]);
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') throw new ForeignKeyViolation('push_devices.sessionId');
+        throw err;
+      }
+    },
+    removeForSession: async (sessionId) => (await this.prisma.pushDevice.deleteMany({ where: { sessionId } })).count > 0,
+    listLive: async (userId, now) => {
+      const rows = await this.prisma.pushDevice.findMany({
+        where: { userId, session: { revokedAt: null, idleExpiresAt: { gt: now }, absoluteExpiresAt: { gt: now } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map((r) => ({ id: r.id, userId: r.userId, sessionId: r.sessionId, platform: r.platform as PushPlatform, token: r.token, environment: r.environment as PushEnvironment, createdAt: r.createdAt, updatedAt: r.updatedAt }));
+    },
+    removeByIds: async (ids) => (ids.length === 0 ? 0 : (await this.prisma.pushDevice.deleteMany({ where: { id: { in: [...ids] } } })).count),
+  };
+
   /** MUT-358 (ADR-160): three queries whatever the number of profiles (brief §2.3). */
   readonly billing: BillingRepository = {
     // MUT-731: set by the constructor (field initializers run before it).
@@ -4588,6 +4615,8 @@ export class PrismaLedgerStore implements LedgerStore {
         if (tombstones.length > 0) await tx.auditEvent.createMany({ data: auditRows(tombstones, at) });
         // D9, R4: the person's own rows, then the person.
         await tx.membership.deleteMany({ where: { userId } });
+        // MUT-780: the person's phone push tokens (also ON DELETE CASCADE).
+        await tx.pushDevice.deleteMany({ where: { userId } });
         await tx.session.deleteMany({ where: { userId } });
         // MUT-115: the person's passkeys and any creation challenge of theirs (also ON DELETE CASCADE).
         await tx.passkey.deleteMany({ where: { userId } });

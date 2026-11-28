@@ -2694,6 +2694,7 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/operator/OperatorSignupsPage.tsx` | `ChipBadge` (now exported) | history rows, the account page's domain chip |
 | `src/hosted/data/billingPlans.ts` | `useOfferLine` (MUT-703) | Subscribe step's `PlanRow` `offerNote` |
 | `src/hosted/data/billingView.ts` | `planLaunchOf`, `planOfferFor`, `planComebackOf` (MUT-703) | Subscribe step, opening interval |
+| `server/src/push/service.ts` | `createPushService().notifyUser` (MUT-780) | the unclaimed sweep; MUT-782's VAT reminders may add a kind |
 | `src/hosted/pages/client-books/VatBadge.tsx` | `VatBadge({ state })` (MUT-783): the word, its glyph and colour | the desk's VAT column, the VAT drawer |
 | `src/hosted/pages/client-books/VatPeriodDrawer.tsx` | `VatPeriodDrawer` (MUT-783) | the desk, on `?vat=<profileId>` |
 | `src/hosted/pages/home/VatPeriodGroup.tsx` | `VatPeriodGroup` (MUT-783) | home's Waiting lane |

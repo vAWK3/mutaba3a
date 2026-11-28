@@ -356,6 +356,9 @@ const SESSION_OPERATIONS = [
   'DELETE /v1/passkeys/{passkeyId}',
   // MUT-370: the person's answer to the passkey suggestion
   'PATCH /v1/me/passkey-prompt',
+  // MUT-780: a phone's push token (organization-independent)
+  'POST /v1/push-devices',
+  'DELETE /v1/push-devices',
   // MUT-535: the person's monthly summary switch (organization-independent, like GET /v1/me)
   'GET /v1/me/monthly-summary-mail',
   'PATCH /v1/me/monthly-summary-mail',
@@ -412,9 +415,9 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
 // MUT-710 (ADR-274 D8): the person's own two-step sign-in, cookie or device.
 const TWO_FACTOR_OPERATIONS = ['GET /v1/me/two-factor', 'POST /v1/me/two-factor/challenge', 'POST /v1/me/two-factor/enrolment', 'POST /v1/me/two-factor/enrolment/confirm', 'POST /v1/me/two-factor/recovery-codes', 'DELETE /v1/me/two-factor'];
-const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
+const IDENTITY_OPERATIONS = ['POST /v1/push-devices', 'DELETE /v1/push-devices', 'GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
-const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
+const DEVICE_IDENTITY_OPERATIONS = ['POST /v1/push-devices', 'DELETE /v1/push-devices', 'GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
 
 interface Operation {
   key: string;

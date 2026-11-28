@@ -4,6 +4,8 @@ import { assertPacksFor, HttpTaxAuthorityClient, RegistryLookup, TokenBox } from
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { documentSignerFrom, signerStatus } from './issuing/pdf/sign/index.js';
 import { loadConfig, readOidcAudience } from './config.js';
+import { FcmPushSender, parseServiceAccount } from './push/fcm-sender.js';
+import { createPushService, DISABLED_PUSH } from './push/service.js';
 import { HttpOcrClient } from './receipts/ocr-client.js';
 import { CloudTasksDispatcher } from './receipts/reading/cloud-tasks.js';
 import { InlineDispatcher } from './receipts/reading/dispatcher.js';
@@ -223,6 +225,11 @@ const receiptReadVerifier = readAudience && readInvokers.length > 0 ? googleOidc
 const documentSigner = documentSignerFrom(config);
 // MUT-735 (ADR-281): the route statistics, flushed from live requests (cpu_idle stops timers) and on shutdown.
 const routeMeter = new RouteMeter({ sink: (deltas) => store.usage.addRouteUsage(deltas), now: () => new Date(), logError: (err) => logger.error({ err }, 'route usage flush failed; batch dropped') });
+// MUT-780 (ADR-350): FCM push when FCM_PROJECT_ID is set (the runtime's identity sends; the JSON key is a local fallback);
+// otherwise dark. A malformed service-account JSON stops the boot here, naming the variable and no part of it.
+const pushService = config.FCM_PROJECT_ID
+  ? createPushService({ store, sender: new FcmPushSender({ projectId: config.FCM_PROJECT_ID, account: config.FCM_SERVICE_ACCOUNT_JSON ? parseServiceAccount(config.FCM_SERVICE_ACCOUNT_JSON) : undefined }), logger })
+  : DISABLED_PUSH;
 const app = createApp({
   store,
   logger,
@@ -246,6 +253,7 @@ const app = createApp({
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   accountantAccess: config.ACCOUNTANT_ACCESS,
   accountantProvisioning: config.ACCOUNTANT_PROVISIONING,
+  push: pushService,
   vatPeriodReminders: config.VAT_PERIOD_REMINDERS,
   malafatDelegation: config.MALAFAT_DELEGATION,
   oauthClientLocalHttp: config.OAUTH_CLIENT_LOCAL_HTTP,

@@ -27,6 +27,7 @@ function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudge
     webhookGateway: stripe,
     reconcileGateway: options.reconcileGateway ?? stripe,
     invoiceTaxNumbers: checkoutGateway,
+    customerEmails: checkoutGateway,
     ...(options.reconcileTimeBudgetMs !== undefined ? { reconcileTimeBudgetMs: options.reconcileTimeBudgetMs } : {}),
     logger: options.logs ? pino({ level: 'info' }, { write: (line: string) => void options.logs!.push(line) }) : pino({ level: 'silent' }),
     now: () => clock.now,
@@ -134,6 +135,66 @@ describe('Stripe sync (MUT-360)', () => {
     const checkout = h.event('checkout.session.completed', { id: 'cs_tax', mode: 'subscription', subscription: 'sub_m362', customer: 'cus_m362', client_reference_id: u.userId, custom_fields: [field] });
     expect(await h.sync.handleEvent(checkout, null)).toMatchObject({ status: 200, result: 'processed' });
     expect(h.checkoutGateway.taxNumbers.get('cus_m362')).toBe('516000000');
+  });
+
+  describe('TD-361 (ADR-292 R5): Checkout\'s email on an unclaimed account', () => {
+    /** An approved accountant creates a customer's account: passwordless, with its origin (what "unclaimed" means). */
+    const provisioned = async (h: Awaited<ReturnType<typeof harness>>) => {
+      const accountant = await h.person();
+      await h.store.provision.setApproval({ userId: accountant.userId, enabled: true, createLimitPerDay: null, lookupLimitPerDay: null, at: NOW });
+      const made = await h.store.provision.create({
+        accountantUserId: accountant.userId,
+        email: `c-${unique()}@client.ps`,
+        displayName: 'Client Owner',
+        locale: 'en',
+        personal: { name: 'Personal', slug: `p-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+        profile: { name: 'Client Ltd', slug: `b-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+        setupLink: { tokenDigest: `digest-${unique()}`, expiresAt: new Date(NOW.getTime() + 14 * 86_400_000) },
+        claimCodeDigest: `code-${unique()}`,
+        at: NOW,
+        auditFor: () => [],
+      });
+      if (made.kind !== 'created') throw new Error(`expected created, got ${made.kind}`);
+      return made.user.id;
+    };
+    const completed = (h: Awaited<ReturnType<typeof harness>>, userId: string, typed: string | null, id = 'cs_361') =>
+      h.event('checkout.session.completed', { id, mode: 'subscription', subscription: 'sub_361', customer: 'cus_361', client_reference_id: userId, customer_details: { email: typed } });
+    const stripeKnows = (h: Awaited<ReturnType<typeof harness>>, userId: string) => {
+      h.stripe.customers.set('cus_361', stripeObjects.customer('cus_361', { mutaba3a_user_id: userId }, 'IL'));
+      h.stripe.subscriptions.set('sub_361', stripeObjects.subscription({ id: 'sub_361', customer: 'cus_361', product: 'prod_F', lookupKey: 'freelancer_list_monthly_ils' }));
+      h.checkoutGateway.customers.set('cus_361', { email: 'typed.in.room@client.ps', userId });
+    };
+
+    it('clears the email Checkout saved on the Stripe customer of an account nobody has claimed', async () => {
+      const h = await harness();
+      const userId = await provisioned(h);
+      stripeKnows(h, userId);
+      expect(await h.sync.handleEvent(completed(h, userId, 'typed.in.room@client.ps'), null)).toMatchObject({ status: 200, result: 'processed' });
+      expect(h.checkoutGateway.customers.get('cus_361')?.email).toBeNull();
+      expect(h.checkoutGateway.calls).toEqual(['clearEmail:cus_361']);
+    });
+
+    it('leaves a claimed or self-made account alone, and a Checkout that collected no email writes nothing', async () => {
+      const h = await harness();
+      const own = await h.person();
+      stripeKnows(h, own.userId);
+      expect(await h.sync.handleEvent(completed(h, own.userId, 'me@studio.ps'), null)).toMatchObject({ result: 'processed' });
+      const unclaimed = await provisioned(h);
+      stripeKnows(h, unclaimed);
+      expect(await h.sync.handleEvent(completed(h, unclaimed, null, 'cs_361b'), null)).toMatchObject({ result: 'processed' });
+      expect(h.checkoutGateway.calls).toEqual([]);
+      expect(h.checkoutGateway.customers.get('cus_361')?.email).toBe('typed.in.room@client.ps');
+    });
+
+    it('a failed clear is an error, so Stripe redelivers the event', async () => {
+      const h = await harness();
+      const userId = await provisioned(h);
+      stripeKnows(h, userId);
+      h.checkoutGateway.failNext();
+      expect(await h.sync.handleEvent(completed(h, userId, 'typed.in.room@client.ps'), null)).toMatchObject({ result: 'error' });
+      expect(await h.sync.handleEvent(completed(h, userId, 'typed.in.room@client.ps', 'cs_361r'), null)).toMatchObject({ result: 'processed' });
+      expect(h.checkoutGateway.customers.get('cus_361')?.email).toBeNull();
+    });
   });
 
   it('a failed tax-number copy is an error, so Stripe redelivers; a session without one writes nothing', async () => {

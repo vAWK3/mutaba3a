@@ -297,6 +297,14 @@ const envSchema = z.object({
   /** MUT-782 (ADR-343): VAT period reminders and "all receipts sent". Off: every route and the daily job answer 404. */
   VAT_PERIOD_REMINDERS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-780 (ADR-350): phone push through Firebase Cloud Messaging. `FCM_PROJECT_ID` turns it on; unset = push is dark
+   * (POST /v1/push-devices answers 404, the sweep sends no push). Sending uses the runtime's own identity (Cloud Run's
+   * service account, granted `roles/firebasecloudmessaging.admin` on the Firebase project); `FCM_SERVICE_ACCOUNT_JSON`
+   * (Secret Manager, or a local file's contents) is the fallback for local runs and needs the project id.
+   */
+  FCM_PROJECT_ID: z.string().min(1).optional(),
+  FCM_SERVICE_ACCOUNT_JSON: z.string().min(2).optional(),
+  /**
    * MUT-593 (ADR-254 D10): Malafat acting as each person with a delegated token. Off, the token endpoint refuses a
    * confidential client, every delegated token answers 401, and Connected apps and the operator's per-firm switch
    * answer 404, so the server deploys dark. Only "true" turns it on; dev and the QA live API do.
@@ -540,6 +548,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (config.PORTAL_LEGACY_REDIRECT && !config.FRONT_DOOR_TOKEN) {
     throw new ConfigError('Invalid configuration:\n  PORTAL_LEGACY_REDIRECT: needs FRONT_DOOR_TOKEN, or every visit would be redirected, the new host\'s included');
+  }
+  if (config.FCM_SERVICE_ACCOUNT_JSON !== undefined && config.FCM_PROJECT_ID === undefined) {
+    throw new ConfigError('Invalid configuration:\n  FCM_PROJECT_ID: FCM_SERVICE_ACCOUNT_JSON needs FCM_PROJECT_ID');
   }
   if ((config.STRIPE_SECRET_KEY === undefined) !== (config.STRIPE_WEBHOOK_SECRET === undefined)) {
     const missing = config.STRIPE_SECRET_KEY === undefined ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET';

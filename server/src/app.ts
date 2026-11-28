@@ -1,5 +1,7 @@
 import { usagePruneRoutes } from './routes/usage-prune.js';
 import { accountantSweepRoutes } from './routes/accountant-sweep.js';
+import { PUSH_DEVICE_ORGANIZATION_INDEPENDENT_ROUTES, pushDeviceRoutes } from './routes/push-devices.js';
+import { DISABLED_PUSH, type PushService } from './push/service.js';
 import { VAT_PERIOD_ENDPOINTS, VAT_PERIOD_ORGANIZATION_INDEPENDENT_ROUTES, vatPeriodRoutes } from './routes/vat-periods.js';
 import { vatPeriodSweepRoutes } from './routes/vat-period-sweep.js';
 import { OPERATOR_USAGE_ROUTES, operatorUsageRoutes } from './routes/operator-usage.js';
@@ -311,6 +313,8 @@ export interface AppDependencies {
    * POST /v1/accountant/customers answers 404 (the server deploys dark).
    */
   accountantProvisioning?: boolean;
+  /** MUT-780 (ADR-350): the phone push path. Absent = push is dark: the register routes answer 404 and nothing is sent. */
+  push?: PushService;
   /** MUT-782 (VAT_PERIOD_REMINDERS): VAT period reminders and "all receipts sent". Absent or false = every route and the daily job answer 404. */
   vatPeriodReminders?: boolean;
   /**
@@ -360,7 +364,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_GIFT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...OPERATOR_PROVISIONING_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...VAT_PERIOD_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_GIFT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...OPERATOR_PROVISIONING_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_CUSTOMER_ORGANIZATION_INDEPENDENT_ROUTES, ...VAT_PERIOD_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, ...PUSH_DEVICE_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -447,7 +451,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.215.0-mut782';
+export const API_VERSION = '1.216.0-mut780';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -823,7 +827,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-735 (ADR-281 §12): the daily usage retention job (/jobs/*, the job token), on the unguarded store.
   app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
   // MUT-767 (ADR-300): the daily sweep of unclaimed provisioned accounts, on the unguarded store.
-  app.route('/', accountantSweepRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, enabled: deps.accountantProvisioning ?? false }));
+  app.route('/', accountantSweepRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, enabled: deps.accountantProvisioning ?? false, push: deps.push ?? DISABLED_PUSH }));
+  // MUT-780 (ADR-351): a signed-in phone's push token.
+  app.route('/', pushDeviceRoutes({ store, enabled: (deps.push ?? DISABLED_PUSH).enabled }));
   app.route('/', vatPeriodSweepRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, enabled: deps.vatPeriodReminders ?? false }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
@@ -838,7 +844,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const stripe = deps.stripe
     ? {
         webhookGateway: deps.stripe.webhookGateway,
-        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway } : {}), ...(taxFollowsAddress ? { taxFollowsAddress } : {}), logger: deps.logger, now }),
+        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, ...(deps.stripe.checkoutGateway ? { invoiceTaxNumbers: deps.stripe.checkoutGateway, customerEmails: deps.stripe.checkoutGateway } : {}), ...(taxFollowsAddress ? { taxFollowsAddress } : {}), logger: deps.logger, now }),
       }
     : null;
   app.route(
@@ -1105,6 +1111,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Receivables', description: 'What is owed, and credits against it' },
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
+      { name: 'Push', description: 'A signed-in phone\'s push token (MUT-780)' },
       { name: 'Passkeys', description: 'A signed-in person\'s passkeys, and the challenge passkey sign-in starts from (MUT-115)' },
       { name: 'Profiles', description: 'A signed-in person\'s own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },

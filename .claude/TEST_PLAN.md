@@ -112,6 +112,12 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
+## Checkout's email on an unclaimed account (TD-361, 2026-11-28)
+
+`billing/stripe/__tests__/sync.test.ts` (TD-361 block): a completed Checkout for an account with no password and a provisioned origin clears the customer's email; a claimed or self-made account, and a Checkout that collected no email, write nothing; a failed clear is an error and the redelivery succeeds. `checkout-gateway.test.ts`: the clear sends an empty `email`. Not in a QA flow (Stripe's own page is outside the specs): checked once against the sandbox by replaying the event.
+
+---
+
 ## Activation Checkout (MUT-766, 2026-11-27)
 
 `routes-accountant-activation.test.ts`: payer is the customer, Stripe customer with no email, address saved, audit actor accountant with `payerUserId`; golden test (same params and Stripe call order and one expiry from both doors for the same payer, the claim sets the verified email); IDOR (another accountant, unknown id, claimed) 404 and unapproved 403; paid plans only and the address country; the limiter counts the accountant; a duplicated and a late webhook make one subscription and the desk shows `paid`; 404 with the flag off. `checkout-gateway.test.ts`: metadata search, create with no email and a per-person key, set email. Unchanged and green: billing-routes, billing-core, billing-gate-routes, routes-accountant-plan.
@@ -5245,6 +5251,10 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 - `src/hosted/analytics/__tests__/portalAnalytics.test.ts`, `src/lib/analytics/__tests__/guard.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts`: `trackGuide` for opted-in people only, the guard keeps a listed guide and drops an unlisted one, contract 2.15.0 pinned.
 - QA `portal.guides.guide-open-read-close` (Arabic then English, the page kept, Done).
 
+## MUT-780: phone push (server)
+- `server/src/push/__tests__/push.test.ts`: ar/en copy and the Arabic counted noun; the service sends to every live device, removes tokens the platform refuses, keeps the ones that failed, survives a throwing sender, does nothing for no device; FCM sender: service-account parse, RS256 assertion verifies, access token reused and renewed, error mapping.
+- `server/src/__tests__/routes-push-devices.test.ts`: dark 404, 401, register (idempotent, replaces on rotation, two phones, a handed-over token moves), 422, remove, sign-out removes, a revoked session never receives; the sweep pushes once on the digest day with counts only and the customer in the data, ar copy, no push when dark or no device, failure and invalid tokens.
+- `server/src/repositories/__tests__/store-contract-push-devices.ts` on memory and Postgres; `config.test.ts` pair rule.
 ## MUT-679 — the Tax Authority guide (2026-11-28)
 - `guideSchema.test.ts`, `GuideDrawer.test.tsx`: `ifStuck` optional, validated, rendered after the note.
 - `guides.test.ts`: no `%`, currency symbol or `NIS`/`ILS` in any guide's copy; scenes need an `-rtl` twin unless declared neutral.

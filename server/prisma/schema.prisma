@@ -426,6 +426,7 @@ model User {
 
   /// MUT-115 (ADR-190): this person's passkeys, and the creation challenges they asked for.
   passkeys           Passkey[]
+  pushDevices        PushDevice[]
   webauthnChallenges WebauthnChallenge[]
 
   /// MUT-559 (ADR-245): the profiles this person reads as an accountant, and the invites they sent as an owner.
@@ -713,6 +714,7 @@ model Session {
   /// MUT-710 (ADR-274 D8, D10): when this session passed the second step (or turned it on). Issuing and the Tax
   /// Authority need it. A password-change rotation copies it: changing the password isn't losing a factor.
   twoFactorAt           DateTime?
+  pushDevices           PushDevice[]
 
   @@index([userId])
   @@index([passkeyId])
@@ -2696,6 +2698,27 @@ model RouteUsageDaily {
 
   @@id([day, routeKey, plan, statusClass])
   @@map("route_usage_daily")
+}
+
+/// MUT-780 (ADR-351): one phone's push token per signed-in session. Never read back to a client; a push reaches only
+/// rows whose session is live. The token is unique: a phone handed to another person moves to their session.
+model PushDevice {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId   String   @unique @db.Uuid
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  /// 'ios' | 'android'
+  platform    String   @db.VarChar(16)
+  /// The FCM registration token (ADR-350).
+  token       String   @unique @db.VarChar(4096)
+  /// 'production' | 'sandbox': the app's build, kept for diagnostics.
+  environment String   @db.VarChar(16)
+  createdAt   DateTime
+  updatedAt   DateTime
+
+  @@index([userId])
+  @@map("push_devices")
 }
 
 /// MUT-782 (ADR-343): how often a client profile files VAT. The accountant's choice is stored in `vat_period_settings`;

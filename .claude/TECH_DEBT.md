@@ -54,7 +54,7 @@ The yes is stored once (`users.pilotWatchConsentAt`); there is no "take it back"
 - **Why it's acceptable:** a cohort of 5 to 8 testers, watched by the founder; the Pilot panel shows the end date and the operator list shows each tester's end.
 - **Fix:** a daily job like `trial-mail.ts` over live pilot grants (minimal copy), and a closed list of onboarding steps if the watched sessions show it is needed.
 ### TD-361: The claim's Stripe email has no retry, and Checkout's email field is unverified for a customer with none (MUT-766)
-**Status**: Open (2026-11-27)
+**Status**: Part 2 resolved 2026-11-28 (the sandbox activation showed Checkout saves the typed email and the cardholder name on a customer with none; the `checkout.session.completed` handler now clears the email of an unclaimed account's customer, see CHANGELOG). Part 1 (no retry for the claim's email) stays open. Still open: the first Stripe receipt can go out before the clear, and the cardholder name is still saved (`customer_update.name: 'auto'`).
 - **What:** (1) if Stripe fails when a customer claims, the verified address is not set on their Stripe customer (a `claim_stripe_email_failed` log line), so Stripe receipts and invoices have no address until someone sets it. (2) Stripe's hosted Checkout may ask for an email when the customer has none and save it, which would put the address typed in the room on the customer before the claim (R5's intent).
 - **Why it's acceptable:** dark behind `ACCOUNTANT_PROVISIONING`; no customer pays this way yet.
 - **Fix:** before the pilot, run one activation in Stripe test mode and look at the customer; if Checkout stores an email, pass `customer_update` or set the email from the claim only and document it. Add the email to the Stripe sync (set it when the mirror links a customer whose person has a verified address and Stripe has none).
@@ -3505,3 +3505,8 @@ When resolving debt:
 **Why deferred**: the Flutter repo is separate and its copy was already behind 2.14.0 (the billing stack's bump). 2.15.0 adds only portal events, so no phone code is affected, but its parity test pins a version.
 **Update 2026-11-28**: the contract is 2.16.0 (MUT-785 and MUT-786 added two guide values in one bump); the Flutter copy is still behind.
 **Cost**: each new portal guide adds a value to the `guide` enum (a minor bump, a pinned hash, a Flutter copy). A guide that is phone-only or website-only needs none. If guides multiply, move the guide id out of the enum into a closed list generated from the content files.
+
+### TD-380: The push grant and env are not in Terraform yet (MUT-780)
+**Where**: `server/infrastructure/terraform` (no `push.tf`): the cross-project grant `roles/firebasecloudmessaging.admin` to the API's service account on `mtb3a-barmajiyat`, and `FCM_PROJECT_ID` on the Cloud Run service.
+**Why deferred**: the grant is applied by an operator against another project, and push is dark until `FCM_PROJECT_ID` is set, so the first release needs neither. Exact `gcloud` lines are in `docs/operations/before-release.md`.
+**Cost**: until a `push.tf` (a `google_project_iam_member`, an env entry behind a `push_project_id` variable, a tftest) lands, the env is added to the service by hand and a later `make release server` would drop it. Do it in the release that turns push on.

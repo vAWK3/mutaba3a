@@ -611,6 +611,9 @@ export const STORE_ACCESS: StoreAccess = {
     prune: 'operator',
     purgeSubject: 'operator',
   },
+  // MUT-780 (ADR-351): a person registers and removes their own phone's token; the sender and its pruning run on the
+  // store beneath the guard.
+  pushDevices: { register: 'sessionOnly', removeForSession: 'sessionOnly', listLive: 'operator', removeByIds: 'operator' },
 };
 
 export interface StoreGuard {

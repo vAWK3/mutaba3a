@@ -43,6 +43,8 @@ export interface CheckoutGateway {
   customerIdOf(userId: string): Promise<string | null>;
   /** MUT-766 (R5): the verified address, set on the customer when an unclaimed account is claimed. */
   setCustomerEmail(customer: string, email: string): Promise<void>;
+  /** TD-361 (R5): takes the address Checkout saved off the customer of an account nobody has claimed (Stripe: '' unsets it). */
+  clearCustomerEmail(customer: string): Promise<void>;
   /** Every subscription Stripe holds for the customer, ended ones included (review: no double charge). */
   subscriptionsOf(customer: string): Promise<SubscriptionState[]>;
   /**
@@ -183,6 +185,9 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
     },
     async setCustomerEmail(customer, email) {
       await wrapped(() => stripe.customers.update(customer, { email }));
+    },
+    async clearCustomerEmail(customer) {
+      await wrapped(() => stripe.customers.update(customer, { email: '' }));
     },
     async findOrCreateCustomer(person) {
       if (person.email === null) {

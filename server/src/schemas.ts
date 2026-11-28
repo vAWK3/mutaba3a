@@ -1959,10 +1959,23 @@ export const UnclaimedSweepSummarySchema = z
     removed: z.number().int(),
     flagged: z.number().int(),
     digests: z.number().int(),
+    /** MUT-780: accountants a phone push went to (at least one device took it). */
+    pushed: z.number().int(),
     failed: z.number().int(),
     incomplete: z.boolean(),
   })
   .openapi('UnclaimedSweepSummary');
+
+/** MUT-780 (ADR-351): a phone registers its FCM token for the signed-in session. */
+export const RegisterPushDeviceRequestSchema = z
+  .object({
+    platform: z.enum(['ios', 'android']),
+    token: z.string().min(1).max(4096),
+    /** The app's build: `sandbox` for a debug build, else `production` (the default). */
+    environment: z.enum(['production', 'sandbox']).optional(),
+  })
+  .strict()
+  .openapi('RegisterPushDeviceRequest');
 
 export const ProvisionedCustomersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
