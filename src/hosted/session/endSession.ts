@@ -4,6 +4,7 @@ import type { AnyRouter } from '@tanstack/react-router';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useMalafatPortalMoments } from './malafatMoments';
 import { resetTrialWelcomeOffer } from './trialWelcomeOffer';
+import { resetPilotWelcomeOffer } from './pilotWelcomeOffer';
 import { endPortalUsage } from '../analytics/portalAnalytics';
 import { setReporterUser } from '../observability/errorReporting';
 
@@ -19,6 +20,7 @@ export function endSession(queryClient: QueryClient, router: AnyRouter, search: 
   useMalafatPortalMoments.getState().reset();
   useLostAccess.getState().reset();
   resetTrialWelcomeOffer();
+  resetPilotWelcomeOffer();
   // MUT-155: sign-out (this tab or another) forgets the usage choice and its random ID, sending
   // nothing; an expired session is the same person, so the choice stays (rule 6, B4)
   if (search.reason === 'signed_out') endPortalUsage();

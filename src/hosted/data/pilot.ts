@@ -1,4 +1,4 @@
-import type { BillingOverview, Schemas } from '../api/client';
+import type { BillingOverview, Me, Schemas } from '../api/client';
 
 /**
  * MUT-753 (plan `docs/designs/pilot-testers-business-plan.md`, design review): the free pilot as the portal reads it
@@ -33,4 +33,20 @@ export function pilotCurrencyOf(billing: Pick<BillingOverview, 'billingAddress'>
   const other: 'ILS' | 'USD' = wanted === 'ILS' ? 'USD' : 'ILS';
   const priced = (c: 'ILS' | 'USD') => plans.some((p) => p.expectedMonthly[c] !== null);
   return priced(wanted) || !priced(other) ? wanted : other;
+}
+
+/**
+ * MUT-755: whether this person may be on a pilot, from /v1/me alone: a profile they own is covered by an operator
+ * grant that ends (a pilot grant always ends, ADR-296). Only then does the shell read GET /v1/billing for the
+ * Welcome and the milestones, so nobody else pays for that read.
+ */
+export function mayBeOnPilot(me: Pick<Me, 'profiles' | 'user'>): boolean {
+  if (me.user.status !== undefined && me.user.status !== 'ACTIVE') return false;
+  return me.profiles.some((p) => p.owned === true && p.billing?.source === 'OPERATOR' && p.billing.until !== null);
+}
+
+/** MUT-755 (design review 3B): the Welcome opens once per account: a pilot runs and it was never closed. */
+export function pilotWelcomeDue(billing: Partial<Pick<BillingOverview, 'pilot'>> | null | undefined): boolean {
+  const pilot = billingPilotOf(billing);
+  return pilot !== null && pilot.welcomeSeenAt === null;
 }

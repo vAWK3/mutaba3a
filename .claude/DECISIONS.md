@@ -7552,6 +7552,17 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** 30 days is a guess at how long the end needs saying; after it the person is simply on their plan. The phone (MUT-756) reads the same `pilotEnded`.
 
+## ADR-331: The Pilot Welcome on the Web Is a Drawer by URL Key, Opened Once by the Shell; Its Main Action Goes to Receipts (MUT-755, epic MUT-751; follows ADR-296's flag on the person)
+
+**Status:** Accepted (2026-11-27; plan T4, design review 3B; built without Basel on the approved plan and wireframe A).
+
+**Decision:**
+1. Drawer-first: `?pilotWelcome=true` (`AccountDrawers`), opened by `PilotWelcomeOpener` in the shell when `GET /v1/billing` `pilot.welcomeSeenAt` is null and no other drawer is open, at most once per page load (`session/pilotWelcomeOffer.ts`, reset on sign-out). It replaces the page's history entry.
+2. The shell reads `GET /v1/billing` only for someone an ending operator grant covers (`mayBeOnPilot`, from /v1/me), so other people pay no extra request.
+3. Later, ✕ and "Start with a receipt" all close it and call `POST /v1/billing/pilot-welcome` once (the cache says seen at once). A deep link with no pilot or an already-closed Welcome closes itself.
+4. The web has a real scan: the main action opens Expenses › Receipts of the open profile (the personal one outside a profile). This answers the plan's open item "whether the web has a real Scan a receipt action".
+5. Motion is `motion-pilot-sheet` for the step cards and their nuqtas exactly (180/230/280 ms rise, 480/530/580 ms pop); the drawer's own entrance stands for the scrim and the half sheet. Reduced motion shows the scenes as drawn.
+
 ## ADR-340: Offers Per Plan: One Coupon per Kind on Solo, Business and Firm, Made Only by the Catalog Script; Dropped on an Upgrade, Kept Through a Downgrade (MUT-703, epic MUT-701; amends ADR-237 d1/d3/d4, ADR-238 d2, ADR-240 d5/d7, ADR-243 d1/d8, ADR-291 d6)
 
 **Status:** Accepted (2026-11-27; plan `.claude/designs/mut-703-offers-plan.md`, Basel approved all 12 §13 defaults; spikes S1/S2 in the plan's "Build decisions").
